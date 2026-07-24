@@ -14,6 +14,7 @@ import { ObserverIcon } from "../../components/ObserverIcon";
 import { DataTable, type Column } from "../../components/DataTable";
 import { LoadingPill } from "../../components/LoadingPill";
 import { NodeFilterBar, type MultibyteFilter } from "./NodeFilterBar";
+import { nodeSearchParams } from "./node-search";
 import { patchNodeSummary } from "./node-updates";
 import type { NodeSummary } from "./types";
 import type { CursorPage } from "../../types/api";
@@ -138,9 +139,19 @@ export function NodeTable({ wsManager, selectedNodeId, onSelectNode }: NodeTable
 
   useTick();
 
+  // switching the field flips what the box means (a name vs a hex prefix), so stale text mustn't carry over
+  const handleSearchFieldChange = useCallback((field: string) => {
+    setSearchField(field);
+    setSearch("");
+  }, []);
+
+  // derive the actual server params (name vs pubkeyPrefix, hex-guarded) and key the query on THOSE,
+  // so toggling the field with an empty box is a no-op and a name never gets sent as a hex prefix
+  const { name: nameParam, pubkeyPrefix: pubkeyPrefixParam } = nodeSearchParams(searchField, search);
+
   const queryKey = useMemo(
-    () => ["nodes", regionKey, typeFilter, pathsFilter, tracesFilter, search, searchField],
-    [regionKey, typeFilter, pathsFilter, tracesFilter, search, searchField],
+    () => ["nodes", regionKey, typeFilter, pathsFilter, tracesFilter, nameParam, pubkeyPrefixParam],
+    [regionKey, typeFilter, pathsFilter, tracesFilter, nameParam, pubkeyPrefixParam],
   );
 
   // page the region's nodes 50 at a time (filters stay server-side, in the query key); rows stream
@@ -151,8 +162,8 @@ export function NodeTable({ wsManager, selectedNodeId, onSelectNode }: NodeTable
       getNodesPage(iatas, {
         cursor,
         type: typeFilter || undefined,
-        name: searchField === "name" ? search || undefined : undefined,
-        pubkeyPrefix: searchField === "pubkey" ? search || undefined : undefined,
+        name: nameParam,
+        pubkeyPrefix: pubkeyPrefixParam,
         supportsMultibytePaths: pathsFilter || undefined,
         supportsMultibyteTraces: tracesFilter || undefined,
       }),
@@ -189,7 +200,7 @@ export function NodeTable({ wsManager, selectedNodeId, onSelectNode }: NodeTable
           search={search}
           onSearchChange={setSearch}
           searchField={searchField}
-          onSearchFieldChange={setSearchField}
+          onSearchFieldChange={handleSearchFieldChange}
           typeFilter={typeFilter}
           onTypeChange={setTypeFilter}
           pathsFilter={pathsFilter}
