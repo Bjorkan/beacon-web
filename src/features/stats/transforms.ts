@@ -28,9 +28,10 @@ export function formatPreset(preset: string): string {
   return `${freq} · ${bw}k · SF${sf}`;
 }
 
-// True if any point carries at least one meaningful (non-null, non-zero) metric. Bots / MQTT bridges
-// report telemetry rows that are all zeros (no real radio hardware); those count as "no telemetry"
-// so we show an empty state rather than a wall of flat-zero charts.
+// True if any point carries at least one meaningful (non-null, non-zero) metric. Stats-less observers
+// (bots / MQTT bridges, no real radio hardware) used to report all-zero rows; the backend now drops
+// those at ingest, but the non-zero guard stays as a cheap backstop so a stray all-zero row still
+// counts as "no telemetry" (empty state) rather than a wall of flat-zero charts.
 export function hasTelemetry(points: TelemetryPoint[]): boolean {
   const live = (v: number | null) => v != null && v !== 0;
   return points.some(

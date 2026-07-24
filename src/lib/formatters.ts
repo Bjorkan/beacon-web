@@ -94,7 +94,7 @@ export function timeAgoMs(epochMs: number): string {
   return `${Math.floor(hours / 24)}d`;
 }
 
-// Node/observer summaries carry radio as a compact "freq,bw,sf" string (e.g. "915.0,250,11").
+// Node/observer summaries carry radio as a compact "freq,bw,sf" string (e.g. "915,250,11").
 // Formats freq/SF/bandwidth like the observer panel ("915 MHz · SF11 · 250 kHz"); the compact
 // string carries no coding rate, so there's no "CR 4/x" segment.
 export function formatRadio(radio: string | null | undefined): string | null {

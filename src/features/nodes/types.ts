@@ -11,7 +11,7 @@ export interface NodeSummary {
   name: string | null;
   lat: number | null;
   lng: number | null;
-  radio?: string; // compact "freq,bw,sf" string, e.g. "915.0,250,11"; absent when unknown
+  radio?: string; // compact "freq,bw,sf" string, e.g. "915,250,11"; absent when unknown
   defaultScope?: string; // most recently matched transport scope name, e.g. "#bc"
   iatas: NodeIATA[];
   knownNeighborCount: number; // distinct first-hop neighbors we've resolved for this node
