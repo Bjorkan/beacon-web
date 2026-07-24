@@ -42,6 +42,7 @@ export function TalkersTab({ range }: TalkersTabProps) {
         name: a.nodeName ?? a.nodeId.slice(0, 8),
         value: a.advertCount,
         color: nodeTypeColor(a.nodeTypeName, colors),
+        iata: a.iata,
       })),
     [topAdvertisers.data, colors],
   );

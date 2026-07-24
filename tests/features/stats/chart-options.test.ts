@@ -108,6 +108,26 @@ describe("leaderboardOption", () => {
     expect(opt.yAxis.axisLabel.width).toBeLessThanOrEqual(120 - 10);
     expect(opt.yAxis.axisLabel.margin).toBe(110);
   });
+
+  it("keeps a plain count label and the tight right gutter when rows carry no IATA", () => {
+    const rows = [{ name: "node-a", value: 12, color: "#abc" }];
+    const opt = leaderboardOption(rows, colors) as Record<string, any>;
+    expect(opt.series[0].label.formatter({ value: 12, data: {} })).toBe("12");
+    expect(opt.grid.right).toBe(56);
+  });
+
+  it("stamps an IATA chip beside the count when rows carry one, widening the right gutter", () => {
+    const rows = [{ name: "node-a", value: 12, color: "#abc", iata: "YOW" }];
+    const opt = leaderboardOption(rows, colors) as Record<string, any>;
+    // the code rides on the data item so the label can read it back
+    expect(opt.series[0].data[0].iata).toBe("YOW");
+    const label = opt.series[0].label;
+    const out = label.formatter({ value: 12, data: { iata: "YOW" } });
+    expect(out).toContain("12");
+    expect(out).toContain("YOW");
+    expect(label.rich.iata).toBeDefined(); // chip style lives in the rich block
+    expect(opt.grid.right).toBeGreaterThan(56); // room for the chip at the bar end
+  });
 });
 
 const point = (t: number, p: Partial<TelemetryPoint>): TelemetryPoint => ({

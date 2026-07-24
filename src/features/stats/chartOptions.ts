@@ -84,14 +84,15 @@ export function observationsAreaOption(
 }
 
 export function leaderboardOption(
-  rows: { name: string; value: number; color: string }[],
+  rows: { name: string; value: number; color: string; iata?: string }[],
   c: ChartColors,
   gridLeft = 116, // widen for longer category labels (e.g. radio presets)
 ): EChartsOption {
+  const hasIata = rows.some((r) => Boolean(r.iata)); // reserve room for the end-of-bar chip only when needed
   return {
     animation: false,
     backgroundColor: "transparent",
-    grid: { left: gridLeft, right: 56, top: 6, bottom: 6 },
+    grid: { left: gridLeft, right: hasIata ? 96 : 56, top: 6, bottom: 6 },
     tooltip: { trigger: "item", ...tooltipStyle(c) },
     xAxis: { type: "value", axisLabel: { show: false }, splitLine: { show: false }, axisLine: { show: false }, axisTick: { show: false } },
     yAxis: {
@@ -117,14 +118,30 @@ export function leaderboardOption(
         type: "bar",
         barMaxWidth: 22,
         barCategoryGap: "42%",
-        data: rows.map((r) => ({ value: r.value, itemStyle: { color: r.color, borderRadius: [0, 4, 4, 0] } })),
+        data: rows.map((r) => ({ value: r.value, iata: r.iata, itemStyle: { color: r.color, borderRadius: [0, 4, 4, 0] } })),
         label: {
           show: true,
           position: "right",
           color: c.textBright,
           fontFamily: MONO,
           fontSize: 11,
-          formatter: (p: { value: number }) => p.value.toLocaleString(),
+          // count, plus an IataChip-style location marker when the row carries one
+          formatter: (p: { value: number; data?: { iata?: string } }) => {
+            const v = p.value.toLocaleString();
+            return p.data?.iata ? `{v|${v}}  {iata|${p.data.iata}}` : v;
+          },
+          rich: {
+            v: { color: c.textBright, fontFamily: MONO, fontSize: 11 },
+            iata: {
+              color: c.primary,
+              backgroundColor: withAlpha(c.primary, 0.1),
+              fontFamily: MONO,
+              fontWeight: "bold",
+              fontSize: 10,
+              padding: [2, 4],
+              borderRadius: 3,
+            },
+          },
         },
       },
     ],
