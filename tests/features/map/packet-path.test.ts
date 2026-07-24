@@ -92,6 +92,27 @@ describe("buildPacketPaths", () => {
     expect(path!.points.map((p) => p.id)).toEqual(["relay1", "relay2", "dst"]);
   });
 
+  it("skips an ambiguous endpoint instead of guessing one of its candidates", () => {
+    // 1-byte source/dest prefixes resolve to several candidate nodes; the backend flags this
+    // "ambiguous" so the client shouldn't pick one and draw it as a definitive endpoint.
+    const ambiguousSource: ResolvedHop = {
+      confidence: "ambiguous",
+      nodes: [
+        { id: "cand-a", publicKey: "pa", longitude: -71, latitude: 46 },
+        { id: "cand-b", publicKey: "pb", longitude: -73, latitude: 48 },
+      ],
+    };
+    const d = detail([
+      obs(1, [hop("relay1", -79, 43), hop("relay2", -78, 44)], {
+        observerId: "obs-1", propagationTimeMs: 100,
+        resolvedSource: ambiguousSource,
+        resolvedDestination: hop("dst", -77, 45), // high confidence — still drawn
+      }),
+    ]);
+    const [path] = buildPacketPaths(d);
+    expect(path!.points.map((p) => p.id)).toEqual(["relay1", "relay2", "dst"]);
+  });
+
   it("draws only the trace route for TRACE packets, suppressing per-observation lines", () => {
     const d = detail(
       [obs(1, [hop("a", -79, 43), hop("b", -75, 45)], { observerId: "obs-1", propagationTimeMs: 100 })],
