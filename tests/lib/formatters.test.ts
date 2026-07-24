@@ -119,4 +119,9 @@ describe("formatClockDrift", () => {
     expect(formatClockDrift(432)).toBe("+7m 12s ahead"); // 7*60 + 12
     expect(formatClockDrift(-3670)).toBe("-1h 1m behind"); // 3670 -> 1h 1m
   });
+
+  it("renders exact minute/hour boundaries with a zero remainder", () => {
+    expect(formatClockDrift(60)).toBe("+1m 0s ahead");
+    expect(formatClockDrift(3600)).toBe("+1h 0m ahead");
+  });
 });

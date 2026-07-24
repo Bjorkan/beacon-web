@@ -73,6 +73,16 @@ describe("PayloadBreakdown — resolved source/destination endpoints", () => {
     expect(screen.getByText("BB")).toBeInTheDocument();
   });
 
+  it("renders an unresolved (none-confidence) endpoint as a non-clickable resolved block", () => {
+    // the backend sends resolvedSource/Destination as {confidence:"none", nodes:[]} (not omitted)
+    // when a 1-byte prefix matches nothing — it must not become a clickable node, but still show the hash
+    const none: ResolvedHop = { confidence: "none", nodes: [] };
+    render(<PayloadBreakdown payload={envelope} resolvedSource={none} resolvedDestination={none} />);
+    expect(screen.queryByRole("button", { name: "AA" })).not.toBeInTheDocument();
+    expect(screen.getByText("AA")).toBeInTheDocument();
+    expect(screen.getByText("BB")).toBeInTheDocument();
+  });
+
   it("resolves an ANON_REQUEST destination hash to a node block", () => {
     const onViewNode = vi.fn();
     const anon = { type: "ANON_REQUEST", destination: 0xbb, ephemeralPubKey: "cc" };

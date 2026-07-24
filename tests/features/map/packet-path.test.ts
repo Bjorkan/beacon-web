@@ -124,6 +124,30 @@ describe("buildPacketPaths", () => {
     expect(buildPacketPaths(d).map((p) => p.key)).toEqual(["trace"]);
   });
 
+  it("draws nothing for a TRACE with no resolved route", () => {
+    // per-observation lines are suppressed for TRACE, so without resolvedRoute there is nothing to draw
+    const d = detail(
+      [obs(1, [hop("a", -79, 43), hop("b", -75, 45)], { observerId: "obs-1", propagationTimeMs: 100 })],
+      { header: { payloadType: PayloadType.TRACE, routeType: 1 } } as unknown as Partial<PacketDetail>,
+    );
+    expect(buildPacketPaths(d)).toEqual([]);
+  });
+
+  it("uses the first located candidate for an ambiguous relay hop", () => {
+    const multi: ResolvedHop = {
+      confidence: "ambiguous",
+      nodes: [
+        { id: "unlocated", publicKey: "p0" }, // no coords — skipped
+        { id: "located", publicKey: "p1", longitude: -78, latitude: 44 }, // first with coords — used
+      ],
+    };
+    const d = detail([
+      obs(1, [multi, hop("relay2", -77, 45)], { observerId: "obs-1", propagationTimeMs: 100 }),
+    ]);
+    const [path] = buildPacketPaths(d);
+    expect(path!.points.map((p) => p.id)).toEqual(["located", "relay2"]);
+  });
+
   it("omits observations that resolve to fewer than 2 located hops", () => {
     const d = detail([
       obs(1, [hop("a", -79, 43), hop("x")], { observerId: "obs-1" }),
