@@ -115,13 +115,14 @@ export function usePacketFilters() {
   return { filters, setFilter, setSearch, setSearchField, clearFilters };
 }
 
-// The /packets endpoint filters by a single payloadType/routeType/scope per request, so a
-// dimension only goes server-side when exactly one value is selected; the rest stay client-side.
+// The /packets endpoint accepts comma-separated payloadTypes/routeTypes/scopes, so any selected
+// dimension goes server-side and pagination pulls the correctly-filtered set from the full history.
+// (observers has no server param, so it stays client-side in matchesFilters, as does the live buffer.)
 export function toServerFilter(filters: PacketFilterState): PacketServerFilter | null {
   const serverFilter: PacketServerFilter = {};
-  if (filters.payloadTypes.length === 1) serverFilter.payloadType = filters.payloadTypes[0]!;
-  if (filters.routeTypes.length === 1) serverFilter.routeType = filters.routeTypes[0]!;
-  if (filters.scopes.length === 1) serverFilter.scope = filters.scopes[0]!;
+  if (filters.payloadTypes.length > 0) serverFilter.payloadTypes = filters.payloadTypes;
+  if (filters.routeTypes.length > 0) serverFilter.routeTypes = filters.routeTypes;
+  if (filters.scopes.length > 0) serverFilter.scopes = filters.scopes;
   return Object.keys(serverFilter).length > 0 ? serverFilter : null;
 }
 

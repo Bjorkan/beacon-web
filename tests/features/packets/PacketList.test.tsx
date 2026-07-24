@@ -84,13 +84,13 @@ describe("PacketList server filter wiring", () => {
   it("passes a single selected type to usePackets as the server filter", () => {
     usePackets.mockClear();
     renderAt("/?types=4");
-    expect(usePackets).toHaveBeenLastCalledWith(false, { payloadType: 4 });
+    expect(usePackets).toHaveBeenLastCalledWith(false, { payloadTypes: [4] });
   });
 
-  it("passes null for multi-select so history stays unfiltered", () => {
+  it("passes a multi-select filter server-side so history stays filtered", () => {
     usePackets.mockClear();
     renderAt("/?types=2,4");
-    expect(usePackets).toHaveBeenLastCalledWith(false, null);
+    expect(usePackets).toHaveBeenLastCalledWith(false, { payloadTypes: [2, 4] });
   });
 });
 

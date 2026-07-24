@@ -23,16 +23,16 @@ afterEach(() => {
 });
 
 describe("getPackets", () => {
-  it("forwards the single-value server filters (routeType 0 survives, scope is encoded)", async () => {
+  it("forwards plural filters as comma-separated values (routeType 0 survives, scope is encoded)", async () => {
     const getUrl = mockFetchOnce({ items: [], nextCursor: null, hasMore: false });
 
-    await getPackets(["YOW"], { payloadType: 4, routeType: 0, scope: "#bc" });
+    await getPackets(["YOW"], { payloadTypes: [2, 4], routeTypes: [0], scopes: ["#bc", "#west"] });
 
-    const url = getUrl();
-    expect(url).toContain("/packets");
-    expect(url).toContain("payloadType=4");
-    expect(url).toContain("routeType=0");
-    expect(url).toContain("scope=%23bc");
+    const url = new URL(getUrl());
+    expect(url.pathname).toContain("/packets");
+    expect(url.searchParams.get("payloadTypes")).toBe("2,4");
+    expect(url.searchParams.get("routeTypes")).toBe("0"); // single value 0 survives
+    expect(url.searchParams.get("scopes")).toBe("#bc,#west");
   });
 
   it("omits the filter params when none are given", async () => {
@@ -40,12 +40,12 @@ describe("getPackets", () => {
 
     await getPackets(["YOW"], { cursor: 100 });
 
-    const url = getUrl();
-    expect(url).not.toContain("payloadType=");
-    expect(url).not.toContain("routeType=");
-    expect(url).not.toContain("scope=");
-    expect(url).toContain("cursor=100");
-    expect(url).toContain("limit=50");
+    const url = new URL(getUrl());
+    expect(url.searchParams.has("payloadTypes")).toBe(false);
+    expect(url.searchParams.has("routeTypes")).toBe(false);
+    expect(url.searchParams.has("scopes")).toBe(false);
+    expect(url.searchParams.get("cursor")).toBe("100");
+    expect(url.searchParams.get("limit")).toBe("50");
   });
 });
 

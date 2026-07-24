@@ -60,15 +60,15 @@ function iatasParam(iatas?: string[]): string | undefined {
 
 export function getPackets(
   iatas: string[] | undefined,
-  params?: { cursor?: number; limit?: number; payloadType?: number; routeType?: number; scope?: string },
+  params?: { cursor?: number; limit?: number; payloadTypes?: number[]; routeTypes?: number[]; scopes?: string[] },
 ): Promise<CursorPage<PacketSummary>> {
   return request("/packets", {
     iatas: iatasParam(iatas),
     cursor: params?.cursor,
     limit: params?.limit ?? DEFAULT_PAGE_SIZE,
-    payloadType: params?.payloadType,
-    routeType: params?.routeType,
-    scope: params?.scope,
+    payloadTypes: params?.payloadTypes?.length ? params.payloadTypes.join(",") : undefined,
+    routeTypes: params?.routeTypes?.length ? params.routeTypes.join(",") : undefined,
+    scopes: params?.scopes?.length ? params.scopes.join(",") : undefined,
   });
 }
 
