@@ -83,6 +83,16 @@ export function formatCount(n: number | null | undefined): string {
   return fmt(1_000_000_000, "B");
 }
 
+// Average count per day over a window, e.g. 340 adverts across 7d -> "49/d". Sub-ten rates keep one
+// decimal so a handful of events over a long window doesn't round away to "0/d".
+export function formatRatePerDay(count: number | null | undefined, windowMs: number): string {
+  if (count == null || !Number.isFinite(count)) return "—";
+  const days = windowMs / 86_400_000;
+  const rate = days > 0 ? count / days : 0;
+  const shown = rate >= 10 ? formatCount(Math.round(rate)) : String(Math.round(rate * 10) / 10);
+  return `${shown}/d`;
+}
+
 // clamp negative values from clock skew
 export function timeAgoMs(epochMs: number): string {
   const seconds = Math.max(0, Math.floor((Date.now() - epochMs) / 1000));

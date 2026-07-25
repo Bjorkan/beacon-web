@@ -47,6 +47,10 @@ export interface TopAdvertiser {
   nodeTypeName: string;
   iata: string;
   advertCount: number;
+  // advertCount split by route: flood = route type 0/1 (broadcast, no path), direct = 2/3 (routed).
+  // floodAdvertCount + directAdvertCount === advertCount.
+  floodAdvertCount: number;
+  directAdvertCount: number;
   lastHeard: number; // epoch ms
 }
 
