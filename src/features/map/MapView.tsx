@@ -5,13 +5,15 @@ import "maplibre-gl/dist/maplibre-gl.css";
 import { useMapLibre } from "./useMapLibre";
 import { useMapNodes } from "./useMapNodes";
 import { useMapNeighbors } from "./useMapNeighbors";
+import { useMapBorders } from "./useMapBorders";
+import { useMapBordersData } from "./useMapBordersData";
 import { useMapPacketFlow } from "./useMapPacketFlow";
 import { PacketFlowButton } from "./PacketFlowButton";
 import { useMapNodesData } from "./useMapNodesData";
 import { nodesToFeatureCollection, filterByNodeType, buildNeighborEdges, buildFocusedNeighborEdges, neighborFocusIds, type NeighborEdgeProps } from "./node-geojson";
 import { MapSettingsPanel } from "./MapSettingsPanel";
 import { parseMapView, buildMapParams, type MapViewSnapshot } from "./map-url";
-import { MAP_STYLE_STORAGE_KEY, DEFAULT_STYLE_ID, resolveMapStyle, MAP_NEIGHBOR_LINES_STORAGE_KEY, MAP_CLUSTER_STORAGE_KEY, MAP_NODE_TYPE_STORAGE_KEY, DEFAULT_CENTER, DEFAULT_ZOOM, type NeighborLinesMode } from "./types";
+import { MAP_STYLE_STORAGE_KEY, DEFAULT_STYLE_ID, resolveMapStyle, MAP_NEIGHBOR_LINES_STORAGE_KEY, MAP_CLUSTER_STORAGE_KEY, MAP_NODE_TYPE_STORAGE_KEY, MAP_BORDERS_STORAGE_KEY, DEFAULT_CENTER, DEFAULT_ZOOM, type NeighborLinesMode } from "./types";
 import type { FeatureCollection, LineString } from "geojson";
 import { EmptyState } from "../../components/EmptyState";
 import { LoadingPill } from "../../components/LoadingPill";
@@ -86,6 +88,13 @@ export function MapView({ wsManager, selectedNodeId, onSelectNode }: MapViewProp
 
   // live packet-flow animation: opt-in per session (off by default, not persisted; a deep link can seed it)
   const [packetFlow, setPacketFlow] = useState(() => urlView.flow ?? false);
+
+  // IATA region borders overlay, off by default; seeded URL -> localStorage like the other toggles
+  const [borders, setBorders] = useState(() => urlView.borders ?? localStorage.getItem(MAP_BORDERS_STORAGE_KEY) === "on");
+  const handleBordersChange = useCallback((on: boolean) => {
+    setBorders(on);
+    localStorage.setItem(MAP_BORDERS_STORAGE_KEY, on ? "on" : "off");
+  }, []);
 
   // A deep-link camera opens the map here and suppresses the initial region fit (see useMapLibre).
   const initialCamera = useMemo(
@@ -167,6 +176,14 @@ export function MapView({ wsManager, selectedNodeId, onSelectNode }: MapViewProp
     return chosen.length > 0 ? chosen.map((i) => [i.lon!, i.lat!]) : null;
   }, [iatas, selectedIatas]);
 
+  // Borders to draw: the selected region's IATAs, or every IATA for "All" (most have none configured,
+  // which resolves to a 204 and is dropped). Only fetched while the layer is toggled on.
+  const borderIatas = useMemo(() => {
+    const all = (iatas ?? []).map((i) => i.iata);
+    return selectedIatas && selectedIatas.length > 0 ? all.filter((c) => selectedIatas.includes(c)) : all;
+  }, [iatas, selectedIatas]);
+  const borderData = useMapBordersData(borderIatas, borders);
+
   const { containerRef, mapRef, isReady, error } = useMapLibre(styleId, fitPoints, handleStyleError, initialCamera);
   const isDark = resolveMapStyle(styleId).dark; // drives marker theming + maplibre control chrome
 
@@ -183,12 +200,14 @@ export function MapView({ wsManager, selectedNodeId, onSelectNode }: MapViewProp
       neighborLines,
       styleId,
       flow: packetFlow,
+      borders,
     };
     return { tab: "Map", ...buildMapParams(snapshot) };
-  }, [mapRef, clustered, typeFilter, neighborLines, styleId, packetFlow]);
+  }, [mapRef, clustered, typeFilter, neighborLines, styleId, packetFlow, borders]);
 
   useMapNodes(mapRef, isReady, geojson, isDark, themeKey, clustered, onSelectNode, selectedNodeId, packetFlow, focusIds, `${regionKey}:${typeFilter}`);
   useMapNeighbors(mapRef, isReady, neighborEdges, themeKey);
+  useMapBorders(mapRef, isReady, borderData, themeKey);
   useMapPacketFlow(mapRef, isReady, packetFlow, wsManager, themeKey, regionKey);
 
   return (
@@ -206,6 +225,8 @@ export function MapView({ wsManager, selectedNodeId, onSelectNode }: MapViewProp
         onClusteredChange={handleClusteredChange}
         neighborLines={neighborLines}
         onNeighborLinesChange={handleNeighborLinesChange}
+        borders={borders}
+        onBordersChange={handleBordersChange}
         buildShareParams={buildShareParams}
       />
       <PacketFlowButton active={packetFlow} onToggle={() => setPacketFlow((v) => !v)} />

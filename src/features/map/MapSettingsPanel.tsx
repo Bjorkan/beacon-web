@@ -19,6 +19,23 @@ const NEIGHBOR_OPTIONS = [
   { value: "selected", label: "Selected" },
   { value: "off", label: "Off" },
 ];
+const BORDER_OPTIONS = [
+  { value: "on", label: "On" },
+  { value: "off", label: "Off" },
+];
+
+// Swatch matching the border layer paint (secondary line over a faint fill), so the legend tracks the theme.
+function BorderLegend() {
+  return (
+    <div className="mt-2.5 flex items-center gap-1.5 text-[10px] text-text-dim">
+      <span
+        className="inline-block h-2.5 w-4 rounded-sm border"
+        style={{ borderColor: "var(--palette-secondary)", backgroundColor: "var(--palette-secondary)", opacity: 0.5 }}
+      />
+      IATA region outline
+    </div>
+  );
+}
 
 // Legend for a selected node's coloured edges. Gradient stops mirror the map paint's log anchors
 // (red ~1, yellow ~20 at 60%, green ~150+); palette vars keep it in step with the active theme.
@@ -49,6 +66,8 @@ interface MapSettingsPanelProps {
   onClusteredChange: (c: boolean) => void;
   neighborLines: NeighborLinesMode;
   onNeighborLinesChange: (mode: NeighborLinesMode) => void;
+  borders: boolean;
+  onBordersChange: (on: boolean) => void;
   // builds deep-link params for the current view, evaluated at copy time (reads the live camera)
   buildShareParams: () => Record<string, string | null>;
 }
@@ -62,6 +81,8 @@ export function MapSettingsPanel({
   onClusteredChange,
   neighborLines,
   onNeighborLinesChange,
+  borders,
+  onBordersChange,
   buildShareParams,
 }: MapSettingsPanelProps) {
   const isMobile = useIsMobile();
@@ -133,6 +154,16 @@ export function MapSettingsPanel({
               className="w-full"
             />
             {neighborLines === "selected" && <NeighborLegend />}
+          </Section>
+          <Section title="IATA Borders">
+            <SegmentedControl
+              ariaLabel="IATA borders"
+              options={BORDER_OPTIONS}
+              value={borders ? "on" : "off"}
+              onChange={(v) => onBordersChange(v === "on")}
+              className="w-full"
+            />
+            {borders && <BorderLegend />}
           </Section>
           <div className="px-3 py-2.5 border-t border-border-subtle flex justify-end">
             <CopyLinkButton

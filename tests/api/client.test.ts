@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { getPackets, getNodesPage, getObserversPage, getScopes, getKnownRoutesPage, searchKnownRoutes, getChannels, getChannelMessagesPage, getTraces, getTraceDetail, getStatsOverview, getTopObservers, getTopAdvertisers, getTopTalkers, getStatsNodeTypes, getClockDrift } from "../../src/api/client";
+import { getPackets, getNodesPage, getObserversPage, getScopes, getKnownRoutesPage, searchKnownRoutes, getChannels, getChannelMessagesPage, getTraces, getTraceDetail, getStatsOverview, getTopObservers, getTopAdvertisers, getTopTalkers, getStatsNodeTypes, getClockDrift, getIataBorder } from "../../src/api/client";
+import type { Feature, Polygon } from "geojson";
 import type { NodeSummary } from "../../src/features/nodes/types";
 import type { ObserverSummary } from "../../src/features/observers/types";
 import type { ChannelMessage, ChannelSummary } from "../../src/features/channels/types";
@@ -434,5 +435,54 @@ describe("stats endpoints", () => {
     expect(url.pathname).toContain("/stats/clock-drift");
     expect(url.searchParams.get("iatas")).toBe("YOW,YYZ");
     expect(url.searchParams.get("limit")).toBe("100");
+  });
+});
+
+describe("getIataBorder", () => {
+  // this endpoint can 204 (empty body) or send a literal `null`, so mock the status explicitly
+  function mockStatus(status: number, body: unknown): () => string {
+    let calledUrl = "";
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => {
+        calledUrl = url;
+        return {
+          ok: status >= 200 && status < 300,
+          status,
+          json: async () => {
+            if (status === 204) throw new Error("no body to parse");
+            return body;
+          },
+        } as Response;
+      }),
+    );
+    return () => calledUrl;
+  }
+
+  const feature: Feature<Polygon> = {
+    type: "Feature",
+    properties: {},
+    geometry: { type: "Polygon", coordinates: [[[0, 0], [1, 0], [1, 1], [0, 0]]] },
+  };
+
+  it("requests /iatas/{iata}/border", async () => {
+    const getUrl = mockStatus(200, feature);
+    await getIataBorder("YOW");
+    expect(new URL(getUrl()).pathname).toContain("/iatas/YOW/border");
+  });
+
+  it("returns null for a 204 (no border configured) without parsing a body", async () => {
+    mockStatus(204, undefined);
+    await expect(getIataBorder("YOW")).resolves.toBeNull();
+  });
+
+  it("treats a literal null body as no border", async () => {
+    mockStatus(200, null);
+    await expect(getIataBorder("YOW")).resolves.toBeNull();
+  });
+
+  it("returns the GeoJSON Feature when a border exists", async () => {
+    mockStatus(200, feature);
+    await expect(getIataBorder("YOW")).resolves.toEqual(feature);
   });
 });

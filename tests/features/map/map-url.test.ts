@@ -70,9 +70,15 @@ describe("parseMapView", () => {
     expect(parseMapView(new URLSearchParams("flow=x"))).toEqual({});
   });
 
+  it("reads the iata-borders toggle on/off", () => {
+    expect(parseMapView(new URLSearchParams("borders=on"))).toEqual({ borders: true });
+    expect(parseMapView(new URLSearchParams("borders=off"))).toEqual({ borders: false });
+    expect(parseMapView(new URLSearchParams("borders=x"))).toEqual({});
+  });
+
   it("combines every param into one view", () => {
     const params = new URLSearchParams(
-      "lat=53.31&lng=-113.58&zoom=9&clustering=off&node_type=repeater&neighbor_lines=on&style=liberty&flow=on",
+      "lat=53.31&lng=-113.58&zoom=9&clustering=off&node_type=repeater&neighbor_lines=on&style=liberty&flow=on&borders=on",
     );
     expect(parseMapView(params)).toEqual({
       center: [-113.58, 53.31],
@@ -82,6 +88,7 @@ describe("parseMapView", () => {
       neighborLines: "on",
       styleId: "liberty",
       flow: true,
+      borders: true,
     });
   });
 });
@@ -95,6 +102,7 @@ describe("buildMapParams", () => {
     neighborLines: "on",
     styleId: "liberty",
     flow: true,
+    borders: true,
   };
 
   it("emits every managed key with rounded camera values", () => {
@@ -107,6 +115,7 @@ describe("buildMapParams", () => {
       neighbor_lines: "on",
       style: "liberty",
       flow: "on",
+      borders: "on",
     });
   });
 
@@ -124,6 +133,7 @@ describe("buildMapParams", () => {
       neighborLines: "on",
       styleId: "liberty",
       flow: true,
+      borders: true,
     });
   });
 

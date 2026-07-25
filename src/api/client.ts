@@ -17,6 +17,9 @@ import type {
   NodeTypeCount,
   ClockDriftEntry,
 } from "../features/stats/types";
+import type { Feature, Polygon, MultiPolygon } from "geojson";
+
+export type IataBorder = Feature<Polygon | MultiPolygon>;
 
 // typed fetch wrapper with query params
 
@@ -79,6 +82,17 @@ export function getPacketDetail(packetHash: string): Promise<PacketDetail> {
 
 export function getIatas(): Promise<IataCode[]> {
   return request("/iatas");
+}
+
+// An IATA's GeoJSON border, or null when none is configured. Can't use request(): the endpoint
+// answers 204 (empty body) or a literal `null` for "no border", and request() always parses JSON.
+export async function getIataBorder(iata: string): Promise<IataBorder | null> {
+  const url = new URL(`${API_BASE}/iatas/${iata}/border`, window.location.origin);
+  const res = await fetch(url.toString());
+  if (res.status === 204) return null;
+  if (!res.ok) throw new ApiError(res.status, "unknown", res.statusText);
+  const body = await res.json();
+  return (body ?? null) as IataBorder | null;
 }
 
 export function getRegions(): Promise<RegionSummary[]> {
