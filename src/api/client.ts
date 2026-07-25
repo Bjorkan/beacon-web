@@ -15,6 +15,7 @@ import type {
   ScopeStats,
   ObserverTelemetry,
   NodeTypeCount,
+  ClockDriftEntry,
 } from "../features/stats/types";
 
 // typed fetch wrapper with query params
@@ -300,6 +301,12 @@ export function getRadioPresets(iatas?: string[]): Promise<RadioPreset[]> {
 
 export function getStatsNodeTypes(iatas?: string[]): Promise<NodeTypeCount[]> {
   return request("/stats/node-types", { iatas: iatasParam(iatas) });
+}
+
+// Repeaters/room servers whose clock has drifted past the server threshold, worst-first. Not
+// time-windowed and top-N only (no cursor), so callers pass a generous limit and page client-side.
+export function getClockDrift(iatas?: string[], limit = 100): Promise<ClockDriftEntry[]> {
+  return request("/stats/clock-drift", { iatas: iatasParam(iatas), limit });
 }
 
 // renamed from getScopes to avoid colliding with the /scopes name list; this is the /stats/scopes

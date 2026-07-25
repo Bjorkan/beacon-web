@@ -32,6 +32,15 @@ function TalkersIcon() {
   );
 }
 
+function ClockDriftIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.3" aria-hidden>
+      <circle cx="7" cy="7" r="5.2" />
+      <path d="M7 4v3l2.1 1.4" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
 function GraphIcon() {
   return (
     <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.3" aria-hidden>
@@ -48,6 +57,7 @@ function GraphIcon() {
 const TAB_OPTIONS = [
   { value: "mesh", label: "Mesh", icon: <MeshIcon /> },
   { value: "talkers", label: "Talkers", icon: <TalkersIcon /> },
+  { value: "clockdrift", label: "Clock Drift", icon: <ClockDriftIcon /> },
   { value: "observer", label: "Observer", icon: <ObserverIcon /> },
   { value: "graph", label: "Neighbour Graph", icon: <GraphIcon /> },
 ];
@@ -93,8 +103,8 @@ export function StatsSubHeader({ tab, onTabChange, range, onRangeChange }: Props
           />
         </div>
       )}
-      {/* the graph is topology, not time-series — no range to pick */}
-      {tab !== "graph" && (
+      {/* graph is topology and clock-drift is each node's latest reading — neither is time-windowed */}
+      {tab !== "graph" && tab !== "clockdrift" && (
         <Segmented
           className="shrink-0"
           options={RANGE_OPTIONS}

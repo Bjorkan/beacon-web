@@ -11,6 +11,7 @@ import {
   getRadioPresets,
   getStatsScopes,
   getStatsNodeTypes,
+  getClockDrift,
 } from "../../api/client";
 import { RANGE_MS, type StatsRange } from "./types";
 
@@ -106,6 +107,16 @@ export function useNodeTypes() {
   return useQuery({
     queryKey: ["stats-node-types", regionKey],
     queryFn: () => getStatsNodeTypes(iatas),
+    ...common,
+  });
+}
+
+// clock drift reflects each node's latest measured drift, not a windowed aggregate, so region-only
+export function useClockDrift(limit = 100) {
+  const { iatas, regionKey } = useRegion();
+  return useQuery({
+    queryKey: ["stats-clock-drift", regionKey, limit],
+    queryFn: () => getClockDrift(iatas, limit),
     ...common,
   });
 }

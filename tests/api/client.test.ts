@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { getPackets, getNodesPage, getObserversPage, getScopes, getKnownRoutesPage, searchKnownRoutes, getChannels, getChannelMessagesPage, getTraces, getTraceDetail, getStatsOverview, getTopObservers, getTopAdvertisers, getTopTalkers, getStatsNodeTypes } from "../../src/api/client";
+import { getPackets, getNodesPage, getObserversPage, getScopes, getKnownRoutesPage, searchKnownRoutes, getChannels, getChannelMessagesPage, getTraces, getTraceDetail, getStatsOverview, getTopObservers, getTopAdvertisers, getTopTalkers, getStatsNodeTypes, getClockDrift } from "../../src/api/client";
 import type { NodeSummary } from "../../src/features/nodes/types";
 import type { ObserverSummary } from "../../src/features/observers/types";
 import type { ChannelMessage, ChannelSummary } from "../../src/features/channels/types";
@@ -423,5 +423,16 @@ describe("stats endpoints", () => {
     const url = new URL(getUrl());
     expect(url.pathname).toContain("/stats/node-types");
     expect(url.searchParams.get("iatas")).toBe("YOW,YYZ");
+  });
+
+  it("hits /stats/clock-drift with iatas/limit", async () => {
+    const getUrl = mockFetchOnce([]);
+
+    await getClockDrift(["YOW", "YYZ"], 100);
+
+    const url = new URL(getUrl());
+    expect(url.pathname).toContain("/stats/clock-drift");
+    expect(url.searchParams.get("iatas")).toBe("YOW,YYZ");
+    expect(url.searchParams.get("limit")).toBe("100");
   });
 });
