@@ -38,4 +38,77 @@ describe("PacketPathLine", () => {
     })} />);
     expect(screen.getByText("Raven").className).toContain("text-warn");
   });
+
+  it("tints a high-confidence hop with the green token", () => {
+    render(<PacketPathLine packet={pkt({
+      latestObserver: {
+        id: "o1", iata: "YVR",
+        pathLength: { raw: "41", hashSize: 1, hopCount: 1 }, pathBytes: "7f",
+        resolvedPath: [{ confidence: "high", nodes: [{ id: "n", publicKey: "ab", name: "Falcon" }] }],
+      },
+    })} />);
+    expect(screen.getByText("Falcon").className).toContain("text-green");
+  });
+
+  it("renders both endpoints with the arrow glyph between them", () => {
+    render(<PacketPathLine packet={pkt({
+      latestObserver: {
+        id: "o1", iata: "YVR",
+        pathLength: { raw: "00", hashSize: 1, hopCount: 0 },
+        resolvedSource: { confidence: "high", nodes: [{ id: "s", publicKey: "aa", name: "SrcNode" }] },
+        resolvedDestination: { confidence: "high", nodes: [{ id: "d", publicKey: "bb", name: "DstNode" }] },
+      },
+    })} />);
+    expect(screen.getByText("SrcNode")).toBeInTheDocument();
+    expect(screen.getByText("DstNode")).toBeInTheDocument();
+    expect(screen.getByText("→")).toBeInTheDocument();
+  });
+
+  it("shows n/a for a missing endpoint while the present one still renders", () => {
+    render(<PacketPathLine packet={pkt({
+      latestObserver: {
+        id: "o1", iata: "YVR",
+        pathLength: { raw: "00", hashSize: 1, hopCount: 0 },
+        resolvedSource: { confidence: "high", nodes: [{ id: "s", publicKey: "aa", name: "SrcNode" }] },
+      },
+    })} />);
+    expect(screen.getByText("SrcNode")).toBeInTheDocument();
+    expect(screen.getByText("n/a")).toBeInTheDocument();
+  });
+
+  it("omits the endpoint block entirely when both endpoints are absent", () => {
+    render(<PacketPathLine packet={pkt({
+      latestObserver: {
+        id: "o1", iata: "YVR",
+        pathLength: { raw: "00", hashSize: 1, hopCount: 0 },
+      },
+    })} />);
+    expect(screen.queryByText("→")).not.toBeInTheDocument();
+  });
+
+  it("renders a bare ? for a single unresolved hop", () => {
+    render(<PacketPathLine packet={pkt({
+      latestObserver: {
+        id: "o1", iata: "YVR",
+        pathLength: { raw: "41", hashSize: 1, hopCount: 1 }, pathBytes: "7f",
+        resolvedPath: [{ confidence: "none", nodes: [] }],
+      },
+    })} />);
+    expect(screen.getByText("?")).toBeInTheDocument();
+  });
+
+  it("collapses a run of unresolved hops into a single ?×N chip", () => {
+    render(<PacketPathLine packet={pkt({
+      latestObserver: {
+        id: "o1", iata: "YVR",
+        pathLength: { raw: "43", hashSize: 1, hopCount: 3 }, pathBytes: "7f7f7f",
+        resolvedPath: [
+          { confidence: "none", nodes: [] },
+          { confidence: "none", nodes: [] },
+          { confidence: "none", nodes: [] },
+        ],
+      },
+    })} />);
+    expect(screen.getByText("?×3")).toBeInTheDocument();
+  });
 });
