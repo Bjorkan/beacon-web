@@ -49,6 +49,15 @@ describe("buildPathSummary", () => {
     expect(s.chips).toEqual([]);
   });
 
+  it("renders hop count with no chips when pathBytes is absent entirely", () => {
+    const s = buildPathSummary(pkt(obs({
+      pathLength: { raw: "43", hashSize: 1, hopCount: 3 },
+    })));
+    expect(s.hopLabel).toBe("3 hops");
+    expect(s.chips).toEqual([]);
+    expect(s.isNa).toBe(false);
+  });
+
   it("truncates past the hop budget and counts remaining hops", () => {
     const s = buildPathSummary(pkt(obs({
       pathLength: { raw: "4e", hashSize: 1, hopCount: 14 },
@@ -100,5 +109,13 @@ describe("buildPathSummary", () => {
     })));
     expect(s.source).toEqual({ kind: "node", label: "Salish", confidence: "high" });
     expect(s.destination).toBeNull();
+  });
+
+  it("falls back to an unresolved-run chip for an endpoint with confidence none", () => {
+    const s = buildPathSummary(pkt(obs({
+      pathLength: { raw: "41", hashSize: 1, hopCount: 1 }, pathBytes: "7f",
+      resolvedSource: { confidence: "none", nodes: [] },
+    })));
+    expect(s.source).toEqual({ kind: "unresolved-run", count: 1 });
   });
 });
