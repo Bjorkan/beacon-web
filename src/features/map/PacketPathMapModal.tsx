@@ -56,7 +56,7 @@ export function PacketPathMapModal({ detail, onClose, initialSelectedKey }: {
           <span className="text-[13px] font-mono font-medium text-text-dim uppercase tracking-wider">Packet Path</span>
           <div className="flex items-center gap-1.5">
             <CopyLinkButton
-              params={() => ({ tab: "Packets", hash: detail.packetHash, path: selectedKey ?? "all" })}
+              params={() => ({ tab: "Packets", hash: detail.packetHash, path: selectedKey ?? "all", analyze: null })}
               ariaLabel="Copy path link"
             />
             <CloseButton onClose={onClose} label="Close path map" className="-mr-1" />

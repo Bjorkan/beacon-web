@@ -129,8 +129,9 @@ function AppInner() {
   // Resolve the starting selection once from URL → storage → legacy key (see computeInitialSelection).
   const [initialSelection] = useState(() => computeInitialSelection(searchParams));
 
-  // ?hash / ?node / ?observer restore a shared deep link on load (see each panel's Copy Link button)
-  const [analyzerHash, setAnalyzerHash] = useState<string | null>(() => searchParams.get("hash"));
+  // ?node / ?observer restore a shared deep link on load (see each panel's Copy Link button)
+  // ?analyze=1 is a boolean flag; the hash always lives in ?hash, so ?analyze alone opens nothing
+  const analyzerHash = searchParams.get("analyze") === "1" ? searchParams.get("hash") : null;
   const [selectedObservationId, setSelectedObservationId] = useState<number | null>(null);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(() => searchParams.get("node"));
   // lifted (like selectedNodeId) so a node's "View observer" link can select it before the tab mounts
@@ -148,7 +149,7 @@ function AppInner() {
   const { data: analyzerDetail, isLoading: analyzerLoading } = usePacketDetail(analyzerHash);
   const { data: overlayPacketDetail, isLoading: overlayPacketLoading } = usePacketDetail(overlayPacketHash);
 
-  // deep link: ?hash opens the analyzer drawer; ?path then opens the path popup once, pre-selected
+  // deep link: ?hash&analyze=1 opens the analyzer drawer; ?path then opens the path popup once, pre-selected
   useEffect(() => {
     if (!initialPath || !analyzerDetail || pathLinkHandledRef.current) return;
     pathLinkHandledRef.current = true;
@@ -157,9 +158,14 @@ function AppInner() {
   }, [initialPath, analyzerDetail]);
 
   const handleAnalyze = useCallback((hash: string | null) => {
-    setAnalyzerHash(hash);
     setSelectedObservationId(null);
-  }, []);
+    setSearchParams((p) => {
+      const n = new URLSearchParams(p);
+      if (hash) { n.set("hash", hash); n.set("analyze", "1"); n.delete("path"); }
+      else n.delete("analyze");
+      return n;
+    }, { replace: true });
+  }, [setSearchParams]);
 
   const handleTabChange = (tab: string) => {
     setOverlayNodeId(null);
@@ -168,7 +174,6 @@ function AppInner() {
     // On mobile a detail panel fills the screen, so leaving its tab must close it; desktop side
     // panels persist across tabs. Cross-nav (onViewObserver) re-sets its selection after this.
     if (isMobile) {
-      setAnalyzerHash(null);
       setSelectedObservationId(null);
       setSelectedNodeId(null);
       setSelectedObserverId(null);
@@ -195,7 +200,7 @@ function AppInner() {
   }, []);
 
   // Closing a detail panel drops its deep-link param so a reload can't reopen it (mirrors the packet
-  // analyzer's ?hash cleanup). Selecting a different node/observer doesn't touch the URL — the panel's
+  // analyzer's ?analyze cleanup). Selecting a different node/observer doesn't touch the URL — the panel's
   // Copy Link button rebuilds a fresh link on demand.
   const dropSelectionParam = useCallback((key: "node" | "observer") => {
     setSearchParams((prev) => {

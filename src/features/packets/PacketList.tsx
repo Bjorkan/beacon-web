@@ -31,7 +31,8 @@ interface PacketListProps {
 
 // main packet view: filters, banner, virtual list
 
-export function PacketList({ wsManager, onAnalyze }: PacketListProps) {
+// onAnalyze isn't called here — Task 9's row-expansion "Open analyzer" button will call it
+export function PacketList({ wsManager }: PacketListProps) {
   const [searchParams, setSearchParams] = useSearchParams();
   const { filters, setFilter, setSearch, setSearchField, clearFilters } = usePacketFilters();
   // single-value selections go to the server so scrolling pages through matching history
@@ -68,18 +69,17 @@ export function PacketList({ wsManager, onAnalyze }: PacketListProps) {
     [allPackets, filters, observersByHash],
   );
 
-  // ?hash is the source of truth — the analyzer drawer clears it on close, deselecting the row
+  // ?hash is the selected packet — it expands the row inline. The analyzer is a separate state (?analyze=1).
   const expandedHash = searchParams.get("hash");
 
   const handleToggleExpand = useCallback((hash: string) => {
     const next = expandedHash === hash ? null : hash;
-    onAnalyze(next);
     setSearchParams((p) => {
       const n = new URLSearchParams(p);
       if (next) n.set("hash", next); else n.delete("hash");
       return n;
     }, { replace: true });
-  }, [expandedHash, setSearchParams, onAnalyze]);
+  }, [expandedHash, setSearchParams]);
 
   useWsPacketHandler(wsManager, handlePacketObservation);
   useWsLaggedHandler(wsManager, handleLagged);

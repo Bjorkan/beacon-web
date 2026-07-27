@@ -44,11 +44,11 @@ export function PacketAnalyzerDrawer({ detail, selectedObservationId, onClose, o
 
   const hasPath = useMemo(() => (detail ? buildPacketPaths(detail).length > 0 : false), [detail]);
 
-  // drop ?hash so the closed analyzer can't reopen on reload and the packet row deselects
+  // drop ?analyze so a reload doesn't reopen the drawer; ?hash stays, leaving the row expanded
   const handleClose = useCallback(() => {
     setSearchParams((p) => {
       const n = new URLSearchParams(p);
-      n.delete("hash");
+      n.delete("analyze");
       return n;
     }, { replace: true });
     onClose();
@@ -72,7 +72,7 @@ export function PacketAnalyzerDrawer({ detail, selectedObservationId, onClose, o
       <div className="flex items-center justify-between px-3 py-2 border-b border-border-subtle shrink-0">
         <span className="text-[13px] font-mono font-medium text-text-dim uppercase tracking-wider">Packet Analyzer</span>
         <div className="flex items-center gap-1.5">
-          {detail && <CopyLinkButton params={{ tab: "Packets", hash: detail.packetHash }} ariaLabel="Copy packet link" />}
+          {detail && <CopyLinkButton params={{ tab: "Packets", hash: detail.packetHash, analyze: "1" }} ariaLabel="Copy packet link" />}
           <CloseButton onClose={handleClose} label="Close analyzer" className="-mr-1" />
         </div>
       </div>

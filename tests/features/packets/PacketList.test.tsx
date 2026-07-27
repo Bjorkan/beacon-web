@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
-import { MemoryRouter, useSearchParams } from "react-router-dom";
+import { MemoryRouter } from "react-router-dom";
 import { PacketList } from "../../../src/features/packets/PacketList";
 import type { WsManager } from "../../../src/api/ws-manager";
 import type { PacketSummary } from "../../../src/types/api";
@@ -40,37 +40,35 @@ vi.mock("../../../src/hooks/useWsHandlers", () => ({
 // the virtual list needs ResizeObserver in jsdom; stub it down to the expand wiring under test
 vi.mock("../../../src/features/packets/PacketVirtualList", () => ({
   PacketVirtualList: ({
+    packets,
     expandedHash,
     onToggleExpand,
   }: {
+    packets: PacketSummary[];
     expandedHash: string | null;
     onToggleExpand: (hash: string) => void;
   }) => (
     <div>
       <div data-testid="expanded">{String(expandedHash)}</div>
-      <button type="button" onClick={() => onToggleExpand("h1")}>toggle-h1</button>
+      {packets.map((p) => (
+        <button
+          key={p.packetHash}
+          type="button"
+          aria-expanded={expandedHash === p.packetHash}
+          onClick={() => onToggleExpand(p.packetHash)}
+        >
+          {p.packetHash}
+        </button>
+      ))}
     </div>
   ),
 }));
 
-// stands in for the analyzer drawer's close button, which clears ?hash from outside PacketList
-function ExternalHashCloser() {
-  const [, setSearchParams] = useSearchParams();
-  return (
-    <button
-      type="button"
-      onClick={() =>
-        setSearchParams((p) => {
-          const n = new URLSearchParams(p);
-          n.delete("hash");
-          return n;
-        })
-      }
-    >
-      close-url
-    </button>
-  );
-}
+const packet = (hash: string): PacketSummary => ({
+  packetHash: hash, payloadType: 1, payloadTypeName: "ADVERT",
+  routeType: 1, routeTypeName: "FLOOD",
+  firstHeardAt: 1700000000, lastHeardAt: 1700000000, observationCount: 1,
+});
 
 describe("PacketList server filter wiring", () => {
   function renderAt(url: string) {
@@ -140,24 +138,31 @@ describe("PacketList loading feedback", () => {
 });
 
 describe("PacketList expanded row", () => {
-  it("follows the ?hash param so an external analyzer close deselects the row", () => {
+  it("expands a row from ?hash without opening the analyzer", () => {
     const onAnalyze = vi.fn();
+    usePackets.mockReturnValue({ ...basePackets(), allPackets: [packet("AA11")] });
+
     render(
-      <MemoryRouter initialEntries={["/?hash=h1"]}>
-        <PacketList wsManager={{} as unknown as WsManager} onAnalyze={onAnalyze} />
-        <ExternalHashCloser />
+      <MemoryRouter initialEntries={["/?tab=Packets&hash=AA11"]}>
+        <PacketList wsManager={{} as WsManager} onAnalyze={onAnalyze} />
       </MemoryRouter>,
     );
 
-    expect(screen.getByTestId("expanded").textContent).toBe("h1");
+    expect(screen.getByRole("button", { name: /AA11/ })).toHaveAttribute("aria-expanded", "true");
+    expect(onAnalyze).not.toHaveBeenCalled();
+  });
 
-    // analyzer drawer closed elsewhere — row must deselect
-    fireEvent.click(screen.getByText("close-url"));
-    expect(screen.getByTestId("expanded").textContent).toBe("null");
+  it("clicking a row sets ?hash and does not open the analyzer", () => {
+    const onAnalyze = vi.fn();
+    usePackets.mockReturnValue({ ...basePackets(), allPackets: [packet("AA11")] });
 
-    // clicking the same row again must reopen, not collapse
-    fireEvent.click(screen.getByText("toggle-h1"));
-    expect(screen.getByTestId("expanded").textContent).toBe("h1");
-    expect(onAnalyze).toHaveBeenLastCalledWith("h1");
+    render(
+      <MemoryRouter initialEntries={["/?tab=Packets"]}>
+        <PacketList wsManager={{} as WsManager} onAnalyze={onAnalyze} />
+      </MemoryRouter>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: /AA11/ }));
+    expect(onAnalyze).not.toHaveBeenCalled();
   });
 });

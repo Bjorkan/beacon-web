@@ -11,10 +11,10 @@ function LocationProbe() {
 }
 
 describe("PacketAnalyzerDrawer close", () => {
-  it("removes ?hash from the URL and calls onClose", () => {
+  it("removes ?analyze but keeps ?hash, and calls onClose", () => {
     const onClose = vi.fn();
     render(
-      <MemoryRouter initialEntries={["/?tab=Packets&hash=abc123"]}>
+      <MemoryRouter initialEntries={["/?tab=Packets&hash=abc123&analyze=1"]}>
         <PacketAnalyzerDrawer detail={undefined} selectedObservationId={null} onClose={onClose} />
         <LocationProbe />
       </MemoryRouter>,
@@ -24,7 +24,8 @@ describe("PacketAnalyzerDrawer close", () => {
 
     expect(onClose).toHaveBeenCalledOnce();
     const search = screen.getByTestId("search").textContent ?? "";
-    expect(search).not.toContain("hash=");
+    expect(search).not.toContain("analyze=");
+    expect(search).toContain("hash=abc123"); // row stays expanded
     expect(search).toContain("tab=Packets"); // other params survive
   });
 });
