@@ -46,7 +46,14 @@ export function PacketExpansion({ packet, onOpenAnalyzer, onViewPath, selectedOb
       </div>
 
       <div className="max-h-[360px] overflow-y-auto">
-        {noObservations ? (
+        {isError ? (
+          <div className="flex items-center gap-3 text-[10px] text-danger py-2">
+            <span>Failed to load observations</span>
+            <button type="button" onClick={() => refetch()} className="border border-border rounded-sm px-2 py-0.5 bg-bg-raised cursor-pointer">
+              Retry
+            </button>
+          </div>
+        ) : noObservations ? (
           emptyState
         ) : isLoading ? (
           <div>
@@ -57,13 +64,6 @@ export function PacketExpansion({ packet, onOpenAnalyzer, onViewPath, selectedOb
                 className="h-[22px] border-t border-border-subtle animate-pulse bg-bg-raised/30"
               />
             ))}
-          </div>
-        ) : isError ? (
-          <div className="flex items-center gap-3 text-[10px] text-danger py-2">
-            <span>Failed to load observations</span>
-            <button type="button" onClick={() => refetch()} className="border border-border rounded-sm px-2 py-0.5 bg-bg-raised cursor-pointer">
-              Retry
-            </button>
           </div>
         ) : data && data.observations.length === 0 ? (
           emptyState

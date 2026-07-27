@@ -47,6 +47,14 @@ describe("PacketExpansion", () => {
     expect(screen.getByRole("button", { name: /retry/i })).toBeInTheDocument();
   });
 
+  it("shows error state even when summary count is zero", () => {
+    usePacketDetail.mockReturnValue({ isError: true, refetch: vi.fn() });
+    render(<PacketExpansion {...props} packet={pkt({ observationCount: 0 })} />);
+    expect(screen.getByText("Failed to load observations")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /retry/i })).toBeInTheDocument();
+    expect(screen.queryByText("No observations")).not.toBeInTheDocument();
+  });
+
   it("calls refetch when retry is clicked", () => {
     const refetch = vi.fn();
     usePacketDetail.mockReturnValue({ isError: true, refetch });
