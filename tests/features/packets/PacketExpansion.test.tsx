@@ -1,0 +1,131 @@
+import { describe, it, expect, vi, beforeEach } from "vitest";
+import { render, screen, fireEvent } from "@testing-library/react";
+import { PacketExpansion } from "../../../src/features/packets/PacketExpansion";
+import type { PacketSummary, Observation } from "../../../src/types/api";
+
+const usePacketDetail = vi.fn();
+vi.mock("../../../src/features/packets/usePacketDetail", () => ({
+  usePacketDetail: (h: string | null) => usePacketDetail(h),
+}));
+
+const pkt = (over: Partial<PacketSummary> = {}): PacketSummary => ({
+  packetHash: "AA11", payloadType: 1, payloadTypeName: "ADVERT",
+  routeType: 1, routeTypeName: "FLOOD",
+  firstHeardAt: 1700000000, lastHeardAt: 1700000002, observationCount: 3, ...over,
+});
+
+const obs = (id: number, over: Partial<Observation> = {}): Observation => ({
+  id, observerId: `o${id}`, observerName: `Observer ${id}`, iata: "YVR",
+  heardAt: 1700000000 + id, pathLength: { raw: "41", hashSize: 1, hopCount: 1 },
+  sourceBroker: "b1", resolvedPath: [], ...over,
+});
+
+const props = {
+  packet: pkt(), onOpenAnalyzer: () => {}, onViewPath: () => {},
+  selectedObservationId: null, onSelectObservation: () => {},
+};
+
+beforeEach(() => usePacketDetail.mockReset());
+
+describe("PacketExpansion", () => {
+  it("shows one skeleton row per expected observation while loading", () => {
+    usePacketDetail.mockReturnValue({ isLoading: true });
+    render(<PacketExpansion {...props} />);
+    expect(screen.getAllByTestId("observation-skeleton")).toHaveLength(3);
+  });
+
+  it("caps skeleton rows at the scroll cap for a large observation count", () => {
+    usePacketDetail.mockReturnValue({ isLoading: true });
+    render(<PacketExpansion {...props} packet={pkt({ observationCount: 50 })} />);
+    expect(screen.getAllByTestId("observation-skeleton")).toHaveLength(12);
+  });
+
+  it("shows an error line with retry on failure", () => {
+    usePacketDetail.mockReturnValue({ isError: true, refetch: vi.fn() });
+    render(<PacketExpansion {...props} />);
+    expect(screen.getByText("Failed to load observations")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /retry/i })).toBeInTheDocument();
+  });
+
+  it("calls refetch when retry is clicked", () => {
+    const refetch = vi.fn();
+    usePacketDetail.mockReturnValue({ isError: true, refetch });
+    render(<PacketExpansion {...props} />);
+    fireEvent.click(screen.getByRole("button", { name: /retry/i }));
+    expect(refetch).toHaveBeenCalled();
+  });
+
+  it("shows an empty state when the packet has no observations", () => {
+    usePacketDetail.mockReturnValue({ data: { packetHash: "AA11", observations: [] } });
+    render(<PacketExpansion {...props} />);
+    expect(screen.getByText("No observations")).toBeInTheDocument();
+  });
+
+  it("shows the empty state immediately when the summary count is zero, without a skeleton", () => {
+    usePacketDetail.mockReturnValue({ isLoading: true });
+    render(<PacketExpansion {...props} packet={pkt({ observationCount: 0 })} />);
+    expect(screen.getByText("No observations")).toBeInTheDocument();
+    expect(screen.queryByTestId("observation-skeleton")).not.toBeInTheDocument();
+  });
+
+  it("renders the timing strip from the summary without waiting for the fetch", () => {
+    usePacketDetail.mockReturnValue({ isLoading: true });
+    render(<PacketExpansion {...props} />);
+    expect(screen.getByText(/spread/i)).toBeInTheDocument();
+  });
+
+  it("formats the spread as first/last converted from milliseconds, not re-scaled", () => {
+    usePacketDetail.mockReturnValue({ isLoading: true });
+    render(<PacketExpansion {...props} packet={pkt({ firstHeardAt: 1000, lastHeardAt: 3500 })} />);
+    expect(screen.getByText("spread 2.500s")).toBeInTheDocument();
+  });
+
+  it("renders the observation table once data resolves", () => {
+    usePacketDetail.mockReturnValue({ data: { packetHash: "AA11", observations: [obs(1), obs(2)] } });
+    render(<PacketExpansion {...props} />);
+    expect(screen.getByText("Observer 1")).toBeInTheDocument();
+    expect(screen.getByText("Observer 2")).toBeInTheDocument();
+  });
+
+  it("wires selectedObservationId and onSelectObservation through to the observation table", () => {
+    const onSelectObservation = vi.fn();
+    usePacketDetail.mockReturnValue({ data: { packetHash: "AA11", observations: [obs(1), obs(2)] } });
+    render(<PacketExpansion {...props} selectedObservationId={2} onSelectObservation={onSelectObservation} />);
+    const rows = screen.getAllByRole("row").slice(1);
+    expect(rows[1]).toHaveAttribute("aria-selected", "true");
+    fireEvent.click(screen.getByText("Observer 1"));
+    expect(onSelectObservation).toHaveBeenCalledWith(1);
+  });
+
+  it("disables both action buttons while loading", () => {
+    usePacketDetail.mockReturnValue({ isLoading: true });
+    render(<PacketExpansion {...props} />);
+    expect(screen.getByRole("button", { name: "Open analyzer" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "View path on map" })).toBeDisabled();
+  });
+
+  it("disables both action buttons on error", () => {
+    usePacketDetail.mockReturnValue({ isError: true, refetch: vi.fn() });
+    render(<PacketExpansion {...props} />);
+    expect(screen.getByRole("button", { name: "Open analyzer" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "View path on map" })).toBeDisabled();
+  });
+
+  it("enables both action buttons once the fetch resolves", () => {
+    usePacketDetail.mockReturnValue({ data: { packetHash: "AA11", observations: [] } });
+    render(<PacketExpansion {...props} />);
+    expect(screen.getByRole("button", { name: "Open analyzer" })).not.toBeDisabled();
+    expect(screen.getByRole("button", { name: "View path on map" })).not.toBeDisabled();
+  });
+
+  it("calls onOpenAnalyzer and onViewPath when their buttons are clicked", () => {
+    const onOpenAnalyzer = vi.fn();
+    const onViewPath = vi.fn();
+    usePacketDetail.mockReturnValue({ data: { packetHash: "AA11", observations: [] } });
+    render(<PacketExpansion {...props} onOpenAnalyzer={onOpenAnalyzer} onViewPath={onViewPath} />);
+    fireEvent.click(screen.getByRole("button", { name: "Open analyzer" }));
+    fireEvent.click(screen.getByRole("button", { name: "View path on map" }));
+    expect(onOpenAnalyzer).toHaveBeenCalledTimes(1);
+    expect(onViewPath).toHaveBeenCalledTimes(1);
+  });
+});
