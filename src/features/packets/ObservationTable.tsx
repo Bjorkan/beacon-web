@@ -9,8 +9,7 @@ interface Props {
   onSelect: (id: number) => void;
 }
 
-// per-observer view of a packet: signal readings and path differ row to row since observers sit at
-// different distances from the origin. Presentational — the caller owns selection and ordering.
+// Per-observer readings vary by distance; presentational component owned by caller.
 export function ObservationTable({ observations, selectedId, onSelect }: Props) {
   return (
     <table className="w-full text-[10px] border-collapse">
@@ -47,7 +46,7 @@ export function ObservationTable({ observations, selectedId, onSelect }: Props) 
               <td className="py-1 px-1.5 font-mono text-text-muted">{o.pathLength.hopCount}</td>
               <td className="py-1 px-1.5">
                 {o.pathBytes ? (
-                  <PathData pathBytes={o.pathBytes} hashSize={o.pathLength.hashSize} resolvedPath={o.resolvedPath} />
+                  <PathData pathBytes={o.pathBytes} hashSize={o.pathLength.hashSize} resolvedPath={o.resolvedPath} size="sm" />
                 ) : (
                   <span className="text-text-dim">—</span>
                 )}

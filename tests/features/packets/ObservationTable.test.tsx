@@ -89,4 +89,11 @@ describe("ObservationTable", () => {
     const cell = within(row).getAllByRole("cell")[3]!;
     expect(cell.className).toContain("text-danger");
   });
+
+  it("colors a null SNR as dim", () => {
+    render(<ObservationTable observations={[obs(1, { snr: undefined })]} selectedId={null} onSelect={() => {}} />);
+    const row = screen.getAllByRole("row")[1]!;
+    const cell = within(row).getAllByRole("cell")[3]!;
+    expect(cell.className).toContain("text-text-dim");
+  });
 });
