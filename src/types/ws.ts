@@ -1,6 +1,6 @@
 import type { ChannelMessage } from "../features/channels/types";
 import type { NodeIATA } from "../features/nodes/types";
-import type { ResolvedHop } from "./api";
+import type { PathLength, ResolvedHop } from "./api";
 
 // individual server-sent message shapes
 
@@ -60,6 +60,8 @@ export interface WsPacketObservation {
       rssi: number;
       snr: number;
       sourceBroker: string;
+      pathLength?: PathLength;
+      pathBytes?: string;
       // per-hop resolved path; populated only when the connection opts in via configure{resolvePath},
       // null otherwise. Same shape as the REST Observation.resolvedPath.
       resolvedPath?: ResolvedHop[] | null;

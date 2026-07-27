@@ -12,6 +12,14 @@ export interface LatestObserver {
   id: string;
   displayName?: string;
   iata: string;
+  // path fields land on the REST list from beacon-server ae0669c, and on live rows via the WS feed;
+  // resolvedSource/Destination are WS-only for now — the list endpoints leave them nil on purpose.
+  pathLength?: PathLength;
+  pathBytes?: string;
+  resolvedSource?: ResolvedHop;
+  resolvedDestination?: ResolvedHop;
+  // per-hop resolved path; WS-only, and only when the connection opts into configure{resolvePath}.
+  resolvedPath?: ResolvedHop[];
 }
 
 // packet list and detail shapes

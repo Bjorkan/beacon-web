@@ -215,6 +215,70 @@ describe("usePackets server filter", () => {
   });
 });
 
+describe("usePackets path and endpoint fields", () => {
+  let qc: QueryClient;
+  let rafCallbacks: FrameRequestCallback[];
+
+  beforeEach(() => {
+    getPackets.mockReset();
+    getPackets.mockResolvedValue({ items: [], nextCursor: null });
+    qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+
+    rafCallbacks = [];
+    vi.stubGlobal("requestAnimationFrame", (cb: FrameRequestCallback) => {
+      rafCallbacks.push(cb);
+      return rafCallbacks.length;
+    });
+    vi.stubGlobal("cancelAnimationFrame", () => {});
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  const wrapper = ({ children }: { children: ReactNode }) => (
+    <QueryClientProvider client={qc}>{children}</QueryClientProvider>
+  );
+
+  it("carries path and endpoint fields from the WS observation into latestObserver", () => {
+    const { result } = renderHook(() => usePackets(false, undefined), { wrapper });
+
+    act(() => {
+      result.current.handlePacketObservation({
+        packetHash: "AA11",
+        packet: {
+          payloadType: 1,
+          payloadTypeName: "ADVERT",
+          routeType: 1,
+          routeTypeName: "FLOOD",
+          isFirstObservation: true,
+          observationCount: 1,
+        },
+        observation: {
+          observerId: "obs-1",
+          observerName: "Raven",
+          iata: "YVR",
+          heardAt: 1700000000,
+          rssi: -94,
+          snr: -7.5,
+          sourceBroker: "b1",
+          pathLength: { raw: "42", hashSize: 1, hopCount: 2 },
+          pathBytes: "7fa4",
+          resolvedSource: { confidence: "high", nodes: [{ id: "n1", publicKey: "ab", name: "Salish" }] },
+          resolvedDestination: null,
+        },
+      });
+      rafCallbacks.splice(0).forEach((cb) => cb(0));
+    });
+
+    const obs = result.current.allPackets[0]!.latestObserver;
+    expect(obs?.pathLength).toEqual({ raw: "42", hashSize: 1, hopCount: 2 });
+    expect(obs?.pathBytes).toBe("7fa4");
+    expect(obs?.resolvedSource?.nodes[0]!.name).toBe("Salish");
+    expect(obs?.resolvedDestination).toBeUndefined();
+  });
+});
+
 function observation(hash: string): WsPacketObservation["data"] {
   return {
     packetHash: hash,
