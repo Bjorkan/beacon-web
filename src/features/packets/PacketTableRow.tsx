@@ -54,10 +54,10 @@ export function PacketTableRow({ packet, expanded, isFresh, onToggle }: PacketTa
         </span>
         <span className="font-mono text-text-muted">×{packet.observationCount}</span>
         <span className="text-text-normal truncate">
-          {observer ? (observer.displayName ?? observer.id.slice(0, 8)) : <span className="text-text-dim">—</span>}
+          {observer ? (observer.displayName ?? observer.id.slice(0, 8)) : <span className="text-text-dim">n/a</span>}
         </span>
         <span className="font-mono font-bold text-primary tracking-wider">
-          {observer?.iata ?? <span className="text-text-dim font-normal">—</span>}
+          {observer?.iata ?? <span className="text-text-dim font-normal">n/a</span>}
         </span>
         <span className="text-right text-text-muted">
           <Timestamp value={packet.lastHeardAt} />

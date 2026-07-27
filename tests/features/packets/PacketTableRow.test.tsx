@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, within } from "@testing-library/react";
 import { PacketTableRow } from "../../../src/features/packets/PacketTableRow";
 import type { PacketSummary } from "../../../src/types/api";
 
@@ -25,7 +25,13 @@ describe("PacketTableRow", () => {
 
   it("renders line 2 even when there is no path data, so row height is constant", () => {
     render(<PacketTableRow packet={pkt()} expanded={false} onToggle={() => {}} />);
-    expect(screen.getByText("n/a")).toBeInTheDocument();
+    expect(screen.getAllByText("n/a")).toHaveLength(3);
+  });
+
+  it("falls back to n/a in the observer and IATA cells when there is no observer", () => {
+    render(<PacketTableRow packet={pkt()} expanded={false} onToggle={() => {}} />);
+    const line1 = within(screen.getByRole("button"));
+    expect(line1.getAllByText("n/a")).toHaveLength(2);
   });
 
   it("falls back to the observer id when there is no display name", () => {
