@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef, lazy, Suspense } from "react";
 import { BrowserRouter, useSearchParams } from "react-router-dom";
-import { QueryClient, QueryClientProvider, useQuery } from "@tanstack/react-query";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { RegionProvider, useRegion, useRegionSelection } from "./hooks/useRegion";
 import {
   ALL_REGIONS,
@@ -27,7 +27,7 @@ import { RouteTable } from "./features/routes/RouteTable";
 import { TraceList } from "./features/traces/TraceList";
 import { ChannelList } from "./features/channels/ChannelList";
 import { EmptyState } from "./components/EmptyState";
-import { getPacketDetail } from "./api/client";
+import { usePacketDetail } from "./features/packets/usePacketDetail";
 import { WsManager } from "./api/ws-manager";
 import { WS_URL, ENABLED_TABS } from "./lib/constants";
 import type { PacketDetail } from "./types/api";
@@ -145,21 +145,8 @@ function AppInner() {
   const [pathMapInitialKey, setPathMapInitialKey] = useState<string | null>(null);
   const pathLinkHandledRef = useRef(false);
 
-  // short staleTime: observations keep accruing, so reopening the analyzer should show them
-  // instead of a snapshot frozen at first open
-  const { data: analyzerDetail, isLoading: analyzerLoading } = useQuery({
-    queryKey: ["packet-detail", analyzerHash],
-    queryFn: () => getPacketDetail(analyzerHash!),
-    enabled: !!analyzerHash,
-    staleTime: 30_000,
-  });
-
-  const { data: overlayPacketDetail, isLoading: overlayPacketLoading } = useQuery({
-    queryKey: ["packet-detail", overlayPacketHash],
-    queryFn: () => getPacketDetail(overlayPacketHash!),
-    enabled: !!overlayPacketHash,
-    staleTime: 30_000,
-  });
+  const { data: analyzerDetail, isLoading: analyzerLoading } = usePacketDetail(analyzerHash);
+  const { data: overlayPacketDetail, isLoading: overlayPacketLoading } = usePacketDetail(overlayPacketHash);
 
   // deep link: ?hash opens the analyzer drawer; ?path then opens the path popup once, pre-selected
   useEffect(() => {
