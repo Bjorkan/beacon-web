@@ -98,6 +98,29 @@ function RegionUrlSync() {
   return null;
 }
 
+// Restores a shared "?path" link once its detail arrives. A copied path link carries ?hash without
+// ?analyze (PacketPathMapModal's Copy Link strips it), so this can't reuse the analyzer drawer's fetch
+// and needs its own — sharing usePacketDetail's query cache means that costs nothing extra when both
+// params are present.
+export function PathLinkRestore({ initialPath, hash, analyzerDetail, onRestore }: {
+  initialPath: string | null;
+  hash: string | null;
+  analyzerDetail: PacketDetail | undefined;
+  onRestore: (detail: PacketDetail, key: string) => void;
+}) {
+  const { data: pathLinkDetail } = usePacketDetail(initialPath ? hash : null);
+  const handledRef = useRef(false);
+
+  useEffect(() => {
+    const detail = analyzerDetail ?? pathLinkDetail;
+    if (!initialPath || !detail || handledRef.current) return;
+    handledRef.current = true;
+    onRestore(detail, initialPath);
+  }, [initialPath, analyzerDetail, pathLinkDetail, onRestore]);
+
+  return null;
+}
+
 // Drop the shared node/observer selection when the user changes region, so a detail panel doesn't keep
 // showing an entity that's no longer in the re-queried map/table. Watches the raw selection rather than
 // the resolved regionKey: the async slug→IATA expansion on load bumps regionKey without any user action,
@@ -144,18 +167,14 @@ function AppInner() {
   const [pathMapDetail, setPathMapDetail] = useState<PacketDetail | null>(null);
   const [initialPath] = useState<string | null>(() => searchParams.get("path"));
   const [pathMapInitialKey, setPathMapInitialKey] = useState<string | null>(null);
-  const pathLinkHandledRef = useRef(false);
 
   const { data: analyzerDetail, isLoading: analyzerLoading } = usePacketDetail(analyzerHash);
   const { data: overlayPacketDetail, isLoading: overlayPacketLoading } = usePacketDetail(overlayPacketHash);
 
-  // deep link: ?hash&analyze=1 opens the analyzer drawer; ?path then opens the path popup once, pre-selected
-  useEffect(() => {
-    if (!initialPath || !analyzerDetail || pathLinkHandledRef.current) return;
-    pathLinkHandledRef.current = true;
-    setPathMapDetail(analyzerDetail);
-    setPathMapInitialKey(initialPath);
-  }, [initialPath, analyzerDetail]);
+  const handlePathLinkRestore = useCallback((detail: PacketDetail, key: string) => {
+    setPathMapDetail(detail);
+    setPathMapInitialKey(key);
+  }, []);
 
   const handleAnalyze = useCallback((hash: string | null) => {
     setSelectedObservationId(null);
@@ -262,6 +281,12 @@ function AppInner() {
       <RegionWatcher wsManager={wsManager} />
       <RegionUrlSync />
       <SelectionResetOnRegion onRegionChange={clearSelection} />
+      <PathLinkRestore
+        initialPath={initialPath}
+        hash={searchParams.get("hash")}
+        analyzerDetail={analyzerDetail}
+        onRestore={handlePathLinkRestore}
+      />
       <AppShell activeTab={activeTab} onTabChange={handleTabChange} wsManager={wsManager}>
         <div className="relative flex flex-1 min-h-0">
           <div key={activeTab} className="flex flex-1 min-h-0 fade-in">

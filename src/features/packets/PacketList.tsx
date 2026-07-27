@@ -31,7 +31,7 @@ interface PacketListProps {
 
 // main packet view: filters, banner, virtual list
 
-// onAnalyze isn't called here — Task 9's row-expansion "Open analyzer" button will call it
+// onAnalyze isn't called here — it's retained for the row-expansion's future "Open analyzer" button
 export function PacketList({ wsManager }: PacketListProps) {
   const [searchParams, setSearchParams] = useSearchParams();
   const { filters, setFilter, setSearch, setSearchField, clearFilters } = usePacketFilters();
