@@ -279,7 +279,10 @@ describe("usePackets path and endpoint fields", () => {
   });
 });
 
-function observation(hash: string): WsPacketObservation["data"] {
+function observation(
+  hash: string,
+  over: { heardAt?: number; observerId?: string; observationCount?: number } = {},
+): WsPacketObservation["data"] {
   return {
     packetHash: hash,
     packet: {
@@ -288,19 +291,89 @@ function observation(hash: string): WsPacketObservation["data"] {
       routeType: 1,
       routeTypeName: "FLOOD",
       isFirstObservation: true,
-      observationCount: 1,
+      observationCount: over.observationCount ?? 1,
     },
     observation: {
-      observerId: "o1",
+      observerId: over.observerId ?? "o1",
       observerName: "Obs",
       iata: "YOW",
-      heardAt: 1,
+      heardAt: over.heardAt ?? 1,
       rssi: -80,
       snr: 5,
       sourceBroker: "b",
     },
   };
 }
+
+describe("usePackets live heard window", () => {
+  let qc: QueryClient;
+  let rafCallbacks: FrameRequestCallback[];
+
+  beforeEach(() => {
+    getPackets.mockReset();
+    getPackets.mockResolvedValue({ items: [], nextCursor: null });
+    qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+
+    rafCallbacks = [];
+    vi.stubGlobal("requestAnimationFrame", (cb: FrameRequestCallback) => {
+      rafCallbacks.push(cb);
+      return rafCallbacks.length;
+    });
+    vi.stubGlobal("cancelAnimationFrame", () => {});
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  const wrapper = ({ children }: { children: ReactNode }) => (
+    <QueryClientProvider client={qc}>{children}</QueryClientProvider>
+  );
+
+  const flushRaf = () => rafCallbacks.splice(0).forEach((cb) => cb(0));
+
+  // Each WS message carries only its own heardAt, so a second observation of the same packet used to
+  // collapse the window to a single instant — the expanded row then read "spread 0.000s".
+  it("widens the heard window across observations instead of collapsing it", async () => {
+    const { result } = renderHook(() => usePackets(), { wrapper });
+    await waitFor(() => expect(getPackets).toHaveBeenCalled());
+
+    act(() => {
+      result.current.handlePacketObservation(observation("p1", { heardAt: 2000 }));
+      flushRaf();
+    });
+    act(() => {
+      result.current.handlePacketObservation(observation("p1", { heardAt: 5000 }));
+      flushRaf();
+    });
+    act(() => {
+      result.current.handlePacketObservation(observation("p1", { heardAt: 1000 }));
+      flushRaf();
+    });
+
+    const packet = result.current.allPackets.find((p) => p.packetHash === "p1")!;
+    expect(packet.firstHeardAt).toBe(1000);
+    expect(packet.lastHeardAt).toBe(5000);
+  });
+
+  it("still replaces every other field with the newest observation", async () => {
+    const { result } = renderHook(() => usePackets(), { wrapper });
+    await waitFor(() => expect(getPackets).toHaveBeenCalled());
+
+    act(() => {
+      result.current.handlePacketObservation(observation("p1", { heardAt: 2000, observerId: "o1", observationCount: 1 }));
+      flushRaf();
+    });
+    act(() => {
+      result.current.handlePacketObservation(observation("p1", { heardAt: 3000, observerId: "o2", observationCount: 2 }));
+      flushRaf();
+    });
+
+    const packet = result.current.allPackets.find((p) => p.packetHash === "p1")!;
+    expect(packet.latestObserver?.id).toBe("o2");
+    expect(packet.observationCount).toBe(2);
+  });
+});
 
 describe("usePackets freeze while scrolled away", () => {
   let qc: QueryClient;
