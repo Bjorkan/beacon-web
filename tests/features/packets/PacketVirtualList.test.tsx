@@ -223,3 +223,56 @@ describe("PacketVirtualList scrolling", () => {
     expect(handlers.fetchNextPage).not.toHaveBeenCalled();
   });
 });
+
+// mirrors DataTable.test.tsx's mobile stub, keeping the max-width query the only configurable one
+// so hover-driven components (e.g. Tooltip, used by PacketRow) keep their default hover behaviour
+function setMobile(matches: boolean) {
+  window.matchMedia = vi.fn().mockImplementation((query: string) => ({
+    matches: /max-width/.test(query) ? matches : /hover/.test(query),
+    media: query,
+    onchange: null,
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+    addListener: vi.fn(),
+    removeListener: vi.fn(),
+    dispatchEvent: vi.fn(),
+  })) as unknown as typeof window.matchMedia;
+}
+
+describe("PacketVirtualList responsive row", () => {
+  afterEach(() => {
+    setMobile(false); // back to the desktop default so later tests in this file aren't affected
+  });
+
+  it("renders the card row below md", () => {
+    setMobile(true);
+    const handlers = makeHandlers();
+    const { container } = render(
+      <PacketVirtualList packets={[pkt("AA11")]} expandedHash={null} {...handlers} />,
+    );
+
+    // PacketRow has no button role; PacketTableRow's toggle is a real <button>
+    expect(screen.queryByRole("button")).toBeNull();
+    const card = container.querySelector("[aria-pressed]");
+    expect(card).not.toBeNull();
+
+    fireEvent.click(card!);
+    expect(handlers.onToggleExpand).toHaveBeenCalledWith("AA11");
+  });
+
+  it("renders the grid row at md and up", () => {
+    const { container } = render(
+      <PacketVirtualList packets={[pkt("AA11")]} expandedHash={null} {...makeHandlers()} />,
+    );
+
+    expect(screen.getByRole("button")).toHaveAttribute("aria-expanded", "false");
+    expect(container.querySelector("[aria-pressed]")).toBeNull();
+  });
+
+  it("expands the card row below md", () => {
+    setMobile(true);
+    render(<PacketVirtualList packets={[pkt("AA11")]} expandedHash="AA11" {...makeHandlers()} />);
+
+    expect(screen.getByTestId("packet-expansion")).toBeInTheDocument();
+  });
+});

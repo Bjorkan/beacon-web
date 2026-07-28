@@ -3,8 +3,10 @@ import { useVirtualizer } from "@tanstack/react-virtual";
 import type { PacketSummary } from "../../types/api";
 import { PacketTableHeader } from "./PacketTableHeader";
 import { PacketTableRow } from "./PacketTableRow";
+import { PacketRow } from "./PacketRow";
 import { PacketExpansion } from "./PacketExpansion";
 import { useFreshHashes } from "./useFreshHashes";
+import { useIsMobile } from "../../hooks/useMediaQuery";
 import {
   SCROLL_TOP_THRESHOLD_PX,
   SCROLL_BOTTOM_THRESHOLD_PX,
@@ -45,6 +47,7 @@ export function PacketVirtualList({
 }: PacketVirtualListProps) {
   const parentRef = useRef<HTMLDivElement>(null);
   const freshHashes = useFreshHashes(packets);
+  const isMobile = useIsMobile();
   const atTopRef = useRef(true);
   const prevFirstKeyRef = useRef<string | undefined>(packets[0]?.packetHash);
 
@@ -118,12 +121,21 @@ export function PacketVirtualList({
               }}
             >
               <div className="pt-1.5">
-                <PacketTableRow
-                  packet={packet}
-                  expanded={expanded}
-                  isFresh={freshHashes.has(packet.packetHash)}
-                  onToggle={() => onToggleExpand(packet.packetHash)}
-                />
+                {isMobile ? (
+                  <PacketRow
+                    packet={packet}
+                    expanded={expanded}
+                    isFresh={freshHashes.has(packet.packetHash)}
+                    onToggle={() => onToggleExpand(packet.packetHash)}
+                  />
+                ) : (
+                  <PacketTableRow
+                    packet={packet}
+                    expanded={expanded}
+                    isFresh={freshHashes.has(packet.packetHash)}
+                    onToggle={() => onToggleExpand(packet.packetHash)}
+                  />
+                )}
                 {expanded && (
                   <PacketExpansion
                     packet={packet}
