@@ -176,6 +176,12 @@ function AppInner() {
     setPathMapInitialKey(key);
   }, []);
 
+  // "View path on map" from anywhere that already holds a detail — no key, so the modal picks its own
+  const handleViewPath = useCallback((detail: PacketDetail) => {
+    setPathMapDetail(detail);
+    setPathMapInitialKey(null);
+  }, []);
+
   const handleAnalyze = useCallback((hash: string | null) => {
     setSelectedObservationId(null);
     setSearchParams((p) => {
@@ -264,7 +270,15 @@ function AppInner() {
   }, []);
 
   const tabContent: Record<string, React.ReactNode> = {
-    Packets: <PacketList wsManager={wsManager} onAnalyze={handleAnalyze} />,
+    Packets: (
+      <PacketList
+        wsManager={wsManager}
+        onAnalyze={handleAnalyze}
+        onViewPath={handleViewPath}
+        selectedObservationId={selectedObservationId}
+        onSelectObservation={setSelectedObservationId}
+      />
+    ),
     Nodes: <NodeTable wsManager={wsManager} selectedNodeId={selectedNodeId} onSelectNode={setSelectedNodeId} />,
     Observers: <ObserverTable wsManager={wsManager} selectedObserverId={selectedObserverId} onSelectObserver={handleSelectObserver} onAnalyzePacket={setOverlayPacketHash} onViewStats={handleViewObserverStats} />,
     Routes: <RouteTable />,
@@ -302,7 +316,7 @@ function AppInner() {
               onSelectObservation={setSelectedObservationId}
               onClose={() => handleAnalyze(null)}
               onViewNode={setOverlayNodeId}
-              onViewPath={() => { if (analyzerDetail) { setPathMapDetail(analyzerDetail); setPathMapInitialKey(null); } }}
+              onViewPath={() => { if (analyzerDetail) handleViewPath(analyzerDetail); }}
             />
           )}
           {(activeTab === "Map" || activeTab === "Nodes") && selectedNodeId && (
@@ -337,7 +351,7 @@ function AppInner() {
                 handleTabChange("Observers");
                 setSelectedObserverId(observerId);
               }}
-              onViewPath={() => { if (overlayPacketDetail) { setPathMapDetail(overlayPacketDetail); setPathMapInitialKey(null); } }}
+              onViewPath={() => { if (overlayPacketDetail) handleViewPath(overlayPacketDetail); }}
               inactive={!!pathMapDetail}
             />
           )}

@@ -32,7 +32,7 @@ export function PacketExpansion({ packet, onOpenAnalyzer, onViewPath, selectedOb
   const emptyState = <div className="text-[10px] text-text-dim py-2">No observations</div>;
 
   return (
-    <div className="bg-bg-surface border-l-2 border-primary pl-6 pr-3 py-2">
+    <div data-testid="packet-expansion" className="bg-bg-surface border-l-2 border-primary pl-6 pr-3 py-2">
       <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[10px] text-text-muted pb-2">
         <span>first <Timestamp value={packet.firstHeardAt} /></span>
         <span>last <Timestamp value={packet.lastHeardAt} /></span>

@@ -1,6 +1,8 @@
 import { useState, useCallback, useEffect, useMemo } from "react";
 import { useSearchParams } from "react-router-dom";
+import { useQueryClient } from "@tanstack/react-query";
 import { usePackets } from "./usePackets";
+import { usePacketDetail } from "./usePacketDetail";
 import { usePacketFilters, matchesFilters, toServerFilter } from "./usePacketFilters";
 import { useScopes } from "../../hooks/useScopes";
 import { useRegion } from "../../hooks/useRegion";
@@ -11,6 +13,8 @@ import { LoadingPill } from "../../components/LoadingPill";
 import { SkeletonRows } from "../../components/SkeletonRows";
 import { PAYLOAD_TYPE_NAMES, ROUTE_TYPE_NAMES } from "../../types/enums";
 import type { WsManager } from "../../api/ws-manager";
+import type { PacketDetail } from "../../types/api";
+import type { WsPacketObservation } from "../../types/ws";
 
 // filter options and storage keys
 
@@ -27,13 +31,16 @@ const ROUTE_OPTIONS = Object.entries(ROUTE_TYPE_NAMES).map(([value, label]) => (
 interface PacketListProps {
   wsManager: WsManager;
   onAnalyze: (hash: string | null) => void;
+  onViewPath: (detail: PacketDetail) => void;
+  selectedObservationId: number | null;
+  onSelectObservation: (id: number) => void;
 }
 
 // main packet view: filters, banner, virtual list
 
-// onAnalyze isn't called here — it's retained for the row-expansion's future "Open analyzer" button
-export function PacketList({ wsManager }: PacketListProps) {
+export function PacketList({ wsManager, onAnalyze, onViewPath, selectedObservationId, onSelectObservation }: PacketListProps) {
   const [searchParams, setSearchParams] = useSearchParams();
+  const queryClient = useQueryClient();
   const { filters, setFilter, setSearch, setSearchField, clearFilters } = usePacketFilters();
   // single-value selections go to the server so scrolling pages through matching history
   const serverFilter = useMemo(() => toServerFilter(filters), [filters]);
@@ -81,7 +88,27 @@ export function PacketList({ wsManager }: PacketListProps) {
     }, { replace: true });
   }, [expandedHash, setSearchParams]);
 
-  useWsPacketHandler(wsManager, handlePacketObservation);
+  // Shared with the expanded row's own usePacketDetail, so reading it here costs no extra request.
+  const { data: expandedDetail } = usePacketDetail(expandedHash);
+
+  const handleOpenAnalyzer = useCallback(() => {
+    if (expandedHash) onAnalyze(expandedHash);
+  }, [expandedHash, onAnalyze]);
+
+  const handleViewPath = useCallback(() => {
+    if (expandedDetail) onViewPath(expandedDetail);
+  }, [expandedDetail, onViewPath]);
+
+  // Refetch only the open row's detail, so its observation table keeps pace with the count ticking
+  // up beside it. Every other observation just lands in the list.
+  const handleObservation = useCallback((data: WsPacketObservation["data"]) => {
+    handlePacketObservation(data);
+    if (data.packetHash === expandedHash) {
+      queryClient.invalidateQueries({ queryKey: ["packet-detail", expandedHash] });
+    }
+  }, [handlePacketObservation, expandedHash, queryClient]);
+
+  useWsPacketHandler(wsManager, handleObservation);
   useWsLaggedHandler(wsManager, handleLagged);
 
   const bannerCount = isScrolledAway ? newPacketCount : 0;
@@ -177,6 +204,10 @@ export function PacketList({ wsManager }: PacketListProps) {
             onAtTopChange={setIsAtTop}
             expandedHash={expandedHash}
             onToggleExpand={handleToggleExpand}
+            onOpenAnalyzer={handleOpenAnalyzer}
+            onViewPath={handleViewPath}
+            selectedObservationId={selectedObservationId}
+            onSelectObservation={onSelectObservation}
           />
         )}
         <LoadingPill
