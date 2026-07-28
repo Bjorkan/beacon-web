@@ -1,4 +1,4 @@
-import { type ReactNode, useState, useEffect } from "react";
+import { type ReactNode, useState, useEffect, useMemo, useRef } from "react";
 import { ErrorBoundary } from "./ErrorBoundary";
 import { useQuery } from "@tanstack/react-query";
 import { useRegionSelection, useRegions } from "../hooks/useRegion";
@@ -84,8 +84,43 @@ function regionSummaryLabel(selection: RegionSelection): string {
 // Grouped multi-select: regions (each expands to its member IATAs) on top, then individual IATAs.
 // Toggling keeps the dropdown open so several can be picked; "All Regions" clears the selection.
 function RegionSelector() {
+  const { selection } = useRegionSelection();
+
+  return (
+    <Dropdown
+      width="w-60"
+      renderTrigger={({ toggle }) => (
+        <button
+          type="button"
+          className="flex items-center gap-1.5 bg-bg-raised border border-border rounded px-3 py-1 text-text-bright font-mono text-xs font-semibold hover:border-text-dim/30 transition-colors"
+          onClick={toggle}
+        >
+          <span className="text-text-muted font-normal text-[11px]">REGION</span>
+          {regionSummaryLabel(selection)}
+          <span className="text-text-dim text-[11px]">▾</span>
+        </button>
+      )}
+    >
+      {() => <RegionSelectorPanel />}
+    </Dropdown>
+  );
+}
+
+// Split out from RegionSelector so the filter query lives and dies with the open panel.
+function RegionSelectorPanel() {
   const { selection, setSelection } = useRegionSelection();
   const { regions } = useRegions();
+  const [query, setQuery] = useState("");
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  // Take focus for typing, then hand it back on close — same restore rule as useFocusTrap.
+  useEffect(() => {
+    const restoreTo = document.activeElement as HTMLElement | null;
+    inputRef.current?.focus();
+    return () => {
+      if (restoreTo && restoreTo !== document.body && document.contains(restoreTo)) restoreTo.focus();
+    };
+  }, []);
 
   const { data: iatas, isError: iatasError } = useQuery({
     queryKey: ["iatas"],
@@ -109,63 +144,99 @@ function RegionSelector() {
     });
   };
 
+  const q = query.trim().toLowerCase();
+
+  // A region matches on its name or on any member code. A code-only match carries those codes so the
+  // row can show why it surfaced — otherwise it reads as a stray result.
+  const shownRegions = useMemo(() => {
+    if (!q) return regions.map((region) => ({ region, matched: [] as string[] }));
+    return regions.flatMap((region) => {
+      if (region.name.toLowerCase().includes(q)) return [{ region, matched: [] as string[] }];
+      const matched = region.iatas.filter((code) => code.toLowerCase().includes(q));
+      return matched.length > 0 ? [{ region, matched }] : [];
+    });
+  }, [regions, q]);
+
+  // displayName is the closest thing to a city the API carries, and it's absent for IATAs the server
+  // auto-created from packet traffic — those stay reachable by code.
+  const shownIatas = useMemo(() => {
+    if (!iatas || !q) return iatas ?? [];
+    return iatas.filter(
+      (i) => i.iata.toLowerCase().includes(q) || (i.displayName ?? "").toLowerCase().includes(q),
+    );
+  }, [iatas, q]);
+
+  const showAll = !q || "all regions".includes(q);
+  const showIataGroup = !iatas || shownIatas.length > 0; // keep the group while loading/failed
+  const hasRowsAbove = showAll || shownRegions.length > 0;
+
   return (
-    <Dropdown
-      width="w-60"
-      renderTrigger={({ toggle }) => (
+    <>
+      <div className="sticky -top-1 z-10 -mt-1 bg-bg-raised px-2 pt-1 pb-1.5">
+        <input
+          ref={inputRef}
+          type="text"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          onKeyDown={(e) => {
+            // Escape empties the box first; only a second press reaches Dropdown's close handler.
+            if (e.key === "Escape" && query) {
+              e.stopPropagation();
+              setQuery("");
+            }
+          }}
+          placeholder="Filter IATA or name…"
+          className="w-full text-[11px] font-mono bg-bg-surface border border-border rounded px-2 py-1 text-text-bright placeholder:text-text-dim"
+        />
+      </div>
+
+      {showAll && (
         <button
           type="button"
-          className="flex items-center gap-1.5 bg-bg-raised border border-border rounded px-3 py-1 text-text-bright font-mono text-xs font-semibold hover:border-text-dim/30 transition-colors"
-          onClick={toggle}
+          className={`w-full flex items-center gap-2.5 px-3 py-1.5 text-left text-xs font-mono transition-colors ${
+            isAllRegions(selection)
+              ? "text-text-bright bg-primary/10"
+              : "text-text-muted hover:text-text-normal hover:bg-text-normal/3"
+          }`}
+          onClick={() => setSelection(ALL_REGIONS)}
         >
-          <span className="text-text-muted font-normal text-[11px]">REGION</span>
-          {regionSummaryLabel(selection)}
-          <span className="text-text-dim text-[11px]">▾</span>
+          {/* spacer matching the checkbox column so ALL/code/name align with the rows below */}
+          <span className="w-3 shrink-0" aria-hidden="true" />
+          <span className="font-semibold text-primary w-8 shrink-0">ALL</span>
+          <span className="text-text-dim">All Regions</span>
         </button>
       )}
-    >
-      {() => (
+
+      {shownRegions.length > 0 && (
         <>
-          <button
-            type="button"
-            className={`w-full flex items-center gap-2.5 px-3 py-1.5 text-left text-xs font-mono transition-colors ${
-              isAllRegions(selection)
-                ? "text-text-bright bg-primary/10"
-                : "text-text-muted hover:text-text-normal hover:bg-text-normal/3"
-            }`}
-            onClick={() => setSelection(ALL_REGIONS)}
-          >
-            {/* spacer matching the checkbox column so ALL/code/name align with the rows below */}
-            <span className="w-3 shrink-0" aria-hidden="true" />
-            <span className="font-semibold text-primary w-8 shrink-0">ALL</span>
-            <span className="text-text-dim">All Regions</span>
-          </button>
+          <div className="px-3 pt-2 pb-1 text-[10px] font-mono uppercase tracking-wide text-text-dim">Regions</div>
+          {shownRegions.map(({ region, matched }) => {
+            const checked = selection.regions.includes(region.slug);
+            return (
+              <button
+                key={region.slug}
+                type="button"
+                className={`w-full flex items-center gap-2.5 px-3 py-1.5 text-left text-xs font-mono transition-colors ${
+                  checked ? "text-text-bright bg-primary/10" : "text-text-muted hover:text-text-normal hover:bg-text-normal/3"
+                }`}
+                onClick={() => toggleRegion(region.slug)}
+              >
+                <CheckBox checked={checked} />
+                <span className="truncate">{region.name}</span>
+                {matched.length > 0 && <span className="text-text-dim shrink-0">· {matched.join(", ")}</span>}
+              </button>
+            );
+          })}
+        </>
+      )}
 
-          {regions.length > 0 && (
-            <>
-              <div className="px-3 pt-2 pb-1 text-[10px] font-mono uppercase tracking-wide text-text-dim">Regions</div>
-              {regions.map((r) => {
-                const checked = selection.regions.includes(r.slug);
-                return (
-                  <button
-                    key={r.slug}
-                    type="button"
-                    className={`w-full flex items-center gap-2.5 px-3 py-1.5 text-left text-xs font-mono transition-colors ${
-                      checked ? "text-text-bright bg-primary/10" : "text-text-muted hover:text-text-normal hover:bg-text-normal/3"
-                    }`}
-                    onClick={() => toggleRegion(r.slug)}
-                  >
-                    <CheckBox checked={checked} />
-                    <span className="truncate">{r.name}</span>
-                  </button>
-                );
-              })}
-            </>
-          )}
-
-          <div className="px-3 pt-2 pb-1 text-[10px] font-mono uppercase tracking-wide text-text-dim border-t border-border-subtle mt-1">IATA</div>
+      {showIataGroup && (
+        <>
+          <div className={`px-3 pt-2 pb-1 text-[10px] font-mono uppercase tracking-wide text-text-dim ${
+            hasRowsAbove ? "border-t border-border-subtle mt-1" : ""
+          }`}>IATA</div>
           {iatas ? (
-            iatas.map((i) => {
+            shownIatas.map((i) => {
               const checked = selection.iatas.includes(i.iata);
               return (
                 <button
@@ -189,7 +260,11 @@ function RegionSelector() {
           )}
         </>
       )}
-    </Dropdown>
+
+      {!hasRowsAbove && !showIataGroup && (
+        <div className="px-3 py-2 text-[11px] font-mono text-text-dim">No matches</div>
+      )}
+    </>
   );
 }
 
