@@ -68,7 +68,7 @@ export function PacketAnalyzerDrawer({ detail, selectedObservationId, onClose, o
   const headerHex = rawHex.slice(0, 2);
 
   return (
-    <div className="absolute inset-0 z-30 w-full md:static md:inset-auto md:z-auto md:shrink-0 md:w-[400px] md:border-l border-border bg-bg-surface flex flex-col min-h-0 overflow-hidden">
+    <div data-testid="packet-analyzer-drawer" className="absolute inset-0 z-30 w-full md:static md:inset-auto md:z-auto md:shrink-0 md:w-[400px] md:border-l border-border bg-bg-surface flex flex-col min-h-0 overflow-hidden">
       <div className="flex items-center justify-between px-3 py-2 border-b border-border-subtle shrink-0">
         <span className="text-[13px] font-mono font-medium text-text-dim uppercase tracking-wider">Packet Analyzer</span>
         <div className="flex items-center gap-1.5">

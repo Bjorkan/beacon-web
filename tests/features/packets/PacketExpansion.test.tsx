@@ -1,7 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { PacketExpansion } from "../../../src/features/packets/PacketExpansion";
-import type { PacketSummary, Observation } from "../../../src/types/api";
+import type { PacketSummary, Observation, PacketDetail } from "../../../src/types/api";
+import { PayloadType, RouteType } from "../../../src/types/enums";
 
 const usePacketDetail = vi.fn();
 vi.mock("../../../src/features/packets/usePacketDetail", () => ({
@@ -19,6 +20,19 @@ const obs = (id: number, over: Partial<Observation> = {}): Observation => ({
   heardAt: 1700000000 + id, pathLength: { raw: "41", hashSize: 1, hopCount: 1 },
   sourceBroker: "b1", resolvedPath: [], ...over,
 });
+
+// minimal header so buildPacketPaths(data) (View path on map's hasPath check) doesn't crash on a
+// partial detail fixture — any non-TRACE payload type does
+const header = () => ({ raw: "12", routeType: RouteType.FLOOD, routeTypeName: "FLOOD", payloadType: PayloadType.ADVERT, payloadTypeName: "ADVERT", payloadVersion: 1 });
+
+const resolvedHop = (id: string, lng: number, lat: number) => ({ confidence: "high" as const, nodes: [{ id, publicKey: "pk", longitude: lng, latitude: lat }] });
+
+// a detail with a real drawable path (>=2 located hops), for the "hasPath" enabled cases
+const detailWithPath = (): PacketDetail => ({
+  packetHash: "AA11",
+  header: header(),
+  observations: [obs(1, { resolvedPath: [resolvedHop("a", -79, 43), resolvedHop("b", -75, 45)] })],
+} as unknown as PacketDetail);
 
 const props = {
   packet: pkt(), onOpenAnalyzer: () => {}, onViewPath: () => {},
@@ -64,7 +78,7 @@ describe("PacketExpansion", () => {
   });
 
   it("shows an empty state when the packet has no observations", () => {
-    usePacketDetail.mockReturnValue({ data: { packetHash: "AA11", observations: [] } });
+    usePacketDetail.mockReturnValue({ data: { packetHash: "AA11", header: header(), observations: [] } });
     render(<PacketExpansion {...props} />);
     expect(screen.getByText("No observations")).toBeInTheDocument();
   });
@@ -89,7 +103,7 @@ describe("PacketExpansion", () => {
   });
 
   it("renders the observation table once data resolves", () => {
-    usePacketDetail.mockReturnValue({ data: { packetHash: "AA11", observations: [obs(1), obs(2)] } });
+    usePacketDetail.mockReturnValue({ data: { packetHash: "AA11", header: header(), observations: [obs(1), obs(2)] } });
     render(<PacketExpansion {...props} />);
     expect(screen.getByText("Observer 1")).toBeInTheDocument();
     expect(screen.getByText("Observer 2")).toBeInTheDocument();
@@ -97,7 +111,7 @@ describe("PacketExpansion", () => {
 
   it("wires selectedObservationId and onSelectObservation through to the observation table", () => {
     const onSelectObservation = vi.fn();
-    usePacketDetail.mockReturnValue({ data: { packetHash: "AA11", observations: [obs(1), obs(2)] } });
+    usePacketDetail.mockReturnValue({ data: { packetHash: "AA11", header: header(), observations: [obs(1), obs(2)] } });
     render(<PacketExpansion {...props} selectedObservationId={2} onSelectObservation={onSelectObservation} />);
     const rows = screen.getAllByRole("row").slice(1);
     expect(rows[1]).toHaveAttribute("aria-selected", "true");
@@ -119,17 +133,26 @@ describe("PacketExpansion", () => {
     expect(screen.getByRole("button", { name: "View path on map" })).toBeDisabled();
   });
 
-  it("enables both action buttons once the fetch resolves", () => {
-    usePacketDetail.mockReturnValue({ data: { packetHash: "AA11", observations: [] } });
+  it("enables both action buttons once the fetch resolves with a drawable path", () => {
+    usePacketDetail.mockReturnValue({ data: detailWithPath() });
     render(<PacketExpansion {...props} />);
     expect(screen.getByRole("button", { name: "Open analyzer" })).not.toBeDisabled();
     expect(screen.getByRole("button", { name: "View path on map" })).not.toBeDisabled();
   });
 
+  it("disables View path on map when the loaded detail has no resolvable path", () => {
+    usePacketDetail.mockReturnValue({ data: { packetHash: "AA11", header: header(), observations: [obs(1)] } });
+    render(<PacketExpansion {...props} />);
+    expect(screen.getByRole("button", { name: "Open analyzer" })).not.toBeDisabled();
+    const viewPathBtn = screen.getByRole("button", { name: "View path on map" });
+    expect(viewPathBtn).toBeDisabled();
+    expect(viewPathBtn).toHaveAttribute("title", "No resolved path to map");
+  });
+
   it("calls onOpenAnalyzer and onViewPath when their buttons are clicked", () => {
     const onOpenAnalyzer = vi.fn();
     const onViewPath = vi.fn();
-    usePacketDetail.mockReturnValue({ data: { packetHash: "AA11", observations: [] } });
+    usePacketDetail.mockReturnValue({ data: detailWithPath() });
     render(<PacketExpansion {...props} onOpenAnalyzer={onOpenAnalyzer} onViewPath={onViewPath} />);
     fireEvent.click(screen.getByRole("button", { name: "Open analyzer" }));
     fireEvent.click(screen.getByRole("button", { name: "View path on map" }));

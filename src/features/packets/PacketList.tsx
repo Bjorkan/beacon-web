@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useMemo } from "react";
+import { useState, useCallback, useEffect, useMemo, useRef } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { usePackets } from "./usePackets";
@@ -78,6 +78,23 @@ export function PacketList({ wsManager, onAnalyze, onViewPath, selectedObservati
 
   // ?hash is the selected packet — it expands the row inline. The analyzer is a separate state (?analyze=1).
   const expandedHash = searchParams.get("hash");
+
+  // A deep-linked ?hash that matches nothing once the first page has loaded is stale (bogus, or
+  // long-expired) — strip it so it doesn't linger forever. Only the hash present at mount is
+  // checked, once, so a user's own click-to-expand (always a packet already in allPackets) never
+  // trips this. Gated on isLoading so a slow first page can't strip a link before its packet arrives.
+  const [initialHash] = useState(() => searchParams.get("hash"));
+  const strippedInitialHashRef = useRef(false);
+  useEffect(() => {
+    if (strippedInitialHashRef.current || isLoading || !initialHash) return;
+    strippedInitialHashRef.current = true;
+    if (allPackets.some((p) => p.packetHash === initialHash)) return;
+    setSearchParams((p) => {
+      const n = new URLSearchParams(p);
+      if (n.get("hash") === initialHash) n.delete("hash");
+      return n;
+    }, { replace: true });
+  }, [isLoading, initialHash, allPackets, setSearchParams]);
 
   const handleToggleExpand = useCallback((hash: string) => {
     const next = expandedHash === hash ? null : hash;

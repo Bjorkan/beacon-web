@@ -4,7 +4,7 @@ import { PacketVirtualList } from "../../../src/features/packets/PacketVirtualLi
 import type { PacketSummary } from "../../../src/types/api";
 
 // PacketExpansion fetches through usePacketDetail; stub it so the list renders without a query client.
-const usePacketDetail = vi.fn(() => ({ data: { packetHash: "AA11", observations: [] } }));
+const usePacketDetail = vi.fn(() => ({ data: { packetHash: "AA11", header: { payloadType: 1 }, observations: [] } }));
 vi.mock("../../../src/features/packets/usePacketDetail", () => ({
   usePacketDetail: (h: string | null) => usePacketDetail(h),
 }));
@@ -90,7 +90,7 @@ function setScrollMetrics(el: HTMLElement, { scrollHeight, clientHeight, scrollT
 
 beforeEach(() => {
   observers.length = 0;
-  usePacketDetail.mockReturnValue({ data: { packetHash: "AA11", observations: [] } });
+  usePacketDetail.mockReturnValue({ data: { packetHash: "AA11", header: { payloadType: 1 }, observations: [] } });
 });
 
 describe("PacketVirtualList expansion", () => {
@@ -130,6 +130,14 @@ describe("PacketVirtualList expansion", () => {
   });
 
   it("forwards the expansion's actions", () => {
+    const hop = (id: string, lng: number, lat: number) => ({ confidence: "high" as const, nodes: [{ id, publicKey: "pk", longitude: lng, latitude: lat }] });
+    usePacketDetail.mockReturnValue({
+      data: {
+        packetHash: "AA11",
+        header: { payloadType: 1 },
+        observations: [{ id: 1, observerId: "o1", iata: "YOW", heardAt: 0, sourceBroker: "b", pathLength: { raw: "02", hashSize: 1, hopCount: 2 }, resolvedPath: [hop("a", -79, 43), hop("b", -75, 45)] }],
+      },
+    });
     const handlers = makeHandlers();
     render(<PacketVirtualList packets={[pkt("AA11")]} expandedHash="AA11" {...handlers} />);
 

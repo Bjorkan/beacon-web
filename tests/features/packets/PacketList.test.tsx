@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
-import { MemoryRouter } from "react-router-dom";
+import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { MemoryRouter, useLocation } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { PacketList } from "../../../src/features/packets/PacketList";
 import type { WsManager } from "../../../src/api/ws-manager";
@@ -100,6 +100,11 @@ const observation = (hash: string): WsPacketObservation["data"] => ({
   },
 });
 
+function LocationProbe() {
+  const location = useLocation();
+  return <div data-testid="search">{location.search}</div>;
+}
+
 function renderList(url = "/", props: Partial<Parameters<typeof PacketList>[0]> = {}) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const invalidate = vi.spyOn(queryClient, "invalidateQueries");
@@ -107,7 +112,7 @@ function renderList(url = "/", props: Partial<Parameters<typeof PacketList>[0]> 
   const onViewPath = props.onViewPath ?? vi.fn();
   const onSelectObservation = props.onSelectObservation ?? vi.fn();
 
-  render(
+  const tree = (
     <MemoryRouter initialEntries={[url]}>
       <QueryClientProvider client={queryClient}>
         <PacketList
@@ -117,11 +122,16 @@ function renderList(url = "/", props: Partial<Parameters<typeof PacketList>[0]> 
           selectedObservationId={null}
           onSelectObservation={onSelectObservation}
         />
+        <LocationProbe />
       </QueryClientProvider>
-    </MemoryRouter>,
+    </MemoryRouter>
   );
 
-  return { onAnalyze, onViewPath, onSelectObservation, invalidate };
+  const utils = render(tree);
+
+  // MemoryRouter only reads initialEntries on its first mount, so rerendering with the identical
+  // element (same position in the tree) keeps whatever location the component has navigated to.
+  return { onAnalyze, onViewPath, onSelectObservation, invalidate, rerender: () => utils.rerender(tree) };
 }
 
 describe("PacketList server filter wiring", () => {
@@ -268,5 +278,40 @@ describe("PacketList live observation invalidation", () => {
     packetHandler!(observation("AA11"));
 
     expect(invalidate).not.toHaveBeenCalled();
+  });
+});
+
+describe("PacketList stale ?hash strip", () => {
+  afterEach(() => {
+    usePackets.mockImplementation(basePackets);
+  });
+
+  it("strips a ?hash matching no loaded packet once the first page has loaded", async () => {
+    usePackets.mockImplementation(() => ({ ...basePackets(), isLoading: false, allPackets: [packet("AA11")] }));
+
+    renderList("/?tab=Packets&hash=BOGUS");
+
+    await waitFor(() => expect(screen.getByTestId("search").textContent).not.toContain("hash="));
+  });
+
+  it("does not strip while the first page is still loading", () => {
+    usePackets.mockImplementation(() => ({ ...basePackets(), isLoading: true, allPackets: [] }));
+
+    const { rerender } = renderList("/?tab=Packets&hash=BOGUS");
+    expect(screen.getByTestId("search").textContent).toContain("hash=BOGUS");
+
+    // the packet that matches the deep link arrives only after the first page resolves
+    usePackets.mockImplementation(() => ({ ...basePackets(), isLoading: false, allPackets: [packet("BOGUS")] }));
+    rerender();
+
+    expect(screen.getByTestId("search").textContent).toContain("hash=BOGUS");
+  });
+
+  it("does not strip a ?hash that matches a loaded packet", () => {
+    usePackets.mockImplementation(() => ({ ...basePackets(), isLoading: false, allPackets: [packet("AA11")] }));
+
+    renderList("/?tab=Packets&hash=AA11");
+
+    expect(screen.getByTestId("search").textContent).toContain("hash=AA11");
   });
 });

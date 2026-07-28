@@ -1,8 +1,10 @@
+import { useMemo } from "react";
 import type { PacketSummary } from "../../types/api";
 import { formatPropagation } from "../../lib/formatters";
 import { Timestamp } from "../../components/Timestamp";
 import { usePacketDetail } from "./usePacketDetail";
 import { ObservationTable } from "./ObservationTable";
+import { buildPacketPaths } from "../map/packet-path";
 
 // Roughly what fits the scroll cap; observations are unbounded server-side.
 const SKELETON_ROW_CAP = 12;
@@ -26,6 +28,7 @@ export function PacketExpansion({ packet, onOpenAnalyzer, onViewPath, selectedOb
   // already in ms for formatPropagation -- no *1000 here.
   const spread = packet.lastHeardAt - packet.firstHeardAt;
   const ready = !isLoading && !isError;
+  const hasPath = useMemo(() => (data ? buildPacketPaths(data).length > 0 : false), [data]);
   // The summary already knows the count is zero, so skip the fetch-driven states entirely rather
   // than showing a blank (0-row) skeleton while it loads.
   const noObservations = packet.observationCount === 0;
@@ -40,7 +43,13 @@ export function PacketExpansion({ packet, onOpenAnalyzer, onViewPath, selectedOb
         <button type="button" onClick={onOpenAnalyzer} disabled={!ready} className={ACTION_BUTTON_CLASS}>
           Open analyzer
         </button>
-        <button type="button" onClick={onViewPath} disabled={!ready} className={ACTION_BUTTON_CLASS}>
+        <button
+          type="button"
+          onClick={onViewPath}
+          disabled={!ready || !hasPath}
+          title={hasPath ? undefined : "No resolved path to map"}
+          className={ACTION_BUTTON_CLASS}
+        >
           View path on map
         </button>
       </div>
