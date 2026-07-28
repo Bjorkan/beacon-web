@@ -183,8 +183,7 @@ function AppInner() {
   }, []);
 
   const handleAnalyze = useCallback((hash: string | null) => {
-    // No reset here: observation ids are globally unique, so a stale one from another packet
-    // can't accidentally match — this lets a pick made inside an expanded row survive into the drawer.
+    // No reset: observation ids are globally unique, so a pick inside an expanded row survives into the drawer.
     setSearchParams((p) => {
       const n = new URLSearchParams(p);
       if (hash) { n.set("hash", hash); n.set("analyze", "1"); n.delete("path"); }
