@@ -165,7 +165,9 @@ function AppInner() {
   const [overlayPacketHash, setOverlayPacketHash] = useState<string | null>(null);
   // packet path popup shown as a modal over the analyzer drawer/overlay ("View path on map")
   const [pathMapDetail, setPathMapDetail] = useState<PacketDetail | null>(null);
-  const [initialPath] = useState<string | null>(() => searchParams.get("path"));
+  // Frozen together: the restore must fetch the hash the link asked for, even if the user clicks a
+  // different row before it resolves.
+  const [pathLink] = useState(() => ({ path: searchParams.get("path"), hash: searchParams.get("hash") }));
   const [pathMapInitialKey, setPathMapInitialKey] = useState<string | null>(null);
 
   const { data: analyzerDetail, isLoading: analyzerLoading } = usePacketDetail(analyzerHash);
@@ -196,8 +198,8 @@ function AppInner() {
     setOverlayNodeId(null);
     setOverlayPacketHash(null);
     setPathMapDetail(null);
-    // On mobile a detail panel fills the screen, so leaving its tab must close it; desktop side
-    // panels persist across tabs. Cross-nav (onViewObserver) re-sets its selection after this.
+    // On mobile a detail panel (and the analyzer) fills the screen, so leaving its tab must close it;
+    // desktop side panels persist across tabs. Cross-nav (onViewObserver) re-sets its selection after this.
     if (isMobile) {
       setSelectedObservationId(null);
       setSelectedNodeId(null);
@@ -206,6 +208,8 @@ function AppInner() {
     setSearchParams((prev) => {
       const next = new URLSearchParams(prev);
       next.set("tab", tab);
+      // the analyzer is URL-backed, so its mobile close lives here rather than above
+      if (isMobile) next.delete("analyze");
       // stats sub-state shouldn't haunt the URL on other tabs
       if (tab !== "Analytics") {
         next.delete("statsTab");
@@ -296,8 +300,8 @@ function AppInner() {
       <RegionUrlSync />
       <SelectionResetOnRegion onRegionChange={clearSelection} />
       <PathLinkRestore
-        initialPath={initialPath}
-        hash={searchParams.get("hash")}
+        initialPath={pathLink.path}
+        hash={pathLink.hash}
         analyzerDetail={analyzerDetail}
         onRestore={handlePathLinkRestore}
       />

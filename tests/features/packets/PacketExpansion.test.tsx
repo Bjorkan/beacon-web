@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { PacketExpansion } from "../../../src/features/packets/PacketExpansion";
 import type { PacketSummary, Observation, PacketDetail } from "../../../src/types/api";
@@ -158,5 +158,30 @@ describe("PacketExpansion", () => {
     fireEvent.click(screen.getByRole("button", { name: "View path on map" }));
     expect(onOpenAnalyzer).toHaveBeenCalledTimes(1);
     expect(onViewPath).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("PacketExpansion copy link", () => {
+  const writeText = vi.fn();
+
+  beforeEach(() => {
+    Object.defineProperty(navigator, "clipboard", { value: { writeText }, writable: true, configurable: true });
+    writeText.mockClear();
+    usePacketDetail.mockReturnValue({ data: detailWithPath() });
+  });
+
+  afterEach(() => window.history.replaceState({}, "", "/"));
+
+  it("copies a link to the expanded row with the analyzer stripped", () => {
+    window.history.replaceState({}, "", "/?tab=Packets&hash=AA11&analyze=1&iata=YVR");
+    render(<PacketExpansion {...props} />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Copy row link" }));
+
+    const copied = new URL(writeText.mock.calls[0]![0] as string);
+    expect(copied.searchParams.get("tab")).toBe("Packets");
+    expect(copied.searchParams.get("hash")).toBe("AA11");
+    expect(copied.searchParams.has("analyze")).toBe(false); // the drawer must not tag along
+    expect(copied.searchParams.get("iata")).toBe("YVR"); // unrelated params survive
   });
 });

@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { MemoryRouter, useLocation } from "react-router-dom";
 import { PacketAnalyzerDrawer } from "../../../src/features/packets/PacketAnalyzerDrawer";
@@ -41,6 +41,32 @@ function makeDetail(resolvedPath: unknown[]): PacketDetail {
     observations: [{ id: 1, observerId: "obs12345", iata: "YYZ", heardAt: 0, sourceBroker: "b", pathLength: { raw: "02", hashSize: 1, hopCount: resolvedPath.length }, resolvedPath }],
   } as unknown as PacketDetail;
 }
+
+describe("PacketAnalyzerDrawer copy link", () => {
+  const writeText = vi.fn();
+
+  beforeEach(() => {
+    Object.defineProperty(navigator, "clipboard", { value: { writeText }, writable: true, configurable: true });
+    writeText.mockClear();
+  });
+
+  afterEach(() => window.history.replaceState({}, "", "/"));
+
+  it("copies a link that reopens the drawer over the expanded row", () => {
+    render(
+      <MemoryRouter initialEntries={["/?tab=Packets&hash=abcdef12&analyze=1"]}>
+        <PacketAnalyzerDrawer detail={makeDetail([])} selectedObservationId={null} onClose={() => {}} />
+      </MemoryRouter>,
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Copy packet link" }));
+
+    const copied = new URL(writeText.mock.calls[0]![0] as string);
+    expect(copied.searchParams.get("tab")).toBe("Packets");
+    expect(copied.searchParams.get("hash")).toBe("abcdef12");
+    expect(copied.searchParams.get("analyze")).toBe("1"); // the drawer is part of the shared state
+  });
+});
 
 describe("PacketAnalyzerDrawer view-path button", () => {
   it("enables the button and calls onViewPath when a path is drawable", () => {

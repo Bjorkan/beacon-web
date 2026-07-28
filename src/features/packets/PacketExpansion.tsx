@@ -1,7 +1,8 @@
-import { useMemo } from "react";
+import { useCallback, useMemo } from "react";
 import type { PacketSummary } from "../../types/api";
 import { formatPropagation } from "../../lib/formatters";
 import { Timestamp } from "../../components/Timestamp";
+import { CopyLinkButton } from "../../components/CopyLinkButton";
 import { usePacketDetail } from "./usePacketDetail";
 import { ObservationTable } from "./ObservationTable";
 import { buildPacketPaths } from "../map/packet-path";
@@ -33,6 +34,11 @@ export function PacketExpansion({ packet, onOpenAnalyzer, onViewPath, selectedOb
   // than showing a blank (0-row) skeleton while it loads.
   const noObservations = packet.observationCount === 0;
   const emptyState = <div className="text-[10px] text-text-dim py-2">No observations</div>;
+  // null drops ?analyze, so a link copied while the drawer is open still restores just the row
+  const copyParams = useCallback(
+    () => ({ tab: "Packets", hash: packet.packetHash, analyze: null }),
+    [packet.packetHash],
+  );
 
   return (
     <div data-testid="packet-expansion" className="bg-bg-surface border-l-2 border-primary pl-6 pr-3 py-2">
@@ -52,6 +58,7 @@ export function PacketExpansion({ packet, onOpenAnalyzer, onViewPath, selectedOb
         >
           View path on map
         </button>
+        <CopyLinkButton params={copyParams} ariaLabel="Copy row link" />
       </div>
 
       <div className="max-h-[360px] overflow-y-auto">

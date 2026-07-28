@@ -18,7 +18,7 @@ export interface LatestObserver {
   pathBytes?: string;
   resolvedSource?: ResolvedHop;
   resolvedDestination?: ResolvedHop;
-  // per-hop resolved path; WS-only, and only when the connection opts into configure{resolvePath}.
+  // per-hop resolved path, for the REST list once the backend fills it in — nothing populates it today.
   resolvedPath?: ResolvedHop[];
 }
 

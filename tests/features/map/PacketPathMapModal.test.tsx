@@ -25,6 +25,7 @@ afterEach(() => vi.unstubAllGlobals());
 
 const hop = (id: string, lng: number, lat: number) => ({ confidence: "high" as const, nodes: [{ id, publicKey: "pk", longitude: lng, latitude: lat }] });
 const detail = {
+  packetHash: "aabbccdd",
   header: { payloadType: PayloadType.TEXT, routeType: 1 },
   observations: [
     { id: 1, observerId: "obs-alpha", observerName: "Alpha", iata: "YYZ", heardAt: 0, sourceBroker: "b", pathLength: { raw: "", hashSize: 1, hopCount: 2 }, resolvedPath: [hop("a", -79, 43), hop("b", -75, 45)], propagationTimeMs: 100 },
@@ -73,5 +74,36 @@ describe("PacketPathMapModal", () => {
   it("renders a copy-link button", () => {
     render(<PacketPathMapModal detail={detail} onClose={() => {}} />);
     expect(screen.getByRole("button", { name: "Copy path link" })).toBeInTheDocument();
+  });
+
+  describe("copy path link", () => {
+    const writeText = vi.fn();
+
+    beforeEach(() => {
+      Object.defineProperty(navigator, "clipboard", { value: { writeText }, writable: true, configurable: true });
+      writeText.mockClear();
+    });
+
+    afterEach(() => window.history.replaceState({}, "", "/"));
+
+    it("copies the selected path and strips the analyzer", () => {
+      window.history.replaceState({}, "", "/?tab=Packets&hash=aabb&analyze=1");
+      render(<PacketPathMapModal detail={detail} onClose={() => {}} />);
+      fireEvent.click(screen.getByText("Bravo"));
+
+      fireEvent.click(screen.getByRole("button", { name: "Copy path link" }));
+
+      const copied = new URL(writeText.mock.calls[0]![0] as string);
+      expect(copied.searchParams.get("tab")).toBe("Packets");
+      expect(copied.searchParams.get("hash")).toBe(detail.packetHash);
+      expect(copied.searchParams.get("path")).toBe("obs-bravo");
+      expect(copied.searchParams.has("analyze")).toBe(false); // path and analyze are exclusive
+    });
+
+    it("copies path=all when nothing is isolated", () => {
+      render(<PacketPathMapModal detail={detail} onClose={() => {}} />);
+      fireEvent.click(screen.getByRole("button", { name: "Copy path link" }));
+      expect(new URL(writeText.mock.calls[0]![0] as string).searchParams.get("path")).toBe("all");
+    });
   });
 });
