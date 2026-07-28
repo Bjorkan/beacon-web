@@ -39,7 +39,7 @@ interface MapViewProps {
 export function MapView({ wsManager, selectedNodeId, onSelectNode }: MapViewProps) {
   // Deep-link params, read once at mount (like the region's ?iata seed). Each setting below is seeded
   // URL -> localStorage -> default; the URL wins for this session but is never written back to
-  // localStorage, so a shared link can't clobber the visitor's saved prefs. See docs/superpowers/specs.
+  // localStorage, so a shared link can't clobber the visitor's saved prefs.
   const [searchParams] = useSearchParams();
   const [urlView] = useState(() => parseMapView(searchParams));
 

@@ -1,6 +1,6 @@
 // Deep-link map view <-> URL params. Pure and maplibre-free so it stays unit-testable; mirrors the
 // region-selection.ts pattern. Inbound parsing is lenient — any invalid/unknown value is dropped so a
-// malformed link degrades to the normal view rather than breaking. See docs/superpowers/specs.
+// malformed link degrades to the normal view rather than breaking.
 import { MAP_STYLES, type NeighborLinesMode } from "./types";
 import { NODE_TYPE_NAMES } from "../../lib/node-types";
 
