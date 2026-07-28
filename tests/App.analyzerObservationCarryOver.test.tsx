@@ -124,14 +124,13 @@ afterEach(() => {
 
 describe("opening the analyzer from an expanded row", () => {
   // Regression: handleAnalyze used to reset selectedObservationId on every open, so picking an
-  // observation inside the expanded row and then opening the analyzer landed on observations[0]
-  // instead of the one clicked.
+  // observation inside the expanded row landed the analyzer on observations[0] instead of the one
+  // clicked. Selecting an observation is now what opens the analyzer, so the two happen together.
   it("keeps the observation selected in the expanded row", async () => {
     render(<App />);
 
     fireEvent.click(await screen.findByRole("button", { name: "AA11" }));
     fireEvent.click(await screen.findByText("Observer Three"));
-    fireEvent.click(screen.getByRole("button", { name: "Open analyzer" }));
 
     const drawer = await screen.findByTestId("packet-analyzer-drawer");
     expect(within(drawer).getByText("Observer Three")).toBeInTheDocument();

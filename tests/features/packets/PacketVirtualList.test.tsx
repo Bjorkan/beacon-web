@@ -141,9 +141,11 @@ describe("PacketVirtualList expansion", () => {
     const handlers = makeHandlers();
     render(<PacketVirtualList packets={[pkt("AA11")]} expandedHash="AA11" {...handlers} />);
 
-    fireEvent.click(screen.getByRole("button", { name: "Open analyzer" }));
+    // clicking an observation is what opens the analyzer now — there is no button for it
+    fireEvent.click(screen.getByText("o1"));
     fireEvent.click(screen.getByRole("button", { name: "View path on map" }));
 
+    expect(handlers.onSelectObservation).toHaveBeenCalledWith(1);
     expect(handlers.onOpenAnalyzer).toHaveBeenCalledTimes(1);
     expect(handlers.onViewPath).toHaveBeenCalledTimes(1);
   });

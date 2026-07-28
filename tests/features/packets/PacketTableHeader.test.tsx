@@ -6,7 +6,7 @@ import { GRID_TEMPLATE } from "../../../src/features/packets/packet-grid";
 describe("PacketTableHeader", () => {
   it("declares every column heading", () => {
     render(<PacketTableHeader />);
-    for (const h of ["Hash", "Type", "Route", "Obs", "Hops", "Src → Dst", "IATA", "Age"]) {
+    for (const h of ["Hash", "Type", "Route", "Obs", "Hops", "Hash Size", "Src → Dst", "IATA", "Age"]) {
       expect(screen.getByText(h)).toBeInTheDocument();
     }
   });
@@ -28,9 +28,9 @@ describe("PacketTableHeader", () => {
     expect(el.style.gridTemplateColumns).toBe(GRID_TEMPLATE);
   });
 
-  it("has exactly 9 cells, one per row column including the chevron spacer", () => {
+  it("has exactly 10 cells, one per row column including the chevron spacer", () => {
     const { container } = render(<PacketTableHeader />);
-    expect(container.firstElementChild?.children).toHaveLength(9);
+    expect(container.firstElementChild?.children).toHaveLength(10);
   });
 
   // Regression: the header and the rows are two independent grids. A `ch` track resolves against

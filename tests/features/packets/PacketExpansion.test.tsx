@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { PacketExpansion } from "../../../src/features/packets/PacketExpansion";
 import type { PacketSummary, Observation, PacketDetail } from "../../../src/types/api";
@@ -119,69 +119,58 @@ describe("PacketExpansion", () => {
     expect(onSelectObservation).toHaveBeenCalledWith(1);
   });
 
-  it("disables both action buttons while loading", () => {
-    usePacketDetail.mockReturnValue({ isLoading: true });
-    render(<PacketExpansion {...props} />);
-    expect(screen.getByRole("button", { name: "Open analyzer" })).toBeDisabled();
-    expect(screen.getByRole("button", { name: "View path on map" })).toBeDisabled();
-  });
-
-  it("disables both action buttons on error", () => {
-    usePacketDetail.mockReturnValue({ isError: true, refetch: vi.fn() });
-    render(<PacketExpansion {...props} />);
-    expect(screen.getByRole("button", { name: "Open analyzer" })).toBeDisabled();
-    expect(screen.getByRole("button", { name: "View path on map" })).toBeDisabled();
-  });
-
-  it("enables both action buttons once the fetch resolves with a drawable path", () => {
+  // Clicking an observation opens the analyzer, so a dedicated button would be a second way to do
+  // the same thing. Copy Link lives in the analyzer popup only.
+  it("offers neither an Open analyzer nor a Copy link button", () => {
     usePacketDetail.mockReturnValue({ data: detailWithPath() });
     render(<PacketExpansion {...props} />);
-    expect(screen.getByRole("button", { name: "Open analyzer" })).not.toBeDisabled();
+    expect(screen.queryByRole("button", { name: "Open analyzer" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Copy row link" })).not.toBeInTheDocument();
+  });
+
+  it("opens the analyzer on the clicked observation, selecting it first", () => {
+    const onOpenAnalyzer = vi.fn();
+    const onSelectObservation = vi.fn();
+    usePacketDetail.mockReturnValue({ data: { packetHash: "AA11", header: header(), observations: [obs(1), obs(2)] } });
+    render(<PacketExpansion {...props} onOpenAnalyzer={onOpenAnalyzer} onSelectObservation={onSelectObservation} />);
+
+    fireEvent.click(screen.getByText("Observer 2"));
+
+    expect(onSelectObservation).toHaveBeenCalledWith(2);
+    expect(onOpenAnalyzer).toHaveBeenCalledTimes(1);
+  });
+
+  it("disables View path on map while loading", () => {
+    usePacketDetail.mockReturnValue({ isLoading: true });
+    render(<PacketExpansion {...props} />);
+    expect(screen.getByRole("button", { name: "View path on map" })).toBeDisabled();
+  });
+
+  it("disables View path on map on error", () => {
+    usePacketDetail.mockReturnValue({ isError: true, refetch: vi.fn() });
+    render(<PacketExpansion {...props} />);
+    expect(screen.getByRole("button", { name: "View path on map" })).toBeDisabled();
+  });
+
+  it("enables View path on map once the fetch resolves with a drawable path", () => {
+    usePacketDetail.mockReturnValue({ data: detailWithPath() });
+    render(<PacketExpansion {...props} />);
     expect(screen.getByRole("button", { name: "View path on map" })).not.toBeDisabled();
   });
 
   it("disables View path on map when the loaded detail has no resolvable path", () => {
     usePacketDetail.mockReturnValue({ data: { packetHash: "AA11", header: header(), observations: [obs(1)] } });
     render(<PacketExpansion {...props} />);
-    expect(screen.getByRole("button", { name: "Open analyzer" })).not.toBeDisabled();
     const viewPathBtn = screen.getByRole("button", { name: "View path on map" });
     expect(viewPathBtn).toBeDisabled();
     expect(viewPathBtn).toHaveAttribute("title", "No resolved path to map");
   });
 
-  it("calls onOpenAnalyzer and onViewPath when their buttons are clicked", () => {
-    const onOpenAnalyzer = vi.fn();
+  it("calls onViewPath when its button is clicked", () => {
     const onViewPath = vi.fn();
     usePacketDetail.mockReturnValue({ data: detailWithPath() });
-    render(<PacketExpansion {...props} onOpenAnalyzer={onOpenAnalyzer} onViewPath={onViewPath} />);
-    fireEvent.click(screen.getByRole("button", { name: "Open analyzer" }));
+    render(<PacketExpansion {...props} onViewPath={onViewPath} />);
     fireEvent.click(screen.getByRole("button", { name: "View path on map" }));
-    expect(onOpenAnalyzer).toHaveBeenCalledTimes(1);
     expect(onViewPath).toHaveBeenCalledTimes(1);
-  });
-});
-
-describe("PacketExpansion copy link", () => {
-  const writeText = vi.fn();
-
-  beforeEach(() => {
-    Object.defineProperty(navigator, "clipboard", { value: { writeText }, writable: true, configurable: true });
-    writeText.mockClear();
-    usePacketDetail.mockReturnValue({ data: detailWithPath() });
-  });
-
-  afterEach(() => window.history.replaceState({}, "", "/"));
-
-  it("copies a link to the expanded row with the analyzer stripped", () => {
-    window.history.replaceState({}, "", "/?tab=Packets&hash=AA11&analyze=1&iata=YVR");
-    render(<PacketExpansion {...props} />);
-
-    fireEvent.click(screen.getByRole("button", { name: "Copy row link" }));
-
-    const copied = new URL(writeText.mock.calls[0]![0] as string);
-    expect(copied.searchParams.get("tab")).toBe("Packets");
-    expect(copied.searchParams.get("hash")).toBe("AA11");
-    expect(copied.searchParams.has("analyze")).toBe(false); // the drawer must not tag along
-    expect(copied.searchParams.get("iata")).toBe("YVR"); // unrelated params survive
   });
 });

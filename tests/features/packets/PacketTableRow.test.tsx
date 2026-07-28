@@ -16,10 +16,10 @@ const node = (name: string): ResolvedHop => ({
 
 // pathLength is what makes buildPathSummary produce endpoints at all, so it is always present here.
 const observer = (
-  over: { hopCount?: number } & Partial<Pick<LatestObserver, "resolvedSource" | "resolvedDestination">> = {},
+  over: { hopCount?: number; hashSize?: number } & Partial<Pick<LatestObserver, "resolvedSource" | "resolvedDestination">> = {},
 ): LatestObserver => {
-  const { hopCount = 2, ...rest } = over;
-  return { id: "abcdef1234", iata: "YVR", pathLength: { raw: "1e", hashSize: 1, hopCount }, ...rest };
+  const { hopCount = 2, hashSize = 1, ...rest } = over;
+  return { id: "abcdef1234", iata: "YVR", pathLength: { raw: "1e", hashSize, hopCount }, ...rest };
 };
 
 describe("PacketTableRow", () => {
@@ -42,10 +42,16 @@ describe("PacketTableRow", () => {
     expect(screen.queryByText("latest")).not.toBeInTheDocument();
   });
 
-  it("falls back to n/a in the hops, endpoint and IATA cells when there is no observer", () => {
+  it("falls back to n/a in the hops, hash size, endpoint and IATA cells when there is no observer", () => {
     render(<PacketTableRow packet={pkt()} expanded={false} onToggle={() => {}} />);
     const row = within(screen.getByRole("button"));
-    expect(row.getAllByText("n/a")).toHaveLength(3);
+    expect(row.getAllByText("n/a")).toHaveLength(4);
+  });
+
+  it("shows the hash size alongside the hop count", () => {
+    render(<PacketTableRow packet={pkt({ observationCount: 9, latestObserver: observer({ hopCount: 5, hashSize: 3 }) })} expanded={false} onToggle={() => {}} />);
+    expect(screen.getByText("5")).toBeInTheDocument();
+    expect(screen.getByText("3")).toBeInTheDocument();
   });
 
   it("no longer shows the observer, which moved into the expansion", () => {

@@ -2,7 +2,6 @@ import { useCallback, useMemo } from "react";
 import type { PacketSummary } from "../../types/api";
 import { formatPropagation } from "../../lib/formatters";
 import { Timestamp } from "../../components/Timestamp";
-import { CopyLinkButton } from "../../components/CopyLinkButton";
 import { usePacketDetail } from "./usePacketDetail";
 import { ObservationTable } from "./ObservationTable";
 import { buildPacketPaths } from "../map/packet-path";
@@ -35,10 +34,13 @@ export function PacketExpansion({ packet, onOpenAnalyzer, onViewPath, selectedOb
   // than showing a blank (0-row) skeleton while it loads.
   const noObservations = packet.observationCount === 0;
   const emptyState = <div className="text-[10px] text-text-dim py-2">No observations</div>;
-  // null drops ?analyze, so a link copied while the drawer is open still restores just the row
-  const copyParams = useCallback(
-    () => ({ tab: "Packets", hash: packet.packetHash, analyze: null }),
-    [packet.packetHash],
+  // Picking an observation is the way into the analyzer — it opens on the one you clicked.
+  const handleSelectObservation = useCallback(
+    (id: number) => {
+      onSelectObservation(id);
+      onOpenAnalyzer();
+    },
+    [onSelectObservation, onOpenAnalyzer],
   );
 
   return (
@@ -53,9 +55,6 @@ export function PacketExpansion({ packet, onOpenAnalyzer, onViewPath, selectedOb
         <span>first <Timestamp value={packet.firstHeardAt} /></span>
         <span>last <Timestamp value={packet.lastHeardAt} /></span>
         <span>spread {formatPropagation(spread)}</span>
-        <button type="button" onClick={onOpenAnalyzer} disabled={!ready} className={ACTION_BUTTON_CLASS}>
-          Open analyzer
-        </button>
         <button
           type="button"
           onClick={onViewPath}
@@ -65,7 +64,6 @@ export function PacketExpansion({ packet, onOpenAnalyzer, onViewPath, selectedOb
         >
           View path on map
         </button>
-        <CopyLinkButton params={copyParams} ariaLabel="Copy row link" />
       </div>
 
       <div className="max-h-[360px] overflow-y-auto">
@@ -91,7 +89,7 @@ export function PacketExpansion({ packet, onOpenAnalyzer, onViewPath, selectedOb
         ) : data && data.observations.length === 0 ? (
           emptyState
         ) : data ? (
-          <ObservationTable observations={data.observations} selectedId={selectedObservationId} onSelect={onSelectObservation} />
+          <ObservationTable observations={data.observations} selectedId={selectedObservationId} onSelect={handleSelectObservation} />
         ) : null}
       </div>
     </div>

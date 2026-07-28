@@ -55,7 +55,7 @@ export function PacketVirtualList({
     count: packets.length,
     getScrollElement: () => parentRef.current,
     // a collapsed row: one grid line on desktop, a taller card below md. Expanded rows are remeasured.
-    estimateSize: () => (isMobile ? 64 : 43),
+    estimateSize: () => (isMobile ? 64 : 37),
     overscan: 10,
     getItemKey: (index) => packets[index]?.packetHash ?? index,
   });
@@ -121,7 +121,8 @@ export function PacketVirtualList({
                 transform: `translateY(${virtualRow.start}px)`,
               }}
             >
-              <div className="pt-1.5">
+              {/* cards need breathing room; table rows butt up so the whole strip is a click target */}
+              <div className={isMobile ? "pt-1.5" : ""}>
                 {isMobile ? (
                   <PacketRow
                     packet={packet}

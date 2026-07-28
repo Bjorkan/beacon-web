@@ -19,7 +19,8 @@ interface PacketTableRowProps {
 // expansion instead, which frees the wide column for the packet's endpoints.
 export function PacketTableRow({ packet, expanded, isFresh, onToggle }: PacketTableRowProps) {
   // ?? not ||, so a legitimate 0-hop direct packet still shows its count
-  const hopCount = packet.latestObserver?.pathLength?.hopCount;
+  const pathLength = packet.latestObserver?.pathLength;
+  const na = <span className="text-text-dim">n/a</span>;
 
   return (
     <div
@@ -54,14 +55,13 @@ export function PacketTableRow({ packet, expanded, isFresh, onToggle }: PacketTa
           {packet.scope && <ScopeTag>{packet.scope}</ScopeTag>}
         </span>
         <span className="font-mono text-text-muted">×{packet.observationCount}</span>
-        <span className="font-mono text-text-muted">
-          {hopCount ?? <span className="text-text-dim">n/a</span>}
-        </span>
+        <span className="font-mono text-text-muted">{pathLength?.hopCount ?? na}</span>
+        <span className="font-mono text-text-muted">{pathLength?.hashSize ?? na}</span>
         <span className="min-w-0 overflow-hidden">
           <PacketEndpoints packet={packet} />
         </span>
         <span className="font-mono font-bold text-primary tracking-wider">
-          {packet.latestObserver?.iata ?? <span className="text-text-dim font-normal">n/a</span>}
+          {packet.latestObserver?.iata ?? <span className="font-normal">{na}</span>}
         </span>
         <span className="text-right text-text-muted">
           <Timestamp value={packet.lastHeardAt} />
