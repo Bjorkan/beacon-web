@@ -54,7 +54,8 @@ export function PacketVirtualList({
   const virtualizer = useVirtualizer({
     count: packets.length,
     getScrollElement: () => parentRef.current,
-    estimateSize: () => 64, // a collapsed two-line row; expanded ones are remeasured
+    // a collapsed row: one grid line on desktop, a taller card below md. Expanded rows are remeasured.
+    estimateSize: () => (isMobile ? 64 : 43),
     overscan: 10,
     getItemKey: (index) => packets[index]?.packetHash ?? index,
   });

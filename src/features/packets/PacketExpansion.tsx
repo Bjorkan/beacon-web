@@ -25,6 +25,7 @@ interface Props {
 // the per-observer table, which does wait on usePacketDetail.
 export function PacketExpansion({ packet, onOpenAnalyzer, onViewPath, selectedObservationId, onSelectObservation }: Props) {
   const { data, isLoading, isError, refetch } = usePacketDetail(packet.packetHash);
+  const observer = packet.latestObserver;
   // firstHeardAt/lastHeardAt are epoch ms (same unit Timestamp expects), so the difference is
   // already in ms for formatPropagation -- no *1000 here.
   const spread = packet.lastHeardAt - packet.firstHeardAt;
@@ -43,6 +44,12 @@ export function PacketExpansion({ packet, onOpenAnalyzer, onViewPath, selectedOb
   return (
     <div data-testid="packet-expansion" className="bg-bg-surface border-l-2 border-primary pl-6 pr-3 py-2">
       <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[10px] text-text-muted pb-2">
+        <span>
+          observer{" "}
+          {observer
+            ? <span className="text-text-normal">{observer.displayName ?? observer.id.slice(0, 8)}</span>
+            : <span className="text-text-dim">n/a</span>}
+        </span>
         <span>first <Timestamp value={packet.firstHeardAt} /></span>
         <span>last <Timestamp value={packet.lastHeardAt} /></span>
         <span>spread {formatPropagation(spread)}</span>

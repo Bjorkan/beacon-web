@@ -12,7 +12,8 @@ export function PacketTableHeader() {
       <span>Type</span>
       <span>Route</span>
       <span>Obs</span>
-      <span>Observer</span>
+      <span>Hops</span>
+      <span>Src → Dst</span>
       <span>IATA</span>
       <span className="text-right">Age</span>
     </div>
