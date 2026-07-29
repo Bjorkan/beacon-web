@@ -1,6 +1,7 @@
 import type { Feature, FeatureCollection, LineString, Point } from "geojson";
 import type { PacketDetail, Observation, ResolvedHop } from "../../types/api";
 import { PayloadType } from "../../types/enums";
+import { packetChain } from "./packet-flow";
 
 export interface PathPoint {
   id: string;
@@ -49,14 +50,6 @@ function observerLabel(obs: Observation): string {
   return obs.observerName ?? obs.observerId.slice(0, 8);
 }
 
-// The map plots one marker per hop, so an ambiguous endpoint (a 1-byte prefix matching several
-// candidate nodes) would force us to guess which node actually sent/received the packet. Only plot
-// source/destination when the backend resolved it unambiguously ("high"); ambiguous/unresolved
-// endpoints are left off the line — the analyzer still lists every candidate for them.
-function confidentEndpoint(hop: ResolvedHop | undefined): ResolvedHop | undefined {
-  return hop?.confidence === "high" ? hop : undefined;
-}
-
 // One drawable path per observation (and the trace route for TRACE packets) that resolves to >=2
 // located hops, keyed by observerId and sorted fastest-first. Colors are assigned after sorting so
 // the selector swatch matches the drawn line.
@@ -72,11 +65,8 @@ export function buildPacketPaths(detail: PacketDetail): PacketPath[] {
   // lines would just duplicate the single "Trace route" below — draw only that one for traces.
   if (!isTrace) {
     for (const obs of detail.observations) {
-      // full chain: source → relay hops → destination. Endpoints only when unambiguously resolved
-      // (see confidentEndpoint); missing/unlocated hops drop out in pathPoints.
-      const chain = [confidentEndpoint(obs.resolvedSource), ...obs.resolvedPath, confidentEndpoint(obs.resolvedDestination)].filter(
-        (h): h is ResolvedHop => h != null,
-      );
+      // full chain: source → relay hops → destination; missing/unlocated hops drop out in pathPoints.
+      const chain = packetChain(obs.resolvedSource, obs.resolvedPath, obs.resolvedDestination);
       add(obs.observerId, observerLabel(obs), obs.propagationTimeMs, pathPoints(chain));
     }
   }

@@ -1,7 +1,22 @@
 import type { ResolvedHop } from "../../types/api";
 
-// Pure helpers for the live packet-flow animation (modelled on MeshMapper's LiveViz). No maplibre
-// import, so they stay unit-testable; the hook owns the layers, the rAF loop, and the node flashes.
+// Pure helpers for drawing a packet's path — the live flow animation (modelled on MeshMapper's
+// LiveViz) and the path map share them. No maplibre import, so they stay unit-testable; the hook
+// owns the layers, the rAF loop, and the node flashes.
+
+// The full chain for one observation: source → relay hops → destination. Both maps plot one marker
+// per hop, so an ambiguous endpoint (a 1-byte prefix matching several candidate nodes) would force
+// us to guess which node actually sent or received the packet — only plot endpoints the backend
+// resolved unambiguously. Relay hops carry no such gate; they fall back to their first located
+// candidate. WS types the endpoints nullable where REST leaves them optional, hence both here.
+export function packetChain(
+  source: ResolvedHop | null | undefined,
+  path: ResolvedHop[],
+  destination: ResolvedHop | null | undefined,
+): ResolvedHop[] {
+  const confident = (hop: ResolvedHop | null | undefined) => (hop?.confidence === "high" ? hop : undefined);
+  return [confident(source), ...path, confident(destination)].filter((hop): hop is ResolvedHop => hop != null);
+}
 
 // The located nodes on a packet's resolved path — first candidate per hop, deduped by id. The dot
 // rides these coords and flashes each node as it crosses.
