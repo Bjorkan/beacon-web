@@ -172,3 +172,30 @@ describe("PayloadBreakdown — GROUP_TEXT decrypted channel message", () => {
     expect(screen.getByRole("tooltip").textContent).not.toBe(formatAbsolute(sentAt * 1000));
   });
 });
+
+describe("PayloadBreakdown — multi-line message bodies", () => {
+  // Newlines survive the backend intact (ingest strips only NULs/invalid UTF-8), so the browser's
+  // default white-space:normal was collapsing them to spaces. jsdom doesn't apply that collapsing,
+  // so asserting on textContent alone can't catch the bug — the class is what pins it.
+  const body = "🟠\nDWD aktuell: WARNUNG vor GEWITTER\nDi 17:37 - Di 19:00";
+  // getByText normalizes whitespace by default, which would defeat the point here
+  const exact = { normalizer: (s: string) => s };
+
+  it.each([
+    ["GROUP_TEXT", { type: "GROUP_TEXT", channelHash: "ab", decrypted: { sender: "Alice", content: body } }],
+    ["GROUP_DATA", { type: "GROUP_DATA", channelHash: "ab", decrypted: { sender: "Alice", content: body } }],
+    ["TEXT_MESSAGE", { type: "TEXT_MESSAGE", cipherMac: "0011", ciphertext: "dead", decrypted: { message: body } }],
+    ["RESPONSE", { type: "RESPONSE", cipherMac: "0011", ciphertext: "dead", decrypted: { content: body } }],
+  ])("preserves linebreaks in a %s body", (_type, payload) => {
+    render(<PayloadBreakdown payload={payload} />);
+    expect(screen.getByText(body, exact).className).toContain("whitespace-pre-wrap");
+  });
+
+  it("wraps message text at word boundaries, not mid-word", () => {
+    const payload = { type: "GROUP_TEXT", channelHash: "ab", decrypted: { sender: "Alice", content: body } };
+    render(<PayloadBreakdown payload={payload} />);
+    // break-all is for hex/pubkeys; prose should use break-words
+    expect(screen.getByText(body, exact).className).toContain("break-words");
+    expect(screen.getByText(body, exact).className).not.toContain("break-all");
+  });
+});

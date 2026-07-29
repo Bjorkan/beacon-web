@@ -314,8 +314,9 @@ function GroupTextPayload({ payload }: PayloadProps) {
             )}
             {decrypted.content != null && (
               <div>
-                <span className="text-text-dim">Message </span>
-                <span className="text-text-bright break-all">{String(decrypted.content)}</span>
+                {/* label sits above the body so every line of a multi-line message shares a left edge */}
+                <div className="text-text-dim">Message</div>
+                <div className="text-text-bright whitespace-pre-wrap break-words pl-2">{String(decrypted.content)}</div>
               </div>
             )}
             {decrypted.sentAt != null && (
@@ -336,7 +337,7 @@ function TextPayload({ payload, ...endpoints }: PayloadProps & EndpointProps) {
       {(d) => (
         <div className="flex flex-col gap-1">
           {d.message != null && (
-            <div className="text-text-bright break-all">{String(d.message)}</div>
+            <div className="text-text-bright whitespace-pre-wrap break-words">{String(d.message)}</div>
           )}
           <div className="flex gap-x-4 text-text-dim">
             {d.timestamp != null && <Timestamp value={(d.timestamp as number) * 1000} />}
@@ -380,7 +381,7 @@ function ResponsePayload({ payload, ...endpoints }: PayloadProps & EndpointProps
             <FieldRow label="Tag"><span className="text-text-normal">{String(d.tag)}</span></FieldRow>
           )}
           {d.content != null && (
-            <div className="text-text-bright break-all">{String(d.content)}</div>
+            <div className="text-text-bright whitespace-pre-wrap break-words">{String(d.content)}</div>
           )}
         </div>
       )}

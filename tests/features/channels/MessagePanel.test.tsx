@@ -30,9 +30,18 @@ const liveMsgB = {
   sentAt: 3000,
 } as ChannelMessage;
 
+const multiLineMsg: ChannelMessage = {
+  id: 2,
+  packetHash: "ph-multiline",
+  channelHash: "ch1",
+  senderName: "dave",
+  content: "🟠\nDWD aktuell: WARNUNG vor GEWITTER\nDi 17:37 - Di 19:00",
+  sentAt: 4000,
+};
+
 vi.mock("../../../src/api/client", () => ({
   getChannelMessagesPage: vi.fn(() =>
-    Promise.resolve({ items: [restMsg, liveMsgA, liveMsgB], nextCursor: null, hasMore: false }),
+    Promise.resolve({ items: [restMsg, liveMsgA, liveMsgB, multiLineMsg], nextCursor: null, hasMore: false }),
   ),
 }));
 
@@ -68,5 +77,23 @@ describe("MessagePanel row keys", () => {
     expect(keyWarnings).toEqual([]);
 
     errorSpy.mockRestore();
+  });
+});
+
+describe("MessagePanel multi-line messages", () => {
+  it("preserves linebreaks in a message body", async () => {
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+
+    render(
+      <QueryClientProvider client={qc}>
+        <MessagePanel channel={channel} heardCounts={{}} regionKey="*" />
+      </QueryClientProvider>,
+    );
+
+    // jsdom doesn't collapse whitespace the way a browser does, so the class is what pins this;
+    // the normalizer override stops findByText from collapsing the newlines before matching
+    const body = await screen.findByText(multiLineMsg.content, { normalizer: (s) => s });
+    expect(body.className).toContain("whitespace-pre-wrap");
+    expect(body.className).toContain("break-words");
   });
 });
