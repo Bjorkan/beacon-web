@@ -6,9 +6,12 @@ import {
   getPayloadBreakdown,
   getTopNodes,
   getTopObservers,
+  getTopAdvertisers,
+  getTopTalkers,
   getRadioPresets,
   getStatsScopes,
   getStatsNodeTypes,
+  getClockDrift,
 } from "../../api/client";
 import { RANGE_MS, type StatsRange } from "./types";
 
@@ -71,6 +74,24 @@ export function useTopObservers(range: StatsRange, limit = 10) {
   });
 }
 
+export function useTopAdvertisers(range: StatsRange, limit = 10) {
+  const { iatas, regionKey } = useRegion();
+  return useQuery({
+    queryKey: ["stats-top-advertisers", regionKey, range, limit],
+    queryFn: () => getTopAdvertisers(iatas, sinceFor(range), limit),
+    ...common,
+  });
+}
+
+export function useTopTalkers(range: StatsRange, limit = 10) {
+  const { iatas, regionKey } = useRegion();
+  return useQuery({
+    queryKey: ["stats-top-talkers", regionKey, range, limit],
+    queryFn: () => getTopTalkers(iatas, sinceFor(range), limit),
+    ...common,
+  });
+}
+
 export function useRadioPresets() {
   const { iatas, regionKey } = useRegion();
   return useQuery({
@@ -86,6 +107,16 @@ export function useNodeTypes() {
   return useQuery({
     queryKey: ["stats-node-types", regionKey],
     queryFn: () => getStatsNodeTypes(iatas),
+    ...common,
+  });
+}
+
+// clock drift reflects each node's latest measured drift, not a windowed aggregate, so region-only
+export function useClockDrift(limit = 100) {
+  const { iatas, regionKey } = useRegion();
+  return useQuery({
+    queryKey: ["stats-clock-drift", regionKey, limit],
+    queryFn: () => getClockDrift(iatas, limit),
     ...common,
   });
 }

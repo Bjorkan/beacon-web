@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef } from "react";
 import type { Map as MapLibreMap, GeoJSONSource, CircleLayerSpecification, LineLayerSpecification } from "maplibre-gl";
 import type { Feature, FeatureCollection, Point, LineString } from "geojson";
 import type { WsManager } from "../../api/ws-manager";
-import { resolvedPathNodes, posAtHop, trailCoords } from "./packet-flow";
+import { packetChain, resolvedPathNodes, posAtHop, trailCoords } from "./packet-flow";
 import {
   PACKET_FLOW_TRAIL_SOURCE_ID,
   PACKET_FLOW_TRAIL_LAYER_ID,
@@ -173,9 +173,11 @@ export function useMapPacketFlow(
     if (!enabled) return;
     const map = mapRef.current;
     const unsub = wsManager.onPacketObservation((data) => {
-      const resolved = data.observation?.resolvedPath;
-      if (!resolved) return;
-      const nodes = resolvedPathNodes(resolved);
+      const obs = data.observation;
+      // resolvedPath is opt-in and the toggle above lands a beat after connect, but the endpoints
+      // always ship — bail rather than animate a bare source→destination hop that never happened.
+      if (!obs?.resolvedPath) return;
+      const nodes = resolvedPathNodes(packetChain(obs.resolvedSource, obs.resolvedPath, obs.resolvedDestination));
       if (nodes.length < 2) return; // need at least two located hops to animate a path
       while (flowsRef.current.length >= PACKET_FLOW_MAX) flowsRef.current.shift();
       flowsRef.current.push({

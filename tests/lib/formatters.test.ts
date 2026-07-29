@@ -7,7 +7,11 @@ import {
   snrLevel,
   formatPropagation,
   formatCount,
+  formatClockDrift,
+  formatRatePerDay,
 } from "../../src/lib/formatters";
+
+const DAY_MS = 86_400_000;
 
 describe("formatHex", () => {
   it("truncates to 8 chars uppercase", () => {
@@ -101,5 +105,53 @@ describe("formatPropagation", () => {
 
   it("returns dash for null", () => {
     expect(formatPropagation(null)).toBe("—");
+  });
+});
+
+describe("formatClockDrift", () => {
+  it("labels a zero drift as in sync", () => {
+    expect(formatClockDrift(0)).toBe("in sync");
+  });
+
+  it("shows sub-minute drift with a sign and direction word", () => {
+    expect(formatClockDrift(42)).toBe("+42s ahead");
+    expect(formatClockDrift(-45)).toBe("-45s behind");
+  });
+
+  it("breaks out minutes and hours, dropping seconds once hours appear", () => {
+    expect(formatClockDrift(432)).toBe("+7m 12s ahead"); // 7*60 + 12
+    expect(formatClockDrift(-3670)).toBe("-1h 1m behind"); // 3670 -> 1h 1m
+  });
+
+  it("renders exact minute/hour boundaries with a zero remainder", () => {
+    expect(formatClockDrift(60)).toBe("+1m 0s ahead");
+    expect(formatClockDrift(3600)).toBe("+1h 0m ahead");
+  });
+});
+
+describe("formatRatePerDay", () => {
+  it("equals the compacted count over a one-day window", () => {
+    expect(formatRatePerDay(1240, DAY_MS)).toBe("1.2k/d");
+    expect(formatRatePerDay(340, DAY_MS)).toBe("340/d");
+  });
+
+  it("divides the count by the window in days and rounds to a whole rate", () => {
+    expect(formatRatePerDay(1240, 7 * DAY_MS)).toBe("177/d"); // 177.14 -> 177
+    expect(formatRatePerDay(340, 7 * DAY_MS)).toBe("49/d"); // 48.57 -> 49
+  });
+
+  it("keeps one decimal for sub-ten rates so small counts don't vanish", () => {
+    expect(formatRatePerDay(12, 30 * DAY_MS)).toBe("0.4/d"); // 0.4/day
+    expect(formatRatePerDay(138, 30 * DAY_MS)).toBe("4.6/d"); // 4.6/day
+  });
+
+  it("returns a zero rate for a zero count or a zero window", () => {
+    expect(formatRatePerDay(0, 7 * DAY_MS)).toBe("0/d");
+    expect(formatRatePerDay(5, 0)).toBe("0/d");
+  });
+
+  it("shows a dash for a missing count, matching formatCount", () => {
+    expect(formatRatePerDay(null, 7 * DAY_MS)).toBe("—");
+    expect(formatRatePerDay(undefined, 7 * DAY_MS)).toBe("—");
   });
 });

@@ -52,6 +52,21 @@ export function formatUptime(seconds: number): string {
   return `${m}m`;
 }
 
+// Signed device-clock drift for the node detail, e.g. "+42s ahead", "-1h 1m behind", "in sync".
+// formatUptime floors to whole minutes and is unsigned, so it can't render sub-minute drift.
+// +ve = device clock ahead of the server (matches clockDriftSeconds).
+export function formatClockDrift(seconds: number): string {
+  if (seconds === 0) return "in sync";
+  const dir = seconds > 0 ? "ahead" : "behind";
+  const sign = seconds > 0 ? "+" : "-";
+  const s = Math.abs(seconds);
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const sec = s % 60;
+  const mag = h > 0 ? `${h}h ${m}m` : m > 0 ? `${m}m ${sec}s` : `${sec}s`;
+  return `${sign}${mag} ${dir}`;
+}
+
 export function formatBattery(volts: number): string {
   return `${volts.toFixed(2)}V`;
 }
@@ -68,6 +83,16 @@ export function formatCount(n: number | null | undefined): string {
   return fmt(1_000_000_000, "B");
 }
 
+// Average count per day over a window, e.g. 340 adverts across 7d -> "49/d". Sub-ten rates keep one
+// decimal so a handful of events over a long window doesn't round away to "0/d".
+export function formatRatePerDay(count: number | null | undefined, windowMs: number): string {
+  if (count == null || !Number.isFinite(count)) return "—";
+  const days = windowMs / 86_400_000;
+  const rate = days > 0 ? count / days : 0;
+  const shown = rate >= 10 ? formatCount(Math.round(rate)) : String(Math.round(rate * 10) / 10);
+  return `${shown}/d`;
+}
+
 // clamp negative values from clock skew
 export function timeAgoMs(epochMs: number): string {
   const seconds = Math.max(0, Math.floor((Date.now() - epochMs) / 1000));
@@ -79,7 +104,7 @@ export function timeAgoMs(epochMs: number): string {
   return `${Math.floor(hours / 24)}d`;
 }
 
-// Node/observer summaries carry radio as a compact "freq,bw,sf" string (e.g. "915.0,250,11").
+// Node/observer summaries carry radio as a compact "freq,bw,sf" string (e.g. "915,250,11").
 // Formats freq/SF/bandwidth like the observer panel ("915 MHz · SF11 · 250 kHz"); the compact
 // string carries no coding rate, so there's no "CR 4/x" segment.
 export function formatRadio(radio: string | null | undefined): string | null {

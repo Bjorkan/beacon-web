@@ -34,6 +34,9 @@ export function MeshTab({ range, onSelectObserver, wsManager }: MeshTabProps) {
   useLiveOverview(wsManager);
   const overview = useStatsOverview();
   const observations = useStatsObservations(range);
+  // top-row KPIs are a fixed 24h snapshot, so their sparklines use a dedicated
+  // 24h series rather than the range-driven one (deduped by query key when range is 24h)
+  const overviewObs = useStatsObservations("24h");
   const payload = usePayloadBreakdown(range);
   const topNodes = useTopNodes(10);
   const topObservers = useTopObservers(range, 8);
@@ -102,8 +105,9 @@ export function MeshTab({ range, onSelectObserver, wsManager }: MeshTabProps) {
     [scopes.data],
   );
 
-  const obsSpark = useMemo(() => obs.slice(-24).map((p) => p.observationCount), [obs]);
-  const observerSpark = useMemo(() => obs.slice(-24).map((p) => p.activeObservers), [obs]);
+  const kpiObs = useMemo(() => aggregateByHour(overviewObs.data ?? []), [overviewObs.data]);
+  const obsSpark = useMemo(() => kpiObs.slice(-24).map((p) => p.observationCount), [kpiObs]);
+  const observerSpark = useMemo(() => kpiObs.slice(-24).map((p) => p.activeObservers), [kpiObs]);
 
   const ov = overview.data;
   const kpiLoading = overview.isLoading;

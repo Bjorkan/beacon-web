@@ -1,4 +1,4 @@
-import { useCallback } from "react";
+import { useCallback, useMemo } from "react";
 import { useSearchParams } from "react-router-dom";
 import { CloseButton } from "../../components/CloseButton";
 import { CopyLinkButton } from "../../components/CopyLinkButton";
@@ -14,6 +14,7 @@ import { buildObservationFrame, computeFieldRanges, ColoredHexDump, HeaderBitBre
 import { PayloadBreakdown } from "./payload-renderers";
 import { ObservationCard } from "./ObservationCard";
 import { PathData } from "./PathData";
+import { buildPacketPaths } from "../map/packet-path";
 
 function decodePayloadHex(encoded: string): string | null {
   try {
@@ -32,19 +33,22 @@ interface PacketAnalyzerDrawerProps {
   onClose: () => void;
   onSelectObservation?: (id: number) => void;
   onViewNode?: (nodeId: string) => void;
+  onViewPath?: () => void;
   loading?: boolean;
 }
 
 // side panel (full-screen on mobile) showing packet structure and payload breakdown
 
-export function PacketAnalyzerDrawer({ detail, selectedObservationId, onClose, onSelectObservation, onViewNode, loading }: PacketAnalyzerDrawerProps) {
+export function PacketAnalyzerDrawer({ detail, selectedObservationId, onClose, onSelectObservation, onViewNode, onViewPath, loading }: PacketAnalyzerDrawerProps) {
   const [, setSearchParams] = useSearchParams();
 
-  // drop ?hash so the closed analyzer can't reopen on reload and the packet row deselects
+  const hasPath = useMemo(() => (detail ? buildPacketPaths(detail).length > 0 : false), [detail]);
+
+  // drop ?analyze so a reload doesn't reopen the drawer; ?hash stays, leaving the row expanded
   const handleClose = useCallback(() => {
     setSearchParams((p) => {
       const n = new URLSearchParams(p);
-      n.delete("hash");
+      n.delete("analyze");
       return n;
     }, { replace: true });
     onClose();
@@ -64,11 +68,11 @@ export function PacketAnalyzerDrawer({ detail, selectedObservationId, onClose, o
   const headerHex = rawHex.slice(0, 2);
 
   return (
-    <div className="absolute inset-0 z-30 w-full md:static md:inset-auto md:z-auto md:shrink-0 md:w-[400px] md:border-l border-border bg-bg-surface flex flex-col min-h-0 overflow-hidden">
+    <div data-testid="packet-analyzer-drawer" className="absolute inset-0 z-30 w-full md:static md:inset-auto md:z-auto md:shrink-0 md:w-[400px] md:border-l border-border bg-bg-surface flex flex-col min-h-0 overflow-hidden">
       <div className="flex items-center justify-between px-3 py-2 border-b border-border-subtle shrink-0">
         <span className="text-[13px] font-mono font-medium text-text-dim uppercase tracking-wider">Packet Analyzer</span>
         <div className="flex items-center gap-1.5">
-          {detail && <CopyLinkButton params={{ tab: "Packets", hash: detail.packetHash }} ariaLabel="Copy packet link" />}
+          {detail && <CopyLinkButton params={{ tab: "Packets", hash: detail.packetHash, analyze: "1" }} ariaLabel="Copy packet link" />}
           <CloseButton onClose={handleClose} label="Close analyzer" className="-mr-1" />
         </div>
       </div>
@@ -114,6 +118,22 @@ export function PacketAnalyzerDrawer({ detail, selectedObservationId, onClose, o
                 <span><span className="text-text-dim">Propagation </span><span className="text-text-normal">{formatPropagation(detail.firstToLastMs)}</span></span>
               </div>
             </DrawerSection>
+
+            <div className="px-3 py-2 border-b border-border-subtle">
+              <button
+                type="button"
+                onClick={onViewPath}
+                disabled={!hasPath || !onViewPath}
+                title={hasPath ? undefined : "No resolved path to map"}
+                className="w-full flex items-center justify-center gap-1.5 rounded border border-border bg-bg-base px-3 py-1.5 text-[13px] font-mono text-text-normal hover:bg-text-normal/3 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              >
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" aria-hidden>
+                  <path d="M9 5l-6 2v12l6-2 6 2 6-2V5l-6 2-6-2z" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round" />
+                  <path d="M9 5v12M15 7v12" stroke="currentColor" strokeWidth="1.4" />
+                </svg>
+                View path on map
+              </button>
+            </div>
 
             {selectedObs && (
               <DrawerSection title="Observation">
@@ -181,22 +201,12 @@ export function PacketAnalyzerDrawer({ detail, selectedObservationId, onClose, o
                   </ColorAccentField>
                 )}
 
-                {/* Path data — for TRACE the path bytes are per-hop SNR samples, so show them raw */}
+                {/* Path data — TRACE's pathBytes are now its trace path hashes (matching hashSize/hopCount
+                    and resolvedPath), so it resolves through PathData like every other type. */}
                 {selectedObs?.pathBytes && (
                   <ColorAccentField field="pathData">
-                    {detail.header.payloadType === PayloadType.TRACE ? (
-                      <>
-                        <div className="text-text-dim text-xs font-medium uppercase tracking-wider mb-1">Path SNR Data</div>
-                        <div className="font-mono text-[13px] text-text-normal break-all">
-                          {selectedObs.pathBytes.toUpperCase()}
-                        </div>
-                      </>
-                    ) : (
-                      <>
-                        <div className="text-text-dim text-xs font-medium uppercase tracking-wider mb-1">Path Data</div>
-                        <PathData pathBytes={selectedObs.pathBytes} hashSize={selectedObs.pathLength.hashSize} resolvedPath={selectedObs.resolvedPath} onViewNode={onViewNode} />
-                      </>
-                    )}
+                    <div className="text-text-dim text-xs font-medium uppercase tracking-wider mb-1">Path Data</div>
+                    <PathData pathBytes={selectedObs.pathBytes} hashSize={selectedObs.pathLength.hashSize} resolvedPath={selectedObs.resolvedPath} onViewNode={onViewNode} />
                   </ColorAccentField>
                 )}
 
@@ -212,7 +222,7 @@ export function PacketAnalyzerDrawer({ detail, selectedObservationId, onClose, o
             {detail.parsedPayload && typeof detail.parsedPayload === "object" && Object.keys(detail.parsedPayload).length > 0 && (
               <DrawerSection title="Payload Breakdown">
                 <div className="font-mono text-[13px]">
-                  <PayloadBreakdown payload={detail.parsedPayload} resolvedRoute={detail.resolvedRoute} onViewNode={onViewNode} />
+                  <PayloadBreakdown payload={detail.parsedPayload} resolvedRoute={detail.resolvedRoute} resolvedSource={selectedObs?.resolvedSource} resolvedDestination={selectedObs?.resolvedDestination} onViewNode={onViewNode} />
                 </div>
               </DrawerSection>
             )}

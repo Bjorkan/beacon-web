@@ -9,11 +9,17 @@ import type {
   PayloadBreakdownItem,
   TopNode,
   TopObserver,
+  TopAdvertiser,
+  TopTalker,
   RadioPreset,
   ScopeStats,
   ObserverTelemetry,
   NodeTypeCount,
+  ClockDriftEntry,
 } from "../features/stats/types";
+import type { Feature, Polygon, MultiPolygon } from "geojson";
+
+export type IataBorder = Feature<Polygon | MultiPolygon>;
 
 // typed fetch wrapper with query params
 
@@ -58,15 +64,15 @@ function iatasParam(iatas?: string[]): string | undefined {
 
 export function getPackets(
   iatas: string[] | undefined,
-  params?: { cursor?: number; limit?: number; payloadType?: number; routeType?: number; scope?: string },
+  params?: { cursor?: number; limit?: number; payloadTypes?: number[]; routeTypes?: number[]; scopes?: string[] },
 ): Promise<CursorPage<PacketSummary>> {
   return request("/packets", {
     iatas: iatasParam(iatas),
     cursor: params?.cursor,
     limit: params?.limit ?? DEFAULT_PAGE_SIZE,
-    payloadType: params?.payloadType,
-    routeType: params?.routeType,
-    scope: params?.scope,
+    payloadTypes: params?.payloadTypes?.length ? params.payloadTypes.join(",") : undefined,
+    routeTypes: params?.routeTypes?.length ? params.routeTypes.join(",") : undefined,
+    scopes: params?.scopes?.length ? params.scopes.join(",") : undefined,
   });
 }
 
@@ -76,6 +82,17 @@ export function getPacketDetail(packetHash: string): Promise<PacketDetail> {
 
 export function getIatas(): Promise<IataCode[]> {
   return request("/iatas");
+}
+
+// An IATA's GeoJSON border, or null when none is configured. Can't use request(): the endpoint
+// answers 204 (empty body) or a literal `null` for "no border", and request() always parses JSON.
+export async function getIataBorder(iata: string): Promise<IataBorder | null> {
+  const url = new URL(`${API_BASE}/iatas/${iata}/border`, window.location.origin);
+  const res = await fetch(url.toString());
+  if (res.status === 204) return null;
+  if (!res.ok) throw new ApiError(res.status, "unknown", res.statusText);
+  const body = await res.json();
+  return (body ?? null) as IataBorder | null;
 }
 
 export function getRegions(): Promise<RegionSummary[]> {
@@ -209,6 +226,7 @@ export function getNodesPage(
     limit?: number;
     type?: string;
     name?: string;
+    pubkeyPrefix?: string; // case-insensitive hex prefix; server matches and validates
     supportsMultibytePaths?: "true" | "false";
     supportsMultibyteTraces?: "true" | "false";
     neighbors?: boolean; // include each node's neighborIds (?neighbors=true)
@@ -220,6 +238,7 @@ export function getNodesPage(
     limit: params?.limit ?? DEFAULT_PAGE_SIZE,
     typeName: params?.type,
     name: params?.name,
+    pubkeyPrefix: params?.pubkeyPrefix,
     supportsMultibytePaths: params?.supportsMultibytePaths,
     supportsMultibyteTraces: params?.supportsMultibyteTraces,
     neighbors: params?.neighbors ? "true" : undefined,
@@ -282,12 +301,26 @@ export function getTopObservers(iatas?: string[], since?: number, limit = 10): P
   return request("/stats/top-observers", { iatas: iatasParam(iatas), since, limit });
 }
 
+export function getTopAdvertisers(iatas?: string[], since?: number, limit = 10): Promise<TopAdvertiser[]> {
+  return request("/stats/top-advertisers", { iatas: iatasParam(iatas), since, limit });
+}
+
+export function getTopTalkers(iatas?: string[], since?: number, limit = 10): Promise<TopTalker[]> {
+  return request("/stats/top-talkers", { iatas: iatasParam(iatas), since, limit });
+}
+
 export function getRadioPresets(iatas?: string[]): Promise<RadioPreset[]> {
   return request("/stats/radio-presets", { iatas: iatasParam(iatas) });
 }
 
 export function getStatsNodeTypes(iatas?: string[]): Promise<NodeTypeCount[]> {
   return request("/stats/node-types", { iatas: iatasParam(iatas) });
+}
+
+// Repeaters/room servers whose clock has drifted past the server threshold, worst-first. Not
+// time-windowed and top-N only (no cursor), so callers pass a generous limit and page client-side.
+export function getClockDrift(iatas?: string[], limit = 100): Promise<ClockDriftEntry[]> {
+  return request("/stats/clock-drift", { iatas: iatasParam(iatas), limit });
 }
 
 // renamed from getScopes to avoid colliding with the /scopes name list; this is the /stats/scopes

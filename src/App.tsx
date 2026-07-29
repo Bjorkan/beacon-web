@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef, lazy, Suspense } from "react";
 import { BrowserRouter, useSearchParams } from "react-router-dom";
-import { QueryClient, QueryClientProvider, useQuery } from "@tanstack/react-query";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { RegionProvider, useRegion, useRegionSelection } from "./hooks/useRegion";
 import {
   ALL_REGIONS,
@@ -18,6 +18,7 @@ import { SplashScreen } from "./components/SplashScreen";
 import { PacketList } from "./features/packets/PacketList";
 import { PacketAnalyzerDrawer } from "./features/packets/PacketAnalyzerDrawer";
 import { PacketAnalyzerOverlay } from "./features/packets/PacketAnalyzerOverlay";
+import { PacketPathMapModal } from "./features/map/PacketPathMapModal";
 import { NodeTable } from "./features/nodes/NodeTable";
 import { NodeDetailPanel } from "./features/nodes/NodeDetailPanel";
 import { NodeDetailOverlay } from "./features/nodes/NodeDetailOverlay";
@@ -26,9 +27,10 @@ import { RouteTable } from "./features/routes/RouteTable";
 import { TraceList } from "./features/traces/TraceList";
 import { ChannelList } from "./features/channels/ChannelList";
 import { EmptyState } from "./components/EmptyState";
-import { getPacketDetail } from "./api/client";
+import { usePacketDetail } from "./features/packets/usePacketDetail";
 import { WsManager } from "./api/ws-manager";
 import { WS_URL, ENABLED_TABS } from "./lib/constants";
+import type { PacketDetail } from "./types/api";
 
 // Map is the only heavy tab (maplibre-gl is ~1MB), so lazy-load it — its chunk is fetched the
 // first time someone opens the Map tab instead of bloating the initial bundle.
@@ -96,6 +98,29 @@ function RegionUrlSync() {
   return null;
 }
 
+// Restores a shared "?path" link once its detail arrives. A copied path link carries ?hash without
+// ?analyze (PacketPathMapModal's Copy Link strips it), so this can't reuse the analyzer drawer's fetch
+// and needs its own — sharing usePacketDetail's query cache means that costs nothing extra when both
+// params are present.
+export function PathLinkRestore({ initialPath, hash, analyzerDetail, onRestore }: {
+  initialPath: string | null;
+  hash: string | null;
+  analyzerDetail: PacketDetail | undefined;
+  onRestore: (detail: PacketDetail, key: string) => void;
+}) {
+  const { data: pathLinkDetail } = usePacketDetail(initialPath ? hash : null);
+  const handledRef = useRef(false);
+
+  useEffect(() => {
+    const detail = analyzerDetail ?? pathLinkDetail;
+    if (!initialPath || !detail || handledRef.current) return;
+    handledRef.current = true;
+    onRestore(detail, initialPath);
+  }, [initialPath, analyzerDetail, pathLinkDetail, onRestore]);
+
+  return null;
+}
+
 // Drop the shared node/observer selection when the user changes region, so a detail panel doesn't keep
 // showing an entity that's no longer in the re-queried map/table. Watches the raw selection rather than
 // the resolved regionKey: the async slug→IATA expansion on load bumps regionKey without any user action,
@@ -127,8 +152,9 @@ function AppInner() {
   // Resolve the starting selection once from URL → storage → legacy key (see computeInitialSelection).
   const [initialSelection] = useState(() => computeInitialSelection(searchParams));
 
-  // ?hash / ?node / ?observer restore a shared deep link on load (see each panel's Copy Link button)
-  const [analyzerHash, setAnalyzerHash] = useState<string | null>(() => searchParams.get("hash"));
+  // ?node / ?observer restore a shared deep link on load (see each panel's Copy Link button)
+  // ?analyze=1 is a boolean flag; the hash always lives in ?hash, so ?analyze alone opens nothing
+  const analyzerHash = searchParams.get("analyze") === "1" ? searchParams.get("hash") : null;
   const [selectedObservationId, setSelectedObservationId] = useState<number | null>(null);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(() => searchParams.get("node"));
   // lifted (like selectedNodeId) so a node's "View observer" link can select it before the tab mounts
@@ -137,35 +163,44 @@ function AppInner() {
   const [overlayNodeId, setOverlayNodeId] = useState<string | null>(null);
   // packet analyzer shown as a modal over the node panel (clicking a node's observation row)
   const [overlayPacketHash, setOverlayPacketHash] = useState<string | null>(null);
+  // packet path popup shown as a modal over the analyzer drawer/overlay ("View path on map")
+  const [pathMapDetail, setPathMapDetail] = useState<PacketDetail | null>(null);
+  // Frozen together: the restore must fetch the hash the link asked for, even if the user clicks a
+  // different row before it resolves.
+  const [pathLink] = useState(() => ({ path: searchParams.get("path"), hash: searchParams.get("hash") }));
+  const [pathMapInitialKey, setPathMapInitialKey] = useState<string | null>(null);
 
-  // short staleTime: observations keep accruing, so reopening the analyzer should show them
-  // instead of a snapshot frozen at first open
-  const { data: analyzerDetail, isLoading: analyzerLoading } = useQuery({
-    queryKey: ["packet-detail", analyzerHash],
-    queryFn: () => getPacketDetail(analyzerHash!),
-    enabled: !!analyzerHash,
-    staleTime: 30_000,
-  });
+  const { data: analyzerDetail, isLoading: analyzerLoading } = usePacketDetail(analyzerHash);
+  const { data: overlayPacketDetail, isLoading: overlayPacketLoading } = usePacketDetail(overlayPacketHash);
 
-  const { data: overlayPacketDetail, isLoading: overlayPacketLoading } = useQuery({
-    queryKey: ["packet-detail", overlayPacketHash],
-    queryFn: () => getPacketDetail(overlayPacketHash!),
-    enabled: !!overlayPacketHash,
-    staleTime: 30_000,
-  });
+  const handlePathLinkRestore = useCallback((detail: PacketDetail, key: string) => {
+    setPathMapDetail(detail);
+    setPathMapInitialKey(key);
+  }, []);
+
+  // "View path on map" from anywhere that already holds a detail — no key, so the modal picks its own
+  const handleViewPath = useCallback((detail: PacketDetail) => {
+    setPathMapDetail(detail);
+    setPathMapInitialKey(null);
+  }, []);
 
   const handleAnalyze = useCallback((hash: string | null) => {
-    setAnalyzerHash(hash);
-    setSelectedObservationId(null);
-  }, []);
+    // No reset: observation ids are globally unique, so a pick inside an expanded row survives into the drawer.
+    setSearchParams((p) => {
+      const n = new URLSearchParams(p);
+      if (hash) { n.set("hash", hash); n.set("analyze", "1"); n.delete("path"); }
+      else n.delete("analyze");
+      return n;
+    }, { replace: true });
+  }, [setSearchParams]);
 
   const handleTabChange = (tab: string) => {
     setOverlayNodeId(null);
     setOverlayPacketHash(null);
-    // On mobile a detail panel fills the screen, so leaving its tab must close it; desktop side
-    // panels persist across tabs. Cross-nav (onViewObserver) re-sets its selection after this.
+    setPathMapDetail(null);
+    // On mobile a detail panel (and the analyzer) fills the screen, so leaving its tab must close it;
+    // desktop side panels persist across tabs. Cross-nav (onViewObserver) re-sets its selection after this.
     if (isMobile) {
-      setAnalyzerHash(null);
       setSelectedObservationId(null);
       setSelectedNodeId(null);
       setSelectedObserverId(null);
@@ -173,6 +208,8 @@ function AppInner() {
     setSearchParams((prev) => {
       const next = new URLSearchParams(prev);
       next.set("tab", tab);
+      // the analyzer is URL-backed, so its mobile close lives here rather than above
+      if (isMobile) next.delete("analyze");
       // stats sub-state shouldn't haunt the URL on other tabs
       if (tab !== "Analytics") {
         next.delete("statsTab");
@@ -188,10 +225,11 @@ function AppInner() {
     setOverlayNodeId(null);
     setOverlayPacketHash(null);
     setSelectedObserverId(null);
+    setPathMapDetail(null);
   }, []);
 
   // Closing a detail panel drops its deep-link param so a reload can't reopen it (mirrors the packet
-  // analyzer's ?hash cleanup). Selecting a different node/observer doesn't touch the URL — the panel's
+  // analyzer's ?analyze cleanup). Selecting a different node/observer doesn't touch the URL — the panel's
   // Copy Link button rebuilds a fresh link on demand.
   const dropSelectionParam = useCallback((key: "node" | "observer") => {
     setSearchParams((prev) => {
@@ -236,7 +274,15 @@ function AppInner() {
   }, []);
 
   const tabContent: Record<string, React.ReactNode> = {
-    Packets: <PacketList wsManager={wsManager} onAnalyze={handleAnalyze} />,
+    Packets: (
+      <PacketList
+        wsManager={wsManager}
+        onAnalyze={handleAnalyze}
+        onViewPath={handleViewPath}
+        selectedObservationId={selectedObservationId}
+        onSelectObservation={setSelectedObservationId}
+      />
+    ),
     Nodes: <NodeTable wsManager={wsManager} selectedNodeId={selectedNodeId} onSelectNode={setSelectedNodeId} />,
     Observers: <ObserverTable wsManager={wsManager} selectedObserverId={selectedObserverId} onSelectObserver={handleSelectObserver} onAnalyzePacket={setOverlayPacketHash} onViewStats={handleViewObserverStats} />,
     Routes: <RouteTable />,
@@ -253,6 +299,12 @@ function AppInner() {
       <RegionWatcher wsManager={wsManager} />
       <RegionUrlSync />
       <SelectionResetOnRegion onRegionChange={clearSelection} />
+      <PathLinkRestore
+        initialPath={pathLink.path}
+        hash={pathLink.hash}
+        analyzerDetail={analyzerDetail}
+        onRestore={handlePathLinkRestore}
+      />
       <AppShell activeTab={activeTab} onTabChange={handleTabChange} wsManager={wsManager}>
         <div className="relative flex flex-1 min-h-0">
           <div key={activeTab} className="flex flex-1 min-h-0 fade-in">
@@ -268,6 +320,7 @@ function AppInner() {
               onSelectObservation={setSelectedObservationId}
               onClose={() => handleAnalyze(null)}
               onViewNode={setOverlayNodeId}
+              onViewPath={() => { if (analyzerDetail) handleViewPath(analyzerDetail); }}
             />
           )}
           {(activeTab === "Map" || activeTab === "Nodes") && selectedNodeId && (
@@ -301,6 +354,18 @@ function AppInner() {
               onViewObserver={(observerId) => {
                 handleTabChange("Observers");
                 setSelectedObserverId(observerId);
+              }}
+              onViewPath={() => { if (overlayPacketDetail) handleViewPath(overlayPacketDetail); }}
+              inactive={!!pathMapDetail}
+            />
+          )}
+          {pathMapDetail && (
+            <PacketPathMapModal
+              detail={pathMapDetail}
+              initialSelectedKey={pathMapInitialKey}
+              onClose={() => {
+                setPathMapDetail(null);
+                setSearchParams((prev) => { const n = new URLSearchParams(prev); n.delete("path"); return n; }, { replace: true });
               }}
             />
           )}

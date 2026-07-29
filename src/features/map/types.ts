@@ -98,6 +98,12 @@ export const NEIGHBORS_LINE_LAYER_ID = "neighbor-lines"; // line layer drawn ben
 export const MAP_NEIGHBOR_LINES_STORAGE_KEY = "beacon-map-neighbor-lines";
 export type NeighborLinesMode = "on" | "selected" | "off";
 
+// --- IATA border layer ---
+export const IATA_BORDERS_SOURCE_ID = "iata-borders";
+export const IATA_BORDERS_FILL_LAYER_ID = "iata-borders-fill"; // low-alpha fill beneath the markers
+export const IATA_BORDERS_LINE_LAYER_ID = "iata-borders-line"; // outline stroke over the fill
+export const MAP_BORDERS_STORAGE_KEY = "beacon-map-borders";
+
 // --- Live packet-flow (modelled on MeshMapper's "LiveViz"): dim every node, then per packet shoot an
 // orange dot along its real hop path with a fading dashed trail, flashing each node as the dot crosses ---
 export const PACKET_FLOW_TRAIL_SOURCE_ID = "packet-flow-trail";

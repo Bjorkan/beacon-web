@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { getPackets, getNodesPage, getObserversPage, getScopes, getKnownRoutesPage, searchKnownRoutes, getChannels, getChannelMessagesPage, getTraces, getTraceDetail, getStatsOverview, getTopObservers, getStatsNodeTypes } from "../../src/api/client";
+import { getPackets, getNodesPage, getObserversPage, getScopes, getKnownRoutesPage, searchKnownRoutes, getChannels, getChannelMessagesPage, getTraces, getTraceDetail, getStatsOverview, getTopObservers, getTopAdvertisers, getTopTalkers, getStatsNodeTypes, getClockDrift, getIataBorder } from "../../src/api/client";
+import type { Feature, Polygon } from "geojson";
 import type { NodeSummary } from "../../src/features/nodes/types";
 import type { ObserverSummary } from "../../src/features/observers/types";
 import type { ChannelMessage, ChannelSummary } from "../../src/features/channels/types";
@@ -23,16 +24,16 @@ afterEach(() => {
 });
 
 describe("getPackets", () => {
-  it("forwards the single-value server filters (routeType 0 survives, scope is encoded)", async () => {
+  it("forwards plural filters as comma-separated values (routeType 0 survives, scope is encoded)", async () => {
     const getUrl = mockFetchOnce({ items: [], nextCursor: null, hasMore: false });
 
-    await getPackets(["YOW"], { payloadType: 4, routeType: 0, scope: "#bc" });
+    await getPackets(["YOW"], { payloadTypes: [2, 4], routeTypes: [0], scopes: ["#bc", "#west"] });
 
-    const url = getUrl();
-    expect(url).toContain("/packets");
-    expect(url).toContain("payloadType=4");
-    expect(url).toContain("routeType=0");
-    expect(url).toContain("scope=%23bc");
+    const url = new URL(getUrl());
+    expect(url.pathname).toContain("/packets");
+    expect(url.searchParams.get("payloadTypes")).toBe("2,4");
+    expect(url.searchParams.get("routeTypes")).toBe("0"); // single value 0 survives
+    expect(url.searchParams.get("scopes")).toBe("#bc,#west");
   });
 
   it("omits the filter params when none are given", async () => {
@@ -40,12 +41,12 @@ describe("getPackets", () => {
 
     await getPackets(["YOW"], { cursor: 100 });
 
-    const url = getUrl();
-    expect(url).not.toContain("payloadType=");
-    expect(url).not.toContain("routeType=");
-    expect(url).not.toContain("scope=");
-    expect(url).toContain("cursor=100");
-    expect(url).toContain("limit=50");
+    const url = new URL(getUrl());
+    expect(url.searchParams.has("payloadTypes")).toBe(false);
+    expect(url.searchParams.has("routeTypes")).toBe(false);
+    expect(url.searchParams.has("scopes")).toBe(false);
+    expect(url.searchParams.get("cursor")).toBe("100");
+    expect(url.searchParams.get("limit")).toBe("50");
   });
 });
 
@@ -82,6 +83,16 @@ describe("getNodesPage", () => {
     const url = getUrl();
     expect(url).not.toContain("cursor=");
     expect(url).toContain("limit=50");
+  });
+
+  it("forwards the pubkeyPrefix search param", async () => {
+    const getUrl = mockFetchOnce({ items: [], nextCursor: null, hasMore: false });
+
+    await getNodesPage(["YYZ"], { pubkeyPrefix: "a1b2" });
+
+    const url = getUrl();
+    expect(url).toContain("/nodes");
+    expect(url).toContain("pubkeyPrefix=a1b2");
   });
 
   it("forwards the Nodes-table filters (type maps to typeName, multibyte flags)", async () => {
@@ -381,6 +392,30 @@ describe("stats endpoints", () => {
     expect(url.searchParams.get("limit")).toBe("15");
   });
 
+  it("hits /stats/top-advertisers with iatas/since/limit", async () => {
+    const getUrl = mockFetchOnce([]);
+
+    await getTopAdvertisers(["YOW", "YYZ"], 1700000000000, 10);
+
+    const url = new URL(getUrl());
+    expect(url.pathname).toContain("/stats/top-advertisers");
+    expect(url.searchParams.get("iatas")).toBe("YOW,YYZ");
+    expect(url.searchParams.get("since")).toBe("1700000000000");
+    expect(url.searchParams.get("limit")).toBe("10");
+  });
+
+  it("hits /stats/top-talkers with iatas/since/limit", async () => {
+    const getUrl = mockFetchOnce([]);
+
+    await getTopTalkers(["YOW"], 1700000000000, 8);
+
+    const url = new URL(getUrl());
+    expect(url.pathname).toContain("/stats/top-talkers");
+    expect(url.searchParams.get("iatas")).toBe("YOW");
+    expect(url.searchParams.get("since")).toBe("1700000000000");
+    expect(url.searchParams.get("limit")).toBe("8");
+  });
+
   it("hits /stats/node-types with the region's IATAs", async () => {
     const getUrl = mockFetchOnce([{ nodeType: 2, nodeTypeName: "repeater", count: 12 }]);
 
@@ -389,5 +424,65 @@ describe("stats endpoints", () => {
     const url = new URL(getUrl());
     expect(url.pathname).toContain("/stats/node-types");
     expect(url.searchParams.get("iatas")).toBe("YOW,YYZ");
+  });
+
+  it("hits /stats/clock-drift with iatas/limit", async () => {
+    const getUrl = mockFetchOnce([]);
+
+    await getClockDrift(["YOW", "YYZ"], 100);
+
+    const url = new URL(getUrl());
+    expect(url.pathname).toContain("/stats/clock-drift");
+    expect(url.searchParams.get("iatas")).toBe("YOW,YYZ");
+    expect(url.searchParams.get("limit")).toBe("100");
+  });
+});
+
+describe("getIataBorder", () => {
+  // this endpoint can 204 (empty body) or send a literal `null`, so mock the status explicitly
+  function mockStatus(status: number, body: unknown): () => string {
+    let calledUrl = "";
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url: string) => {
+        calledUrl = url;
+        return {
+          ok: status >= 200 && status < 300,
+          status,
+          json: async () => {
+            if (status === 204) throw new Error("no body to parse");
+            return body;
+          },
+        } as Response;
+      }),
+    );
+    return () => calledUrl;
+  }
+
+  const feature: Feature<Polygon> = {
+    type: "Feature",
+    properties: {},
+    geometry: { type: "Polygon", coordinates: [[[0, 0], [1, 0], [1, 1], [0, 0]]] },
+  };
+
+  it("requests /iatas/{iata}/border", async () => {
+    const getUrl = mockStatus(200, feature);
+    await getIataBorder("YOW");
+    expect(new URL(getUrl()).pathname).toContain("/iatas/YOW/border");
+  });
+
+  it("returns null for a 204 (no border configured) without parsing a body", async () => {
+    mockStatus(204, undefined);
+    await expect(getIataBorder("YOW")).resolves.toBeNull();
+  });
+
+  it("treats a literal null body as no border", async () => {
+    mockStatus(200, null);
+    await expect(getIataBorder("YOW")).resolves.toBeNull();
+  });
+
+  it("returns the GeoJSON Feature when a border exists", async () => {
+    mockStatus(200, feature);
+    await expect(getIataBorder("YOW")).resolves.toEqual(feature);
   });
 });

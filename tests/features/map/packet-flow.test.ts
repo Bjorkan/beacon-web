@@ -1,10 +1,30 @@
 import { describe, it, expect } from "vitest";
-import { resolvedPathNodes, posAtHop, trailCoords } from "../../../src/features/map/packet-flow";
+import { packetChain, resolvedPathNodes, posAtHop, trailCoords } from "../../../src/features/map/packet-flow";
 import type { ResolvedHop } from "../../../src/types/api";
 
 function hop(id: string, lng: number, lat: number): ResolvedHop {
   return { confidence: "high", nodes: [{ id, publicKey: "pk", longitude: lng, latitude: lat }] };
 }
+
+describe("packetChain", () => {
+  const relay = hop("r", -75, 45);
+
+  it("wraps the relay hops in a high-confidence source and destination", () => {
+    const src = hop("s", -70, 40);
+    const dst = hop("d", -80, 50);
+    expect(packetChain(src, [relay], dst)).toEqual([src, relay, dst]);
+  });
+
+  it("drops ambiguous and unresolved endpoints", () => {
+    const ambiguous: ResolvedHop = { confidence: "ambiguous", nodes: [{ id: "x", publicKey: "pk", longitude: -70, latitude: 40 }] };
+    expect(packetChain(ambiguous, [relay], { confidence: "none", nodes: [] })).toEqual([relay]);
+  });
+
+  it("accepts null or absent endpoints and leaves relay hops untouched", () => {
+    const ambiguousRelay: ResolvedHop = { confidence: "ambiguous", nodes: [{ id: "y", publicKey: "pk", longitude: -76, latitude: 46 }] };
+    expect(packetChain(null, [relay, ambiguousRelay], undefined)).toEqual([relay, ambiguousRelay]);
+  });
+});
 
 describe("resolvedPathNodes", () => {
   it("returns each hop's first located node as {id,lng,lat}, deduped, in order", () => {

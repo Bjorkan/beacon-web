@@ -46,6 +46,52 @@ describe("PayloadBreakdown — trace resolvedRoute overlay", () => {
   });
 });
 
+describe("PayloadBreakdown — resolved source/destination endpoints", () => {
+  const envelope = {
+    type: "TEXT_MESSAGE",
+    sourceHash: "aa",
+    destinationHash: "bb",
+    cipherMac: "0011",
+    ciphertext: "deadbeef",
+    decrypted: null,
+  };
+  const resolvedSource: ResolvedHop = { confidence: "high", nodes: [{ id: "s1", publicKey: "aa", name: "Alice" }] };
+  const resolvedDestination: ResolvedHop = { confidence: "high", nodes: [{ id: "d1", publicKey: "bb", name: "Bob" }] };
+
+  it("makes the resolved From/To hashes clickable node blocks", () => {
+    const onViewNode = vi.fn();
+    render(<PayloadBreakdown payload={envelope} resolvedSource={resolvedSource} resolvedDestination={resolvedDestination} onViewNode={onViewNode} />);
+    fireEvent.click(screen.getByRole("button", { name: "BB" })); // To → destination node
+    expect(onViewNode).toHaveBeenCalledWith("d1");
+    fireEvent.click(screen.getByRole("button", { name: "AA" })); // From → source node
+    expect(onViewNode).toHaveBeenCalledWith("s1");
+  });
+
+  it("falls back to a plain hash badge when the endpoint did not resolve", () => {
+    render(<PayloadBreakdown payload={envelope} />);
+    expect(screen.queryByRole("button", { name: "BB" })).not.toBeInTheDocument();
+    expect(screen.getByText("BB")).toBeInTheDocument();
+  });
+
+  it("renders an unresolved (none-confidence) endpoint as a non-clickable resolved block", () => {
+    // the backend sends resolvedSource/Destination as {confidence:"none", nodes:[]} (not omitted)
+    // when a 1-byte prefix matches nothing — it must not become a clickable node, but still show the hash
+    const none: ResolvedHop = { confidence: "none", nodes: [] };
+    render(<PayloadBreakdown payload={envelope} resolvedSource={none} resolvedDestination={none} />);
+    expect(screen.queryByRole("button", { name: "AA" })).not.toBeInTheDocument();
+    expect(screen.getByText("AA")).toBeInTheDocument();
+    expect(screen.getByText("BB")).toBeInTheDocument();
+  });
+
+  it("resolves an ANON_REQUEST destination hash to a node block", () => {
+    const onViewNode = vi.fn();
+    const anon = { type: "ANON_REQUEST", destination: 0xbb, ephemeralPubKey: "cc" };
+    render(<PayloadBreakdown payload={anon} resolvedDestination={resolvedDestination} onViewNode={onViewNode} />);
+    fireEvent.click(screen.getByRole("button", { name: "0xBB" }));
+    expect(onViewNode).toHaveBeenCalledWith("d1");
+  });
+});
+
 describe("PayloadBreakdown — DISCOVER_REQ", () => {
   // Backend emits DISCOVER as a top-level parsedPayload.type (not nested under CONTROL).
   // See beacon-server internal/ingest/packet.go parsedDiscoverReq.
@@ -124,5 +170,32 @@ describe("PayloadBreakdown — GROUP_TEXT decrypted channel message", () => {
     expect(screen.getByRole("tooltip").textContent).toBe(formatAbsolute(sentAt));
     // the seconds interpretation (×1000) would be a far-future date
     expect(screen.getByRole("tooltip").textContent).not.toBe(formatAbsolute(sentAt * 1000));
+  });
+});
+
+describe("PayloadBreakdown — multi-line message bodies", () => {
+  // Newlines survive the backend intact (ingest strips only NULs/invalid UTF-8), so the browser's
+  // default white-space:normal was collapsing them to spaces. jsdom doesn't apply that collapsing,
+  // so asserting on textContent alone can't catch the bug — the class is what pins it.
+  const body = "🟠\nDWD aktuell: WARNUNG vor GEWITTER\nDi 17:37 - Di 19:00";
+  // getByText normalizes whitespace by default, which would defeat the point here
+  const exact = { normalizer: (s: string) => s };
+
+  it.each([
+    ["GROUP_TEXT", { type: "GROUP_TEXT", channelHash: "ab", decrypted: { sender: "Alice", content: body } }],
+    ["GROUP_DATA", { type: "GROUP_DATA", channelHash: "ab", decrypted: { sender: "Alice", content: body } }],
+    ["TEXT_MESSAGE", { type: "TEXT_MESSAGE", cipherMac: "0011", ciphertext: "dead", decrypted: { message: body } }],
+    ["RESPONSE", { type: "RESPONSE", cipherMac: "0011", ciphertext: "dead", decrypted: { content: body } }],
+  ])("preserves linebreaks in a %s body", (_type, payload) => {
+    render(<PayloadBreakdown payload={payload} />);
+    expect(screen.getByText(body, exact).className).toContain("whitespace-pre-wrap");
+  });
+
+  it("wraps message text at word boundaries, not mid-word", () => {
+    const payload = { type: "GROUP_TEXT", channelHash: "ab", decrypted: { sender: "Alice", content: body } };
+    render(<PayloadBreakdown payload={payload} />);
+    // break-all is for hex/pubkeys; prose should use break-words
+    expect(screen.getByText(body, exact).className).toContain("break-words");
+    expect(screen.getByText(body, exact).className).not.toContain("break-all");
   });
 });

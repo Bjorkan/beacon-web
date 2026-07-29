@@ -38,7 +38,7 @@ function MessageRow({ msg, heardCount, onAnalyze }: { msg: ChannelMessage; heard
         <Timestamp value={msg.sentAt} className="text-[11px] text-text-dim" />
         {reach > 0 && <Badge variant="text">×{reach}</Badge>}
       </div>
-      <div className="text-text-normal text-xs mt-0.5">{msg.content}</div>
+      <div className="text-text-normal text-xs mt-0.5 whitespace-pre-wrap break-words">{msg.content}</div>
     </div>
   );
 }

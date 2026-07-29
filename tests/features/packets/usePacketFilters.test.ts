@@ -49,31 +49,34 @@ describe("matchesFilters — scope", () => {
 });
 
 describe("toServerFilter", () => {
-  it("returns null when nothing narrows to a single value", () => {
+  it("returns null when no server-side dimension is selected", () => {
     expect(toServerFilter(EMPTY_FILTERS)).toBeNull();
-    expect(toServerFilter({ ...EMPTY_FILTERS, payloadTypes: [2, 4] as PayloadTypeValue[] })).toBeNull();
   });
 
-  it("emits payloadType only for a single selected type", () => {
-    expect(toServerFilter({ ...EMPTY_FILTERS, payloadTypes: [4] as PayloadTypeValue[] })).toEqual({ payloadType: 4 });
+  it("pushes a multi-value payload-type selection server-side", () => {
+    expect(toServerFilter({ ...EMPTY_FILTERS, payloadTypes: [2, 4] as PayloadTypeValue[] })).toEqual({ payloadTypes: [2, 4] });
   });
 
-  it("emits routeType 0 (falsy) for a single selected route", () => {
-    expect(toServerFilter({ ...EMPTY_FILTERS, routeTypes: [0] as RouteTypeValue[] })).toEqual({ routeType: 0 });
+  it("emits payloadTypes for a single selected type", () => {
+    expect(toServerFilter({ ...EMPTY_FILTERS, payloadTypes: [4] as PayloadTypeValue[] })).toEqual({ payloadTypes: [4] });
   });
 
-  it("emits scope for a single selected scope", () => {
-    expect(toServerFilter({ ...EMPTY_FILTERS, scopes: ["#bc"] })).toEqual({ scope: "#bc" });
+  it("emits routeTypes including 0 (falsy) for a selected route", () => {
+    expect(toServerFilter({ ...EMPTY_FILTERS, routeTypes: [0] as RouteTypeValue[] })).toEqual({ routeTypes: [0] });
   });
 
-  it("emits only the single-valued dimensions when combined", () => {
+  it("emits scopes for selected scopes", () => {
+    expect(toServerFilter({ ...EMPTY_FILTERS, scopes: ["#bc", "#west"] })).toEqual({ scopes: ["#bc", "#west"] });
+  });
+
+  it("emits every selected dimension together", () => {
     const filters = {
       ...EMPTY_FILTERS,
       payloadTypes: [4] as PayloadTypeValue[],
       routeTypes: [1, 2] as RouteTypeValue[],
       scopes: ["#bc"],
     };
-    expect(toServerFilter(filters)).toEqual({ payloadType: 4, scope: "#bc" });
+    expect(toServerFilter(filters)).toEqual({ payloadTypes: [4], routeTypes: [1, 2], scopes: ["#bc"] });
   });
 
   it("ignores client-only filters (observers, search)", () => {

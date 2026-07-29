@@ -70,8 +70,15 @@ class LivePacketStore {
 
     const existing = this.hashIndex.get(summary.packetHash);
     if (existing !== undefined) {
+      // A WS message only knows its own heardAt, so widen the window rather than replacing it —
+      // otherwise the expanded row's spread reads 0 for every re-heard packet.
+      const prev = this.buffer[existing]!;
       this.buffer = [...this.buffer];
-      this.buffer[existing] = summary;
+      this.buffer[existing] = {
+        ...summary,
+        firstHeardAt: Math.min(prev.firstHeardAt, summary.firstHeardAt),
+        lastHeardAt: Math.max(prev.lastHeardAt, summary.lastHeardAt),
+      };
     } else {
       this.buffer = [summary, ...this.buffer];
       this.rebuildIndex();
@@ -159,6 +166,11 @@ export function usePackets(frozen: boolean = false, serverFilter: PacketServerFi
           id: data.observation.observerId,
           displayName: data.observation.observerName,
           iata: data.observation.iata,
+          pathLength: data.observation.pathLength,
+          pathBytes: data.observation.pathBytes,
+          // WS nulls these when the payload type carries no endpoint; the REST shape uses undefined
+          resolvedSource: data.observation.resolvedSource ?? undefined,
+          resolvedDestination: data.observation.resolvedDestination ?? undefined,
         },
       };
 

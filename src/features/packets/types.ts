@@ -11,11 +11,11 @@ export interface PacketFilterState {
   searchField: SearchField;
 }
 
-// Filters /packets history can apply server-side (each accepts a single value per request)
+// Filters /packets history can apply server-side; each accepts multiple comma-separated values.
 export interface PacketServerFilter {
-  payloadType?: number;
-  routeType?: number;
-  scope?: string;
+  payloadTypes?: number[];
+  routeTypes?: number[];
+  scopes?: string[];
 }
 
 export const EMPTY_FILTERS: PacketFilterState = {

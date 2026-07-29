@@ -1,8 +1,12 @@
 import { useRef, useCallback, useLayoutEffect } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import type { PacketSummary } from "../../types/api";
+import { PacketTableHeader } from "./PacketTableHeader";
+import { PacketTableRow } from "./PacketTableRow";
 import { PacketRow } from "./PacketRow";
+import { PacketExpansion } from "./PacketExpansion";
 import { useFreshHashes } from "./useFreshHashes";
+import { useIsMobile } from "../../hooks/useMediaQuery";
 import {
   SCROLL_TOP_THRESHOLD_PX,
   SCROLL_BOTTOM_THRESHOLD_PX,
@@ -18,6 +22,11 @@ interface PacketVirtualListProps {
   onAtTopChange: (isAtTop: boolean) => void;
   expandedHash: string | null;
   onToggleExpand: (hash: string) => void;
+  // only the expanded row renders an expansion, so these need no hash argument
+  onOpenAnalyzer: () => void;
+  onViewPath: () => void;
+  selectedObservationId: number | null;
+  onSelectObservation: (id: number) => void;
 }
 
 // virtualized scroll list with fresh-item highlighting and infinite load
@@ -31,16 +40,22 @@ export function PacketVirtualList({
   onAtTopChange,
   expandedHash,
   onToggleExpand,
+  onOpenAnalyzer,
+  onViewPath,
+  selectedObservationId,
+  onSelectObservation,
 }: PacketVirtualListProps) {
   const parentRef = useRef<HTMLDivElement>(null);
   const freshHashes = useFreshHashes(packets);
+  const isMobile = useIsMobile();
   const atTopRef = useRef(true);
   const prevFirstKeyRef = useRef<string | undefined>(packets[0]?.packetHash);
 
   const virtualizer = useVirtualizer({
     count: packets.length,
     getScrollElement: () => parentRef.current,
-    estimateSize: () => 64, // rough -- rows vary a lot when expanded, tanstack remeasures
+    // a collapsed row: one grid line on desktop, a taller card below md. Expanded rows are remeasured.
+    estimateSize: () => (isMobile ? 64 : 37),
     overscan: 10,
     getItemKey: (index) => packets[index]?.packetHash ?? index,
   });
@@ -84,16 +99,19 @@ export function PacketVirtualList({
       className="flex-1 overflow-y-auto px-4 pb-10"
       onScroll={handleScroll}
     >
+      <PacketTableHeader />
       <div
         style={{ height: virtualizer.getTotalSize(), position: "relative" }}
       >
         {virtualizer.getVirtualItems().map((virtualRow) => {
           const packet = packets[virtualRow.index];
           if (!packet) return null;
+          const expanded = expandedHash === packet.packetHash;
           return (
             <div
               key={packet.packetHash}
               data-index={virtualRow.index}
+              data-testid={`packet-item-${packet.packetHash}`}
               ref={virtualizer.measureElement}
               style={{
                 position: "absolute",
@@ -103,13 +121,32 @@ export function PacketVirtualList({
                 transform: `translateY(${virtualRow.start}px)`,
               }}
             >
-              <div className="pt-1.5">
-                <PacketRow
-                  packet={packet}
-                  expanded={expandedHash === packet.packetHash}
-                  isFresh={freshHashes.has(packet.packetHash)}
-                  onToggle={() => onToggleExpand(packet.packetHash)}
-                />
+              {/* cards need breathing room; table rows butt up so the whole strip is a click target */}
+              <div className={isMobile ? "pt-1.5" : ""}>
+                {isMobile ? (
+                  <PacketRow
+                    packet={packet}
+                    expanded={expanded}
+                    isFresh={freshHashes.has(packet.packetHash)}
+                    onToggle={() => onToggleExpand(packet.packetHash)}
+                  />
+                ) : (
+                  <PacketTableRow
+                    packet={packet}
+                    expanded={expanded}
+                    isFresh={freshHashes.has(packet.packetHash)}
+                    onToggle={() => onToggleExpand(packet.packetHash)}
+                  />
+                )}
+                {expanded && (
+                  <PacketExpansion
+                    packet={packet}
+                    onOpenAnalyzer={onOpenAnalyzer}
+                    onViewPath={onViewPath}
+                    selectedObservationId={selectedObservationId}
+                    onSelectObservation={onSelectObservation}
+                  />
+                )}
               </div>
             </div>
           );

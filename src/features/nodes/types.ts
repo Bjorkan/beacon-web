@@ -11,7 +11,7 @@ export interface NodeSummary {
   name: string | null;
   lat: number | null;
   lng: number | null;
-  radio?: string; // compact "freq,bw,sf" string, e.g. "915.0,250,11"; absent when unknown
+  radio?: string; // compact "freq,bw,sf" string, e.g. "915,250,11"; absent when unknown
   defaultScope?: string; // most recently matched transport scope name, e.g. "#bc"
   iatas: NodeIATA[];
   knownNeighborCount: number; // distinct first-hop neighbors we've resolved for this node
@@ -31,6 +31,12 @@ export interface Node extends NodeSummary {
   firstSeen: number; // epoch ms
   lastSeen: number; // epoch ms
   metadata: Record<string, unknown> | null;
+  // Clock drift, repeaters/room servers only; absent for other types or before a qualifying advert.
+  // Device minus server time in seconds (+ve = device ahead). clockCheckedAt == lastAdvertAt.
+  // clockOutOfSync is the server's verdict against its threshold — don't recompute it client-side.
+  clockDriftSeconds?: number;
+  clockOutOfSync?: boolean;
+  clockCheckedAt?: number; // epoch ms
 }
 
 // First-hop neighbor of a node, from GET /nodes/{id}/neighbors (bare array, no pagination).
