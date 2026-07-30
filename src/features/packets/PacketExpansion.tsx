@@ -4,6 +4,9 @@ import { formatPropagation } from "../../lib/formatters";
 import { Timestamp } from "../../components/Timestamp";
 import { usePacketDetail } from "./usePacketDetail";
 import { ObservationTable } from "./ObservationTable";
+import { ObservationCard } from "./ObservationCard";
+import { useIsMobile } from "../../hooks/useMediaQuery";
+import { PayloadType } from "../../types/enums";
 import { buildPacketPaths } from "../map/packet-path";
 
 // Roughly what fits the scroll cap; observations are unbounded server-side.
@@ -24,6 +27,7 @@ interface Props {
 // the per-observer table, which does wait on usePacketDetail.
 export function PacketExpansion({ packet, onOpenAnalyzer, onViewPath, selectedObservationId, onSelectObservation }: Props) {
   const { data, isLoading, isError, refetch } = usePacketDetail(packet.packetHash);
+  const isMobile = useIsMobile();
   const observer = packet.latestObserver;
   // firstHeardAt/lastHeardAt are epoch ms (same unit Timestamp expects), so the difference is
   // already in ms for formatPropagation -- no *1000 here.
@@ -44,7 +48,7 @@ export function PacketExpansion({ packet, onOpenAnalyzer, onViewPath, selectedOb
   );
 
   return (
-    <div data-testid="packet-expansion" className="bg-bg-surface border-l-2 border-primary pl-6 pr-3 py-2">
+    <div data-testid="packet-expansion" className="bg-bg-surface border-l-2 border-primary pl-3 md:pl-6 pr-3 py-2">
       <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[10px] text-text-muted pb-2">
         <span>
           observer{" "}
@@ -89,7 +93,23 @@ export function PacketExpansion({ packet, onOpenAnalyzer, onViewPath, selectedOb
         ) : data && data.observations.length === 0 ? (
           emptyState
         ) : data ? (
-          <ObservationTable observations={data.observations} selectedId={selectedObservationId} onSelect={handleSelectObservation} />
+          // The table's eight columns need ~407px, so below md its Path column lands off-screen
+          // behind a nested sideways scroll. Cards give the path a full-width row of its own.
+          isMobile ? (
+            <div className="flex flex-col gap-1.5">
+              {data.observations.map((o) => (
+                <ObservationCard
+                  key={o.id}
+                  observation={o}
+                  selected={o.id === selectedObservationId}
+                  onClick={() => handleSelectObservation(o.id)}
+                  isTrace={data.header.payloadType === PayloadType.TRACE}
+                />
+              ))}
+            </div>
+          ) : (
+            <ObservationTable observations={data.observations} selectedId={selectedObservationId} onSelect={handleSelectObservation} />
+          )
         ) : null}
       </div>
     </div>
