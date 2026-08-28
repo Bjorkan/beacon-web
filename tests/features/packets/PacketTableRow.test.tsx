@@ -1,17 +1,12 @@
 import { describe, it, expect, vi } from "vitest";
 import { render, screen, fireEvent, within } from "@testing-library/react";
 import { PacketTableRow } from "../../../src/features/packets/PacketTableRow";
-import type { LatestObserver, PacketSummary, ResolvedHop } from "../../../src/types/api";
+import type { LatestObserver, PacketSummary } from "../../../src/types/api";
 
 const pkt = (over: Partial<PacketSummary> = {}): PacketSummary => ({
   packetHash: "AA11BB22", payloadType: 1, payloadTypeName: "ADVERT",
   routeType: 1, routeTypeName: "FLOOD",
   firstHeardAt: 1700000000, lastHeardAt: 1700000000, observationCount: 3, ...over,
-});
-
-const node = (name: string): ResolvedHop => ({
-  confidence: "high",
-  nodes: [{ id: "n-1", name, publicKey: "aabbccdd" }],
 });
 
 // pathLength is what makes buildPathSummary produce endpoints at all, so it is always present here.
