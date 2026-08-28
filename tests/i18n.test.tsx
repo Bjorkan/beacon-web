@@ -1,7 +1,7 @@
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { LanguageSelector } from "../src/components/LanguageSelector";
-import i18n, { availableLanguages, LANGUAGE_STORAGE_KEY } from "../src/i18n";
+import i18n, { availableLanguages, detectLanguage, LANGUAGE_STORAGE_KEY } from "../src/i18n";
 import english from "../src/locales/en/translation.json";
 import swedish from "../src/locales/sv/translation.json";
 
@@ -40,6 +40,11 @@ describe("internationalization", () => {
       { code: "sv", name: "Svenska", direction: "ltr" },
       { code: "en", name: "English", direction: "ltr" },
     ]);
+  });
+
+  it("defaults to Swedish when no language has been chosen", () => {
+    localStorage.removeItem(LANGUAGE_STORAGE_KEY);
+    expect(detectLanguage()).toBe("sv");
   });
 
   it("keeps the Swedish catalog aligned with the English source catalog", () => {

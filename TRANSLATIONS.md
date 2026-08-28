@@ -20,10 +20,15 @@ The build discovers every `src/locales/*/translation.json` file. A valid new
 file therefore appears in the language selector automatically—there is no
 registry or component to update.
 
-English is the source and fallback language. It is safe to submit a partial
-translation while work is in progress: missing keys display in English. Please
-keep related text grouped by feature and prefer short, descriptive keys over
-copying the English sentence into the key.
+Swedish is the app's default and fallback language, and English is the source
+catalog that translations are made from. It is safe to submit a partial
+translation while work is in progress: keys missing from a translation fall
+back to Swedish (which in turn is complete and mirrors the English source).
+Please keep related text grouped by feature and prefer short, descriptive keys
+over copying the English sentence into the key.
+
+First-time visitors get Swedish regardless of browser language; a language
+chosen in the picker is stored and always wins.
 
 ## Add or update UI text
 

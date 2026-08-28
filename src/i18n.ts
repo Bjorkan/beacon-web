@@ -2,7 +2,9 @@ import i18n, { type Resource } from "i18next";
 import { initReactI18next } from "react-i18next";
 
 export const LANGUAGE_STORAGE_KEY = "beacon-language";
-const DEFAULT_LANGUAGE = "en";
+// Swedish is the app's default language. Visitors opt into other languages via the picker; an
+// explicit choice is persisted and always wins over the default.
+const DEFAULT_LANGUAGE = "sv";
 
 interface TranslationFile {
   _meta: {
@@ -68,19 +70,8 @@ function storage(): Storage | undefined {
   }
 }
 
-function detectLanguage(): string {
-  const stored = supportedLanguage(storage()?.getItem(LANGUAGE_STORAGE_KEY));
-  if (stored) return stored;
-
-  const browserLanguages = typeof navigator === "undefined"
-    ? []
-    : navigator.languages ?? [navigator.language];
-  for (const language of browserLanguages) {
-    const supported = supportedLanguage(language);
-    if (supported) return supported;
-  }
-
-  return DEFAULT_LANGUAGE;
+export function detectLanguage(): string {
+  return supportedLanguage(storage()?.getItem(LANGUAGE_STORAGE_KEY)) ?? DEFAULT_LANGUAGE;
 }
 
 function updateDocumentLanguage(language: string) {
