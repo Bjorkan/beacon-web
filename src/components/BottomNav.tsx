@@ -1,4 +1,6 @@
 import { useState, type ReactNode } from "react";
+import { useTranslation } from "react-i18next";
+import "../i18n";
 import { BottomSheet } from "./BottomSheet";
 import { ENABLED_TABS } from "../lib/constants";
 
@@ -81,8 +83,10 @@ function NavButton({ label, icon, active, onClick, role, ariaSelected, ariaHasPo
 
 // Bottom sheet listing the overflow tabs.
 function MoreSheet({ tabs, activeTab, onPick, onClose }: { tabs: string[]; activeTab: string; onPick: (tab: string) => void; onClose: () => void }) {
+  const { t } = useTranslation();
+
   return (
-    <BottomSheet onClose={onClose} role="menu" label="More tabs">
+    <BottomSheet onClose={onClose} role="menu" label={t("navigation.moreTabs")}>
       {tabs.map((tab) => (
         <button
           key={tab}
@@ -93,7 +97,7 @@ function MoreSheet({ tabs, activeTab, onPick, onClose }: { tabs: string[]; activ
             activeTab === tab ? "text-primary" : "text-text-normal hover:bg-text-normal/3"
           }`}
         >
-          {tab}
+          {t(`navigation.tabs.${tab.toLowerCase()}`)}
         </button>
       ))}
     </BottomSheet>
@@ -101,6 +105,7 @@ function MoreSheet({ tabs, activeTab, onPick, onClose }: { tabs: string[]; activ
 }
 
 export function BottomNav({ activeTab, onTabChange }: { activeTab: string; onTabChange: (tab: string) => void }) {
+  const { t } = useTranslation();
   const [sheetOpen, setSheetOpen] = useState(false);
   const enabled = new Set<string>(ENABLED_TABS);
   const primary: string[] = PRIMARY_TABS.filter((t) => enabled.has(t));
@@ -114,11 +119,11 @@ export function BottomNav({ activeTab, onTabChange }: { activeTab: string; onTab
 
   return (
     <>
-      <nav className="flex md:hidden shrink-0 bg-bg-surface border-t border-border" role="tablist" aria-label="Primary">
+      <nav className="flex md:hidden shrink-0 bg-bg-surface border-t border-border" role="tablist" aria-label={t("navigation.primary")}>
         {primary.map((tab) => (
           <NavButton
             key={tab}
-            label={tab}
+            label={t(`navigation.tabs.${tab.toLowerCase()}`)}
             icon={<Icon name={tab} />}
             active={activeTab === tab}
             onClick={() => onTabChange(tab)}
@@ -128,7 +133,7 @@ export function BottomNav({ activeTab, onTabChange }: { activeTab: string; onTab
         ))}
         {overflow.length > 0 && (
           <NavButton
-            label="More"
+            label={t("navigation.more")}
             icon={<Icon name="More" />}
             active={overflowActive || sheetOpen}
             onClick={() => setSheetOpen((v) => !v)}

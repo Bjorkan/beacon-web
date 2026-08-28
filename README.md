@@ -84,6 +84,7 @@ src/
   features/               # feature modules (packets, nodes, channels, map, stats)
   hooks/                  # React hooks (region, theme, WebSocket)
   lib/                    # constants, formatters, theme utilities
+  locales/                # JSON translation files, one directory per language
   types/                  # TypeScript types and enums
   App.tsx                 # providers + routing + WS init
   main.tsx                # entry point
@@ -102,6 +103,10 @@ src/
 See [CONTRIBUTING.md](CONTRIBUTING.md). All contributors are welcome — please
 also read the [Code of Conduct](CODE_OF_CONDUCT.md). To report a security issue,
 see [SECURITY.md](SECURITY.md).
+
+Translations are intentionally kept as simple JSON files. See
+[TRANSLATIONS.md](TRANSLATIONS.md) to add a language or update UI text. New
+language files are discovered automatically and appear in the language selector.
 
 ## License
 

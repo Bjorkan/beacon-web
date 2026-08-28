@@ -1,0 +1,65 @@
+{
+  "_meta": {
+    "name": "English",
+    "direction": "ltr"
+  },
+  "common": {
+    "loading": "Loading…",
+    "failedToLoad": "Failed to load",
+    "noMatches": "No matches"
+  },
+  "navigation": {
+    "primary": "Primary navigation",
+    "more": "More",
+    "moreTabs": "More tabs",
+    "tabs": {
+      "packets": "Packets",
+      "channels": "Channels",
+      "map": "Map",
+      "nodes": "Nodes",
+      "observers": "Observers",
+      "routes": "Routes",
+      "traces": "Traces",
+      "analytics": "Analytics"
+    }
+  },
+  "status": {
+    "live": "Live",
+    "liveShort": "LIVE",
+    "stale": "Connection stale",
+    "staleShort": "STALE {{age}}",
+    "staleTitle": "Stale {{age}}",
+    "offline": "Offline",
+    "offlineShort": "OFFLINE"
+  },
+  "region": {
+    "label": "REGION",
+    "allShort": "ALL",
+    "all": "All Regions",
+    "regions": "Regions",
+    "region_one": "{{count}} region",
+    "region_other": "{{count}} regions",
+    "iataCount": "{{count}} IATA",
+    "filterPlaceholder": "Filter IATA or name…"
+  },
+  "language": {
+    "label": "Language",
+    "current": "Language: {{name}}"
+  },
+  "theme": {
+    "label": "Theme"
+  },
+  "errors": {
+    "render": "Something went wrong rendering this view."
+  },
+  "detailPanel": {
+    "expand": "Expand detail panel",
+    "minimize": "Minimize detail panel"
+  },
+  "filters": {
+    "title": "Filters",
+    "packet": "Packet filters",
+    "filterPlaceholder": "Filter…",
+    "noOptions": "No options"
+  }
+}

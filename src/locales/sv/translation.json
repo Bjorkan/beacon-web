@@ -1,0 +1,65 @@
+{
+  "_meta": {
+    "name": "Svenska",
+    "direction": "ltr"
+  },
+  "common": {
+    "loading": "Laddar…",
+    "failedToLoad": "Kunde inte läsa in",
+    "noMatches": "Inga träffar"
+  },
+  "navigation": {
+    "primary": "Huvudnavigering",
+    "more": "Mer",
+    "moreTabs": "Fler flikar",
+    "tabs": {
+      "packets": "Paket",
+      "channels": "Kanaler",
+      "map": "Karta",
+      "nodes": "Noder",
+      "observers": "Observatörer",
+      "routes": "Rutter",
+      "traces": "Spårningar",
+      "analytics": "Analys"
+    }
+  },
+  "status": {
+    "live": "Live",
+    "liveShort": "LIVE",
+    "stale": "Anslutningen svarar inte",
+    "staleShort": "INAKTIV {{age}}",
+    "staleTitle": "Inaktiv i {{age}}",
+    "offline": "Frånkopplad",
+    "offlineShort": "OFFLINE"
+  },
+  "region": {
+    "label": "REGION",
+    "allShort": "ALLA",
+    "all": "Alla regioner",
+    "regions": "Regioner",
+    "region_one": "{{count}} region",
+    "region_other": "{{count}} regioner",
+    "iataCount": "{{count}} IATA",
+    "filterPlaceholder": "Filtrera på IATA eller namn…"
+  },
+  "language": {
+    "label": "Språk",
+    "current": "Språk: {{name}}"
+  },
+  "theme": {
+    "label": "Tema"
+  },
+  "errors": {
+    "render": "Något gick fel när vyn skulle visas."
+  },
+  "detailPanel": {
+    "expand": "Expandera detaljpanelen",
+    "minimize": "Minimera detaljpanelen"
+  },
+  "filters": {
+    "title": "Filter",
+    "packet": "Paketfilter",
+    "filterPlaceholder": "Filtrera…",
+    "noOptions": "Inga alternativ"
+  }
+}
