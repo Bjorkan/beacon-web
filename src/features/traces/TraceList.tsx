@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { useTranslation } from "react-i18next";
 import { useQuery } from "@tanstack/react-query";
 import { getTraces } from "../../api/client";
 import { useRegion } from "../../hooks/useRegion";
@@ -16,12 +17,6 @@ import type { TraceTagSummary, TraceType } from "../../types/api";
 const TRACE_LIST_LIMIT = 200;
 
 // "" = both; the backend takes TRACE or PING and omits the param to mean all.
-const TYPE_OPTIONS = [
-  { value: "", label: "All" },
-  { value: "TRACE", label: "Trace" },
-  { value: "PING", label: "Ping" },
-];
-
 interface TraceListProps {
   onAnalyze: (hash: string | null) => void;
   onViewNode?: (nodeId: string) => void;
@@ -63,6 +58,7 @@ function TraceTagCard({ tag, selected, onSelect }: {
   selected: boolean;
   onSelect: (tag: string) => void;
 }) {
+  const { t } = useTranslation();
   return (
     <div
       className={`bg-bg-surface border rounded-md px-3.5 py-2.5 cursor-pointer ${
@@ -85,7 +81,7 @@ function TraceTagCard({ tag, selected, onSelect }: {
         <Timestamp value={tag.lastHeardAt} className="ml-auto text-[11px] text-text-dim" />
       </div>
       <div className="mt-1 text-[11px] text-text-dim font-mono">
-        {tag.packetCount} pkt · {tag.iataCount} iata
+        {t("traces.summary", { packets: tag.packetCount, iatas: tag.iataCount })}
       </div>
       {tag.pathHashes?.length ? <TracePathPreview hashes={tag.pathHashes} snrs={tag.snrValues ?? []} /> : null}
     </div>
@@ -93,9 +89,15 @@ function TraceTagCard({ tag, selected, onSelect }: {
 }
 
 export function TraceList({ onAnalyze, onViewNode }: TraceListProps) {
+  const { t } = useTranslation();
   const { iatas, regionKey } = useRegion();
   const [selectedTag, setSelectedTag] = useState<string | null>(null);
   const [typeFilter, setTypeFilter] = useState<"" | TraceType>("");
+  const typeOptions = [
+    { value: "", label: t("common.all") },
+    { value: "TRACE", label: "Trace" },
+    { value: "PING", label: "Ping" },
+  ];
 
   // drop the selection when the region changes — the selected tag may not be in the new region
   const prevRegion = useRef(regionKey);
@@ -117,20 +119,20 @@ export function TraceList({ onAnalyze, onViewNode }: TraceListProps) {
       <div className="flex-1 min-w-0 flex flex-col">
         <div className="flex shrink-0 items-center justify-between gap-2 border-b border-border px-3 py-2">
           <span className="font-mono text-[11px] text-text-dim">
-            {tags ? `${tags.length} tag${tags.length === 1 ? "" : "s"}` : ""}
+            {tags ? t("traces.tag", { count: tags.length }) : ""}
           </span>
           <Segmented
-            options={TYPE_OPTIONS}
+            options={typeOptions}
             value={typeFilter}
             onChange={(v) => setTypeFilter(v as "" | TraceType)}
-            ariaLabel="Trace type"
+            ariaLabel={t("traces.type")}
           />
         </div>
         <div className="flex-1 overflow-y-auto p-3 flex flex-col gap-2">
           {isLoading ? (
             <SkeletonRows rows={8} />
           ) : (tags?.length ?? 0) === 0 ? (
-            <EmptyState title="No traces" />
+            <EmptyState title={t("traces.noTraces")} />
           ) : (
             tags!.map((t) => (
               <TraceTagCard key={t.traceTag} tag={t} selected={t.traceTag === selectedTag} onSelect={setSelectedTag} />

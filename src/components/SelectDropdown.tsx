@@ -1,4 +1,5 @@
 import { Dropdown } from "./Dropdown";
+import { useTranslation } from "react-i18next";
 
 interface SelectOption {
   value: string;
@@ -18,7 +19,9 @@ interface SelectDropdownProps {
 
 // single-select dropdown styled to match the packets MultiSelectDropdown trigger
 
-export function SelectDropdown({ label, options, value, onChange, align = "right", allLabel = "All", hideAll = false, fullWidth = false }: SelectDropdownProps) {
+export function SelectDropdown({ label, options, value, onChange, align = "right", allLabel, hideAll = false, fullWidth = false }: SelectDropdownProps) {
+  const { t } = useTranslation();
+  const visibleAllLabel = allLabel ?? t("common.all");
   const active = value !== "";
   const selectedLabel = options.find((o) => o.value === value)?.label ?? value;
 
@@ -41,7 +44,7 @@ export function SelectDropdown({ label, options, value, onChange, align = "right
           aria-haspopup="listbox"
         >
           {label}
-          <span className={active ? "text-primary" : "text-text-dim"}>{active ? selectedLabel : allLabel}</span>
+          <span className={active ? "text-primary" : "text-text-dim"}>{active ? selectedLabel : visibleAllLabel}</span>
           <span className="text-text-dim text-[9px]">{fullWidth && open ? "▴" : "▾"}</span>
         </button>
       )}
@@ -58,7 +61,7 @@ export function SelectDropdown({ label, options, value, onChange, align = "right
               }`}
               onClick={() => { onChange(""); close(); }}
             >
-              {allLabel}
+              {visibleAllLabel}
             </button>
           )}
           {options.map((opt) => {
@@ -79,7 +82,7 @@ export function SelectDropdown({ label, options, value, onChange, align = "right
             );
           })}
           {hideAll && options.length === 0 && (
-            <div className="px-2.5 py-1 text-xs font-mono text-text-dim">No options</div>
+            <div className="px-2.5 py-1 text-xs font-mono text-text-dim">{t("filters.noOptions")}</div>
           )}
         </div>
       )}

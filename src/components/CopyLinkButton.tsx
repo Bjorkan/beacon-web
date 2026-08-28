@@ -1,4 +1,5 @@
 import { useState, useCallback } from "react";
+import { useTranslation } from "react-i18next";
 import { VARIANT_CLASSES } from "./badge-utils";
 
 // Copies a shareable deep link to the current page with the given query params set (built fresh from
@@ -7,8 +8,8 @@ import { VARIANT_CLASSES } from "./badge-utils";
 // (e.g. the map camera) and use a null value to delete a key that's now at its default.
 export function CopyLinkButton({
   params,
-  label = "Copy Link",
-  copiedLabel = "Copied",
+  label,
+  copiedLabel,
   ariaLabel,
 }: {
   params: Record<string, string> | (() => Record<string, string | null>);
@@ -16,7 +17,10 @@ export function CopyLinkButton({
   copiedLabel?: string;
   ariaLabel?: string;
 }) {
+  const { t } = useTranslation();
   const [copied, setCopied] = useState(false);
+  const visibleLabel = label ?? t("common.copyLink");
+  const visibleCopiedLabel = copiedLabel ?? t("common.copied");
 
   const handleCopy = useCallback(() => {
     const url = new URL(window.location.href);
@@ -35,9 +39,9 @@ export function CopyLinkButton({
       type="button"
       className={`inline-flex items-center font-mono text-[11px] font-semibold px-2 py-0.5 rounded-sm border tracking-wider uppercase cursor-pointer transition-colors ${copied ? VARIANT_CLASSES.live : VARIANT_CLASSES.text}`}
       onClick={handleCopy}
-      aria-label={ariaLabel ?? label}
+      aria-label={ariaLabel ?? visibleLabel}
     >
-      {copied ? copiedLabel : label}
+      {copied ? visibleCopiedLabel : visibleLabel}
     </button>
   );
 }

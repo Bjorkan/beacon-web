@@ -9,6 +9,7 @@ interface LoadingPillProps {
 // Small floating status pill shared by the map and the entity tables: a muted "Loading … (N)" while
 // pages stream in, a danger-toned message if a fetch fails. Renders nothing when idle.
 export function LoadingPill({ loading, error, count, noun, position = "bottom-3 left-3" }: LoadingPillProps) {
+  const { t } = useTranslation();
   if (!loading && !error) return null;
   const tone = loading ? "text-text-muted" : "text-danger";
   const dot = loading ? "bg-primary animate-pulse" : "bg-danger";
@@ -19,10 +20,11 @@ export function LoadingPill({ loading, error, count, noun, position = "bottom-3 
     >
       <span className={`size-1.5 rounded-full ${dot}`} aria-hidden />
       {loading
-        ? `Loading ${noun}… (${count})`
+        ? t("common.loadingEntities", { noun, count })
         : count > 0
-          ? `Some ${noun} failed to load (${count} shown)`
-          : `Failed to load ${noun}`}
+          ? t("common.someEntitiesFailed", { noun, count })
+          : t("common.entitiesFailed", { noun })}
     </div>
   );
 }
+import { useTranslation } from "react-i18next";

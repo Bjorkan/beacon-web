@@ -1,4 +1,6 @@
 import { useState, useCallback, useMemo } from "react";
+import { type TFunction } from "i18next";
+import { useTranslation } from "react-i18next";
 import { useQuery, useQueryClient, type InfiniteData } from "@tanstack/react-query";
 import { getObserversPage, getBrokers } from "../../api/client";
 import { useRegion } from "../../hooks/useRegion";
@@ -30,9 +32,11 @@ interface ObserverTableProps {
   onViewStats?: (observerId: string) => void;
 }
 
-const COLUMNS: Column<ObserverSummary>[] = [
+function observerColumns(t: TFunction): Column<ObserverSummary>[] {
+  return [
   {
     header: "Name",
+    label: t("entities.name"),
     sortValue: (obs) => obs.displayName ?? formatHex(obs.id),
     cell: (obs) => (
       <div className="flex items-center gap-2">
@@ -45,12 +49,14 @@ const COLUMNS: Column<ObserverSummary>[] = [
   },
   {
     header: "Type",
+    label: t("entities.type"),
     className: "text-text-muted",
     sortValue: (obs) => obs.observerType ?? null,
     cell: (obs) => obs.observerType ?? "—",
   },
   {
     header: "Radio",
+    label: t("entities.radio"),
     className: "text-text-muted",
     sortValue: (obs) => formatRadio(obs.radio) ?? null,
     cell: (obs) => formatRadio(obs.radio) ?? "—",
@@ -63,15 +69,17 @@ const COLUMNS: Column<ObserverSummary>[] = [
   },
   {
     header: "Status",
+    label: t("entities.status"),
     sortValue: (obs) => deriveObserverStatus(obs),
     cell: (obs) => {
       const status = deriveObserverStatus(obs);
-      return <Badge variant={status === "online" ? "live" : "offline"}>{status}</Badge>;
+      return <Badge variant={status === "online" ? "live" : "offline"}>{t(`options.${status}`)}</Badge>;
     },
   },
-];
+  ];
+}
 
-function renderObserverCard(obs: ObserverSummary) {
+function renderObserverCard(obs: ObserverSummary, t: TFunction) {
   const status = deriveObserverStatus(obs);
   return (
     <div className="flex flex-col gap-1.5 font-mono text-xs">
@@ -83,7 +91,7 @@ function renderObserverCard(obs: ObserverSummary) {
           </span>
         </div>
         <span className="shrink-0">
-          <Badge variant={status === "online" ? "live" : "offline"}>{status}</Badge>
+          <Badge variant={status === "online" ? "live" : "offline"}>{t(`options.${status}`)}</Badge>
         </span>
       </div>
       <div className="flex items-center gap-2 text-text-muted">
@@ -96,6 +104,7 @@ function renderObserverCard(obs: ObserverSummary) {
 }
 
 export function ObserverTable({ wsManager, selectedObserverId, onSelectObserver, onAnalyzePacket, onViewStats }: ObserverTableProps) {
+  const { t } = useTranslation();
   const { iatas, regionKey } = useRegion();
   const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
@@ -154,6 +163,7 @@ export function ObserverTable({ wsManager, selectedObserverId, onSelectObserver,
     () => (scopeFilter ? observers.filter((o) => o.scopes?.includes(scopeFilter)) : observers),
     [observers, scopeFilter],
   );
+  const columns = useMemo(() => observerColumns(t), [t]);
 
   // patch the live status into the paged cache (mirrors NodeTable). A brand-new observer not on any
   // loaded page isn't pulled in here — it surfaces on the next reload/region switch (see the
@@ -195,17 +205,17 @@ export function ObserverTable({ wsManager, selectedObserverId, onSelectObserver,
         />
 
         <DataTable
-          columns={COLUMNS}
+          columns={columns}
           rows={displayObservers}
           rowKey={(o) => o.id}
           selectedKey={selectedObserverId}
           onSelect={onSelectObserver}
           isLoading={isLoading}
-          emptyLabel="No observers"
+          emptyLabel={t("entities.noObservers")}
           defaultSort={{ header: "Name" }}
-          renderCard={renderObserverCard}
+          renderCard={(observer) => renderObserverCard(observer, t)}
         />
-        <LoadingPill loading={isPaging} error={isError} count={loadedCount} noun="observers" position="bottom-3 right-3" />
+        <LoadingPill loading={isPaging} error={isError} count={loadedCount} noun={t("entities.observers")} position="bottom-3 right-3" />
       </div>
 
       {selectedObserverId && (

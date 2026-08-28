@@ -1,4 +1,5 @@
 import { DetailPanel, Section, Field } from "../../components/DetailPanel";
+import { useTranslation } from "react-i18next";
 import { Badge } from "../../components/Badge";
 import { Timestamp } from "../../components/Timestamp";
 import { ResolvedHopBlock } from "../packets/PathData";
@@ -13,17 +14,18 @@ interface RouteDetailPanelProps {
 }
 
 export function RouteDetailPanel({ route, onClose }: RouteDetailPanelProps) {
+  const { t } = useTranslation();
   return (
-    <DetailPanel title="Route Detail" onClose={onClose}>
-      <Section title="Summary" first>
+    <DetailPanel title={t("routes.detail")} onClose={onClose}>
+      <Section title={t("details.summary")} first>
         <div className="flex items-center gap-3 font-mono text-[13px]">
           <Badge variant="default">{route.iata}</Badge>
-          <Field label="Hops" value={route.hopCount} />
-          <Field label="Obs" value={route.observationCount.toLocaleString()} />
+          <Field label={t("packets.hops")} value={route.hopCount} />
+          <Field label={t("details.observations")} value={route.observationCount.toLocaleString()} />
         </div>
       </Section>
 
-      <Section title="Route">
+      <Section title={t("routes.route")}>
         <div className="flex flex-col gap-1.5">
           {route.hops.map((hop, i) => {
             const resolved: ResolvedHop = { confidence: "high", nodes: hop.node ? [hop.node] : [] };
@@ -38,10 +40,10 @@ export function RouteDetailPanel({ route, onClose }: RouteDetailPanelProps) {
         </div>
       </Section>
 
-      <Section title="Timestamps">
+      <Section title={t("details.timestamps")}>
         <div className="flex flex-col gap-0.5 font-mono text-[13px]">
-          <Field label="First seen" value={<Timestamp value={route.firstSeen} />} />
-          <Field label="Last seen" value={<Timestamp value={route.lastSeen} />} />
+          <Field label={t("routes.firstSeen")} value={<Timestamp value={route.firstSeen} />} />
+          <Field label={t("routes.lastSeen")} value={<Timestamp value={route.lastSeen} />} />
         </div>
       </Section>
     </DetailPanel>

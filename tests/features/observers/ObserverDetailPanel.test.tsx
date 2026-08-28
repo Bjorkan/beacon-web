@@ -63,8 +63,8 @@ describe("ObserverDetailPanel status", () => {
 
     renderPanel();
 
-    expect(await screen.findByText("offline")).toBeInTheDocument();
-    expect(screen.queryByText("online")).not.toBeInTheDocument();
+    expect(await screen.findByText(/offline/i)).toBeInTheDocument();
+    expect(screen.queryByText(/online/i)).not.toBeInTheDocument();
   });
 
   it("renders online when lastStatusAt is fresh", async () => {
@@ -72,7 +72,7 @@ describe("ObserverDetailPanel status", () => {
 
     renderPanel();
 
-    expect(await screen.findByText("online")).toBeInTheDocument();
+    expect(await screen.findByText(/online/i)).toBeInTheDocument();
   });
 });
 

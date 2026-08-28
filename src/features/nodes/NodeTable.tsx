@@ -1,4 +1,6 @@
 import { useState, useCallback, useMemo } from "react";
+import { type TFunction } from "i18next";
+import { useTranslation } from "react-i18next";
 import { useQueryClient, type InfiniteData } from "@tanstack/react-query";
 import { getNodesPage } from "../../api/client";
 import { useRegion } from "../../hooks/useRegion";
@@ -30,9 +32,11 @@ interface NodeTableProps {
   onSelectNode: (id: string | null) => void;
 }
 
-const COLUMNS: Column<NodeSummary>[] = [
+function nodeColumns(t: TFunction): Column<NodeSummary>[] {
+  return [
   {
     header: "Name",
+    label: t("entities.name"),
     sortValue: (node) => node.name ?? formatHex(node.id),
     cell: (node) => (
       <span className={`truncate ${node.name ? "text-text-normal" : "text-text-dim italic"}`}>
@@ -42,11 +46,12 @@ const COLUMNS: Column<NodeSummary>[] = [
   },
   {
     header: "Type",
+    label: t("entities.type"),
     sortValue: (node) => node.nodeTypeName,
     cell: (node) => (
       <Badge variant="default">
         {node.isObserver && (
-          <Tooltip label="Observer" className="mr-1"><ObserverIcon /></Tooltip>
+          <Tooltip label={t("entities.observer")} className="mr-1"><ObserverIcon /></Tooltip>
         )}
         {node.nodeTypeName}
       </Badge>
@@ -54,17 +59,19 @@ const COLUMNS: Column<NodeSummary>[] = [
   },
   {
     header: "Radio",
+    label: t("entities.radio"),
     className: "text-text-muted",
     sortValue: (node) => formatRadio(node.radio) ?? null,
     cell: (node) => formatRadio(node.radio) ?? "—",
   },
   {
     header: "IATAs",
+    label: t("entities.iatas"),
     cell: (node) =>
       node.iatas && node.iatas.length > 0 ? (
         <div className="flex flex-wrap gap-1">
           {node.iatas.map((entry) => (
-            <Tooltip key={entry.iata} label={`last heard ${timeAgoMs(entry.lastHeard)} ago`}>
+            <Tooltip key={entry.iata} label={t("entities.lastHeardAgo", { age: timeAgoMs(entry.lastHeard) })}>
               <Badge variant="default">{entry.iata}</Badge>
             </Tooltip>
           ))}
@@ -75,21 +82,24 @@ const COLUMNS: Column<NodeSummary>[] = [
   },
   {
     header: "Neighbors",
+    label: t("entities.neighbors"),
     className: "text-text-muted",
     sortValue: (node) => node.knownNeighborCount,
     cell: (node) => node.knownNeighborCount.toLocaleString(),
   },
   {
     header: "Location",
+    label: t("entities.location"),
     className: "text-text-muted",
     cell: (node) =>
       node.lat != null && node.lng != null
         ? `${node.lat.toFixed(2)}, ${node.lng.toFixed(2)}`
         : "—",
   },
-];
+  ];
+}
 
-function renderNodeCard(node: NodeSummary) {
+function renderNodeCard(node: NodeSummary, t: TFunction) {
   const location =
     node.lat != null && node.lng != null
       ? `${node.lat.toFixed(2)}, ${node.lng.toFixed(2)}`
@@ -103,7 +113,7 @@ function renderNodeCard(node: NodeSummary) {
         <span className="shrink-0">
           <Badge variant="default">
             {node.isObserver && (
-              <Tooltip label="Observer" className="mr-1"><ObserverIcon /></Tooltip>
+              <Tooltip label={t("entities.observer")} className="mr-1"><ObserverIcon /></Tooltip>
             )}
             {node.nodeTypeName}
           </Badge>
@@ -112,12 +122,12 @@ function renderNodeCard(node: NodeSummary) {
       <div className="flex items-center gap-2 text-text-muted">
         <span>{formatRadio(node.radio) ?? "—"}</span>
         {location && <span>· {location}</span>}
-        {node.knownNeighborCount > 0 && <span>· {node.knownNeighborCount.toLocaleString()} neighbors</span>}
+        {node.knownNeighborCount > 0 && <span>· {t("entities.neighborCount", { count: node.knownNeighborCount })}</span>}
       </div>
       {node.iatas && node.iatas.length > 0 && (
         <div className="flex flex-wrap gap-1">
           {node.iatas.map((entry) => (
-            <Tooltip key={entry.iata} label={`last heard ${timeAgoMs(entry.lastHeard)} ago`}>
+            <Tooltip key={entry.iata} label={t("entities.lastHeardAgo", { age: timeAgoMs(entry.lastHeard) })}>
               <Badge variant="default">{entry.iata}</Badge>
             </Tooltip>
           ))}
@@ -128,6 +138,7 @@ function renderNodeCard(node: NodeSummary) {
 }
 
 export function NodeTable({ wsManager, selectedNodeId, onSelectNode }: NodeTableProps) {
+  const { t } = useTranslation();
   const { iatas, regionKey } = useRegion();
   const queryClient = useQueryClient();
   const [typeFilter, setTypeFilter] = useState("");
@@ -178,6 +189,7 @@ export function NodeTable({ wsManager, selectedNodeId, onSelectNode }: NodeTable
     () => (scopeFilter ? nodes.filter((n) => n.defaultScope === scopeFilter) : nodes),
     [nodes, scopeFilter],
   );
+  const columns = useMemo(() => nodeColumns(t), [t]);
 
   const handleNodeUpdate = useCallback(
     (data: WsNodeUpdate["data"]) => {
@@ -213,17 +225,17 @@ export function NodeTable({ wsManager, selectedNodeId, onSelectNode }: NodeTable
         />
 
         <DataTable
-          columns={COLUMNS}
+          columns={columns}
           rows={displayNodes}
           rowKey={(n) => n.id}
           selectedKey={selectedNodeId}
           onSelect={onSelectNode}
           isLoading={isLoading}
-          emptyLabel="No nodes"
+          emptyLabel={t("entities.noNodes")}
           defaultSort={{ header: "Name" }}
-          renderCard={renderNodeCard}
+          renderCard={(node) => renderNodeCard(node, t)}
         />
-        <LoadingPill loading={isPaging} error={isError} count={loadedCount} noun="nodes" position="bottom-3 right-3" />
+        <LoadingPill loading={isPaging} error={isError} count={loadedCount} noun={t("entities.nodes")} position="bottom-3 right-3" />
       </div>
     </div>
   );

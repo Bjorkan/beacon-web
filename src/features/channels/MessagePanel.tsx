@@ -1,4 +1,5 @@
 import { useMemo, useRef, useLayoutEffect, useState, useCallback } from "react";
+import { useTranslation } from "react-i18next";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { getChannelMessagesPage } from "../../api/client";
 import { Badge } from "../../components/Badge";
@@ -54,6 +55,7 @@ interface MessagePanelProps {
 }
 
 export function MessagePanel({ channel, heardCounts, iatas, regionKey, onAnalyze, onBack }: MessagePanelProps) {
+  const { t } = useTranslation();
   const { data, isLoading, fetchNextPage, hasNextPage, isFetchingNextPage } = useInfiniteQuery({
     queryKey: ["channel-messages", channel?.id, regionKey],
     queryFn: ({ pageParam }) => getChannelMessagesPage(channel!.id, { iatas, cursor: pageParam, limit: 50 }),
@@ -132,7 +134,7 @@ export function MessagePanel({ channel, heardCounts, iatas, regionKey, onAnalyze
   if (!channel) {
     return (
       <div className="flex-1 flex items-center justify-center text-text-muted text-sm font-mono">
-        Select a channel
+        {t("channels.select")}
       </div>
     );
   }
@@ -145,7 +147,7 @@ export function MessagePanel({ channel, heardCounts, iatas, regionKey, onAnalyze
             <button
               type="button"
               onClick={onBack}
-              aria-label="Back to channels"
+              aria-label={t("channels.back")}
               className="self-center flex items-center justify-center w-9 h-9 -ml-1.5 rounded text-text-muted hover:text-text-bright hover:bg-text-normal/5 cursor-pointer transition-colors shrink-0"
             >
               <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
@@ -160,17 +162,17 @@ export function MessagePanel({ channel, heardCounts, iatas, regionKey, onAnalyze
         </div>
         <div className="flex gap-1">
           {channel.keyKnown ? (
-            <Badge variant="advert">key known</Badge>
+            <Badge variant="advert">{t("channels.keyKnown")}</Badge>
           ) : (
-            <Badge variant="offline">no key</Badge>
+            <Badge variant="offline">{t("channels.noKey")}</Badge>
           )}
-          {channel.isHashtag && <Badge variant="group">hashtag</Badge>}
+          {channel.isHashtag && <Badge variant="group">{t("channels.hashtag")}</Badge>}
         </div>
       </div>
 
       {!channel.keyKnown && (
         <div className="px-3 py-1.5 bg-warn/5 border-b border-warn/20 text-warn text-xs font-mono">
-          Key not known, messages may not be decrypted
+          {t("channels.unknownKeyWarning")}
         </div>
       )}
 
@@ -181,7 +183,7 @@ export function MessagePanel({ channel, heardCounts, iatas, regionKey, onAnalyze
       >
         {isLoading ? (
           <div className="flex items-center justify-center h-32 text-text-muted text-xs font-mono">
-            Loading...
+            {t("common.loading")}
           </div>
         ) : messages && messages.length > 0 ? (
           <div className="py-2 flex flex-col divide-y divide-border/40">
@@ -192,13 +194,13 @@ export function MessagePanel({ channel, heardCounts, iatas, regionKey, onAnalyze
           </div>
         ) : (
           <div className="flex items-center justify-center h-32 text-text-muted text-xs font-mono">
-            No messages
+            {t("channels.noMessages")}
           </div>
         )}
       </div>
 
       {/* floats over the panel (not the scroll area) so older-page fetches don't shift it */}
-      <LoadingPill loading={isFetchingNextPage} count={sorted.length} noun="messages" position="bottom-3 left-1/2 -translate-x-1/2" />
+      <LoadingPill loading={isFetchingNextPage} count={sorted.length} noun={t("entities.messages")} position="bottom-3 left-1/2 -translate-x-1/2" />
     </div>
   );
 }

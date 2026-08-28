@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import { useTranslation } from "react-i18next";
 import { useChartColors } from "./chartTheme";
 import { useTopAdvertisers, useTopTalkers } from "./useStats";
 import { leaderboardOption } from "./chartOptions";
@@ -22,6 +23,7 @@ function leaderboardHeight(count: number) {
 // The "noisy nodes, politely" tab: who's loudest by adverts and by channel chatter. Advertisers list
 // their flood/direct advert split with a per-day rate; talkers are grouped by sender display-name.
 export function TalkersTab({ range }: TalkersTabProps) {
+  const { t } = useTranslation();
   const colors = useChartColors();
   const topAdvertisers = useTopAdvertisers(range, 20);
   const topTalkers = useTopTalkers(range, 20);
@@ -39,6 +41,7 @@ export function TalkersTab({ range }: TalkersTabProps) {
     return [
       {
         header: "Node",
+        label: t("stats.node"),
         cell: (a) => (
           <div className="flex min-w-0 items-center gap-2">
             <span className={`truncate ${a.nodeName ? "text-text-normal" : "italic text-text-dim"}`}>
@@ -53,7 +56,7 @@ export function TalkersTab({ range }: TalkersTabProps) {
       { header: "Flood", className: "tabular-nums", cell: (a) => split(a.floodAdvertCount), sortValue: (a) => a.floodAdvertCount },
       { header: "Direct", className: "tabular-nums", cell: (a) => split(a.directAdvertCount), sortValue: (a) => a.directAdvertCount },
     ];
-  }, [range]);
+  }, [range, t]);
 
   const talkerRows = useMemo(
     () => (topTalkers.data ?? []).map((t) => ({ name: t.senderName, value: t.messageCount, color: colors.secondary })),
@@ -63,7 +66,7 @@ export function TalkersTab({ range }: TalkersTabProps) {
 
   return (
     <div className="mx-auto grid max-w-[1100px] grid-cols-1 items-start gap-3.5 px-4 py-4 lg:grid-cols-2">
-      <Card title={<>Top advertisers · {range}</>} right={<span className="font-mono text-[10px] text-text-muted">flood · direct</span>}>
+      <Card title={t("stats.topAdvertisers", { range })} right={<span className="font-mono text-[10px] text-text-muted">flood · direct</span>}>
         <div className="flex flex-col" style={{ height: leaderboardHeight(advertisers.length) }}>
           <DataTable
             columns={advertiserColumns}
@@ -72,13 +75,13 @@ export function TalkersTab({ range }: TalkersTabProps) {
             selectedKey={null}
             onSelect={() => {}}
             isLoading={topAdvertisers.isLoading}
-            emptyLabel={topAdvertisers.isError ? "Failed to load" : "No advertisers"}
+            emptyLabel={topAdvertisers.isError ? t("common.failedToLoad") : t("stats.noAdvertisers")}
           />
         </div>
       </Card>
       <ChartCard
-        title={<>Top talkers · {range}</>}
-        right={<span className="font-mono text-[10px] text-text-muted">by name</span>}
+        title={t("stats.topTalkers", { range })}
+        right={<span className="font-mono text-[10px] text-text-muted">{t("stats.byName")}</span>}
         height={leaderboardHeight(talkerRows.length)}
         option={talkersOption}
         isLoading={topTalkers.isLoading}

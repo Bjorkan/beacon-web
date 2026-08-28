@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { useTranslation } from "react-i18next";
 import { EChart } from "./EChart";
 import type { EChartsOption } from "./echarts-setup";
 
@@ -96,15 +97,16 @@ export function ChartCard({
   onEvents?: Record<string, (params: unknown) => void>;
   className?: string;
 }) {
+  const { t } = useTranslation();
   return (
     <Card title={title} right={right} className={className}>
       <div style={{ height }}>
         {isError ? (
-          <Centered>Failed to load</Centered>
+          <Centered>{t("common.failedToLoad")}</Centered>
         ) : isLoading ? (
-          <Centered>Loading…</Centered>
+          <Centered>{t("common.loading")}</Centered>
         ) : isEmpty ? (
-          <Centered>No data</Centered>
+          <Centered>{t("common.noData")}</Centered>
         ) : (
           <EChart option={option} onEvents={onEvents} />
         )}

@@ -1,5 +1,6 @@
 /* eslint-disable react-refresh/only-export-components */
 import { Fragment, useState } from "react";
+import { useTranslation } from "react-i18next";
 import type { PacketDetail, Observation } from "../../types/api";
 import { RouteType, PayloadType } from "../../types/enums";
 import { formatSnr, snrLevel, formatPropagation, SIGNAL_LEVEL_CLASSES } from "../../lib/formatters";
@@ -398,6 +399,7 @@ export function ColorAccentField({
 }
 
 export function ObservationDetail({ observation }: { observation: Observation }) {
+  const { t } = useTranslation();
   const level = snrLevel(observation.snr);
   const sigClass = level ? SIGNAL_LEVEL_CLASSES[level] : "text-text-normal";
 
@@ -413,7 +415,7 @@ export function ObservationDetail({ observation }: { observation: Observation })
         <span><span className="text-text-dim">SNR </span><span className={sigClass}>{formatSnr(observation.snr)}</span></span>
         <span><span className="text-text-dim">RSSI </span><span className={sigClass}>{observation.rssi ?? "—"}</span></span>
         <span><span className="text-text-dim">Prop </span><span className="text-text-normal">{formatPropagation(observation.propagationTimeMs)}</span></span>
-        <span><span className="text-text-dim">Hops </span><span className="text-text-normal">{observation.pathLength.hopCount}</span></span>
+        <span><span className="text-text-dim">{t("packets.hops")} </span><span className="text-text-normal">{observation.pathLength.hopCount}</span></span>
       </div>
 
       {observation.radio && (

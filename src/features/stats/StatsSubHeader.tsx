@@ -1,4 +1,5 @@
 import { Segmented } from "./Segmented";
+import { useTranslation } from "react-i18next";
 import { SelectDropdown } from "../../components/SelectDropdown";
 import { useIsMobile } from "../../hooks/useMediaQuery";
 import type { StatsRange, StatsTab } from "./types";
@@ -54,17 +55,6 @@ function GraphIcon() {
   );
 }
 
-const TAB_OPTIONS = [
-  { value: "mesh", label: "Mesh", icon: <MeshIcon /> },
-  { value: "talkers", label: "Talkers", icon: <TalkersIcon /> },
-  { value: "clockdrift", label: "Clock Drift", icon: <ClockDriftIcon /> },
-  { value: "observer", label: "Observer", icon: <ObserverIcon /> },
-  { value: "graph", label: "Neighbour Graph", icon: <GraphIcon /> },
-];
-
-// Same sections, minus icons, for the mobile dropdown (which is text-only). Scales with TAB_OPTIONS.
-const TAB_SELECT_OPTIONS = TAB_OPTIONS.map(({ value, label }) => ({ value, label }));
-
 const RANGE_OPTIONS = [
   { value: "24h", label: "24h" },
   { value: "7d", label: "7d" },
@@ -79,26 +69,35 @@ interface Props {
 }
 
 export function StatsSubHeader({ tab, onTabChange, range, onRangeChange }: Props) {
+  const { t } = useTranslation();
   const isMobile = useIsMobile();
+  const tabOptions = [
+    { value: "mesh", label: t("stats.mesh"), icon: <MeshIcon /> },
+    { value: "talkers", label: t("stats.talkers"), icon: <TalkersIcon /> },
+    { value: "clockdrift", label: t("stats.clockDrift"), icon: <ClockDriftIcon /> },
+    { value: "observer", label: t("stats.observer"), icon: <ObserverIcon /> },
+    { value: "graph", label: t("stats.neighbourGraph"), icon: <GraphIcon /> },
+  ];
+  const tabSelectOptions = tabOptions.map(({ value, label }) => ({ value, label }));
   return (
     <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-border bg-bg-surface px-4 py-2.5">
       {/* pills don't scale on a phone as sections grow — swap to a compact dropdown there */}
       {isMobile ? (
         <SelectDropdown
-          label="Section"
+          label={t("stats.section")}
           hideAll
           align="left"
-          options={TAB_SELECT_OPTIONS}
+          options={tabSelectOptions}
           value={tab}
           onChange={(v) => onTabChange(v as StatsTab)}
         />
       ) : (
         <div className="min-w-0 max-w-full overflow-x-auto">
           <Segmented
-            options={TAB_OPTIONS}
+            options={tabOptions}
             value={tab}
             onChange={(v) => onTabChange(v as StatsTab)}
-            ariaLabel="Stats section"
+            ariaLabel={t("stats.sectionLabel")}
             size="md"
           />
         </div>
@@ -110,7 +109,7 @@ export function StatsSubHeader({ tab, onTabChange, range, onRangeChange }: Props
           options={RANGE_OPTIONS}
           value={range}
           onChange={(v) => onRangeChange(v as StatsRange)}
-          ariaLabel="Time range"
+          ariaLabel={t("stats.timeRange")}
         />
       )}
     </div>

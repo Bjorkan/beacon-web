@@ -4,7 +4,8 @@ import { SkeletonRows } from "./SkeletonRows";
 import { useIsMobile } from "../hooks/useMediaQuery";
 
 export interface Column<T> {
-  header: string;
+  header: string; // stable sort/key identity; may be an untranslated technical identifier
+  label?: string; // localized visible heading
   cell: (row: T) => ReactNode;
   className?: string; // extra classes applied to the <td>
   sortValue?: (row: T) => string | number | null | undefined; // column is sortable when present
@@ -118,7 +119,7 @@ export function DataTable<T>({ columns, rows, rowKey, selectedKey, onSelect, isL
             <tr className="text-text-muted text-[11px] uppercase tracking-wider border-b border-border">
               {columns.map((col) => {
                 if (!col.sortValue) {
-                  return <th key={col.header} className="text-left px-4 py-2 font-medium">{col.header}</th>;
+                  return <th key={col.header} className="text-left px-4 py-2 font-medium">{col.label ?? col.header}</th>;
                 }
                 const active = sort.header === col.header;
                 return (
@@ -128,7 +129,7 @@ export function DataTable<T>({ columns, rows, rowKey, selectedKey, onSelect, isL
                       onClick={() => toggleSort(col.header)}
                       className="flex items-center gap-1 cursor-pointer hover:text-text-normal transition-colors"
                     >
-                      {col.header}
+                      {col.label ?? col.header}
                       <span className={active ? "text-text-normal" : "text-text-dim/40"}>
                         {active ? (sort.direction === "asc" ? "▲" : "▼") : "▲"}
                       </span>

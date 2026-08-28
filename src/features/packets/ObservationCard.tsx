@@ -3,10 +3,12 @@ import { formatSnr, snrLevel, formatPropagation, SIGNAL_LEVEL_CLASSES } from "..
 import { Timestamp } from "../../components/Timestamp";
 import { PathData } from "./PathData";
 import { IataChip } from "../../components/IataChip";
+import { useTranslation } from "react-i18next";
 
 // single observation with signal stats and resolved path
 
 export function ObservationCard({ observation: obs, selected, onClick, onViewNode, isTrace }: { observation: Observation; selected?: boolean; onClick?: () => void; onViewNode?: (nodeId: string) => void; isTrace?: boolean }) {
+  const { t } = useTranslation();
   const level = snrLevel(obs.snr);
 
   return (
@@ -42,7 +44,7 @@ export function ObservationCard({ observation: obs, selected, onClick, onViewNod
           <span className="font-medium text-text-normal">{formatPropagation(obs.propagationTimeMs)}</span>
         </div>
         <div className="flex flex-col">
-          <span className="text-text-dim text-[10px] font-medium uppercase tracking-wider">Hops</span>
+          <span className="text-text-dim text-[10px] font-medium uppercase tracking-wider">{t("packets.hops")}</span>
           <span className="font-medium text-text-normal">{obs.pathLength.hopCount}</span>
         </div>
       </div>
@@ -57,7 +59,7 @@ export function ObservationCard({ observation: obs, selected, onClick, onViewNod
             </>
           ) : (
             <>
-              <span className="text-text-dim uppercase text-[10px] font-medium tracking-wider mr-1">Path</span>
+              <span className="text-text-dim uppercase text-[10px] font-medium tracking-wider mr-1">{t("fields.path")}</span>
               <PathData pathBytes={obs.pathBytes} hashSize={obs.pathLength.hashSize} resolvedPath={obs.resolvedPath} size="sm" onViewNode={onViewNode} />
             </>
           )}

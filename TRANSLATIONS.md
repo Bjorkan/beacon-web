@@ -46,3 +46,16 @@ translator updates them.
 
 Do not translate identifiers received from the API, radio protocol field names,
 IATA codes, URLs, or the stable English tab values used in query parameters.
+
+## MeshCore terminology
+
+Keep established MeshCore and radio terms unchanged inside translations. This
+includes node roles and protocol vocabulary such as `repeater`, `companion`,
+`room server`, `advert`, `payload`, `flood`, `direct`, `TRACE`, `PING`, `IATA`,
+`LoRa`, `SNR`, `RSSI`, public-key/hash values, and API enum values. Translate the
+surrounding sentence instead—for example, Swedish uses `Hörda adverts` rather
+than inventing a Swedish replacement for `advert`.
+
+Unknown payload objects are rendered from API field names at runtime. Those
+field names are deliberately not sent through i18next because they describe the
+wire format and need to remain recognizable when debugging packets.

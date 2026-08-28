@@ -8,12 +8,14 @@
 import { useState, useEffect } from "react";
 import { MeshatSplashIcon } from "./MeshatSplashIcon";
 import { APP_NAME, SKIP_SPLASH } from "../lib/constants";
+import { useTranslation } from "react-i18next";
 
 const SPLASH_KEY = "meshat-splash-shown";
 const VISIBLE_MS = 2000;
 const FADE_MS = 400;
 
 export function SplashScreen() {
+  const { t } = useTranslation();
   // Synchronous gate: decided before first paint so StrictMode's double-mount
   // (and any same-session reload) never re-shows it.
   const [render, setRender] = useState(() => {
@@ -64,7 +66,7 @@ export function SplashScreen() {
             className="text-text-muted text-xs tracking-[0.12em]"
             style={{ fontFamily: "'Chakra Petch', sans-serif" }}
           >
-            MeshCore Network Analyzer
+            {t("app.tagline")}
           </span>
         </span>
       </span>

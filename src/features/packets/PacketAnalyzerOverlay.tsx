@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import type { PacketDetail } from "../../types/api";
 import { PacketAnalyzerDrawer } from "./PacketAnalyzerDrawer";
 import { NodeDetailOverlay } from "../nodes/NodeDetailOverlay";
@@ -14,6 +15,7 @@ export function PacketAnalyzerOverlay({ detail, loading, onClose, onViewObserver
   onViewPath?: () => void;
   inactive?: boolean;
 }) {
+  const { t } = useTranslation();
   const [selectedObservationId, setSelectedObservationId] = useState<number | null>(null);
   const [viewNodeId, setViewNodeId] = useState<string | null>(null);
 
@@ -29,7 +31,7 @@ export function PacketAnalyzerOverlay({ detail, loading, onClose, onViewObserver
 
   return (
     <>
-      <ModalOverlay label="Packet analyzer" onClose={onClose} inactive={!!viewNodeId || inactive}>
+      <ModalOverlay label={t("packets.analyzerLabel")} onClose={onClose} inactive={!!viewNodeId || inactive}>
         <PacketAnalyzerDrawer
           detail={detail}
           loading={loading}

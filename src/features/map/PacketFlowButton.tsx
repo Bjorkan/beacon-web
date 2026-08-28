@@ -6,13 +6,15 @@ interface PacketFlowButtonProps {
 // Floating play/stop control for the live packet-flow animation. Off by default; when live it shows
 // a pulsing dot and accent styling. Bottom-center, clear of the corner map controls.
 export function PacketFlowButton({ active, onToggle }: PacketFlowButtonProps) {
+  const { t } = useTranslation();
+  const actionLabel = t(active ? "map.stopFlow" : "map.playFlow");
   return (
     <button
       type="button"
       onClick={onToggle}
       aria-pressed={active}
-      aria-label={active ? "Stop live packet flow" : "Play live packet flow"}
-      title={active ? "Stop live packet flow" : "Play live packet flow"}
+      aria-label={actionLabel}
+      title={actionLabel}
       className={`absolute bottom-4 left-1/2 -translate-x-1/2 z-10 flex items-center gap-2 px-3 py-1.5 rounded-full border shadow-lg font-mono text-[11px] uppercase tracking-wider transition-colors cursor-pointer ${
         active
           ? "bg-primary/15 border-primary-dim text-text-bright"
@@ -29,7 +31,8 @@ export function PacketFlowButton({ active, onToggle }: PacketFlowButtonProps) {
           <path d="M2 1.5v7l6-3.5z" />
         </svg>
       )}
-      Live
+      {t("map.live")}
     </button>
   );
 }
+import { useTranslation } from "react-i18next";

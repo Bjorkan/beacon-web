@@ -31,6 +31,7 @@ function valueAxis(c: ChartColors, extra: Record<string, unknown> = {}) {
 export function observationsAreaOption(
   points: { hour: number; observationCount: number; uniquePackets: number }[],
   c: ChartColors,
+  labels = { observations: "Observations", uniquePackets: "Unique packets" },
 ): EChartsOption {
   const obs = points.map((p) => [p.hour, p.observationCount]);
   const uniq = points.map((p) => [p.hour, p.uniquePackets]);
@@ -40,7 +41,7 @@ export function observationsAreaOption(
     grid: { left: 48, right: 14, top: 12, bottom: 24 },
     tooltip: { trigger: "axis", ...tooltipStyle(c), axisPointer: { type: "line", lineStyle: { color: c.primary } } },
     legend: {
-      data: ["Observations", "Unique packets"],
+      data: [labels.observations, labels.uniquePackets],
       right: 8,
       top: 0,
       itemWidth: 10,
@@ -52,7 +53,7 @@ export function observationsAreaOption(
     yAxis: valueAxis(c),
     series: [
       {
-        name: "Observations",
+        name: labels.observations,
         type: "line",
         smooth: true,
         symbol: "none",
@@ -71,7 +72,7 @@ export function observationsAreaOption(
         },
       },
       {
-        name: "Unique packets",
+        name: labels.uniquePackets,
         type: "line",
         smooth: true,
         symbol: "none",
@@ -153,6 +154,7 @@ export function presetBarsOption(
   rows: { name: string; nodes: number; observers: number }[],
   c: ChartColors,
   gridLeft = 172, // fits a full "910.525 · 62.5k · SF7" label
+  labels = { nodes: "Nodes", observers: "Observers" },
 ): EChartsOption {
   const totals = rows.map((r) => r.nodes + r.observers);
   const segment = (data: number[], color: string) => ({
@@ -169,7 +171,7 @@ export function presetBarsOption(
     grid: { left: gridLeft, right: 56, top: 22, bottom: 6 },
     tooltip: { trigger: "axis", ...tooltipStyle(c), axisPointer: { type: "shadow" } },
     legend: {
-      data: ["Nodes", "Observers"],
+      data: [labels.nodes, labels.observers],
       right: 8,
       top: 0,
       itemWidth: 10,
@@ -195,9 +197,9 @@ export function presetBarsOption(
       },
     },
     series: [
-      { name: "Nodes", ...segment(rows.map((r) => r.nodes), c.primary) },
+      { name: labels.nodes, ...segment(rows.map((r) => r.nodes), c.primary) },
       {
-        name: "Observers",
+        name: labels.observers,
         ...segment(rows.map((r) => r.observers), c.secondary),
         // outer segment carries the row total so it sits at the end of the whole stack
         label: {
@@ -379,15 +381,15 @@ function metricLineOption(
   };
 }
 
-export const batteryOption = (p: TelemetryPoint[], c: ChartColors) =>
-  metricLineOption(p, c, { name: "Battery V", color: c.primary, accessor: (x) => (x.batteryMv == null ? null : +(x.batteryMv / 1000).toFixed(3)) });
+export const batteryOption = (p: TelemetryPoint[], c: ChartColors, name = "Battery V") =>
+  metricLineOption(p, c, { name, color: c.primary, accessor: (x) => (x.batteryMv == null ? null : +(x.batteryMv / 1000).toFixed(3)) });
 
-export const noiseFloorOption = (p: TelemetryPoint[], c: ChartColors) =>
-  metricLineOption(p, c, { name: "Noise dBm", color: c.warn, accessor: (x) => x.noiseFloorDb });
+export const noiseFloorOption = (p: TelemetryPoint[], c: ChartColors, name = "Noise dBm") =>
+  metricLineOption(p, c, { name, color: c.warn, accessor: (x) => x.noiseFloorDb });
 
-export const queueOption = (p: TelemetryPoint[], c: ChartColors) =>
-  metricLineOption(p, c, { name: "Queue", color: c.secondary, accessor: (x) => x.queueLength, area: true });
+export const queueOption = (p: TelemetryPoint[], c: ChartColors, name = "Queue") =>
+  metricLineOption(p, c, { name, color: c.secondary, accessor: (x) => x.queueLength, area: true });
 
 // receiveErrors is a cumulative counter in raw points, a per-bucket delta in bucketed ones
-export const receiveErrorsOption = (p: TelemetryPoint[], c: ChartColors, bucketed: boolean) =>
-  metricLineOption(p, c, { name: "Recv errors", color: c.danger, accessor: (x) => x.receiveErrors, delta: !bucketed, area: true });
+export const receiveErrorsOption = (p: TelemetryPoint[], c: ChartColors, bucketed: boolean, name = "Recv errors") =>
+  metricLineOption(p, c, { name, color: c.danger, accessor: (x) => x.receiveErrors, delta: !bucketed, area: true });

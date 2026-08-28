@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { useQuery, keepPreviousData } from "@tanstack/react-query";
 import { Badge } from "../../components/Badge";
 import { EmptyState } from "../../components/EmptyState";
@@ -27,6 +28,7 @@ function ObserverList({
   selectedId: string | null;
   onSelect: (id: string) => void;
 }) {
+  const { t } = useTranslation();
   const { iatas, regionKey } = useRegion();
   const [query, setQuery] = useState("");
   // debounce so the server-side lookup fires once per pause, not once per keystroke
@@ -58,21 +60,21 @@ function ObserverList({
   const loading = searching ? search.isLoading : top.isLoading;
 
   return (
-    <Card title="Observers" className="w-full">
+    <Card title={t("stats.observers")} className="w-full">
       <input
         type="text"
         value={query}
         onChange={(e) => setQuery(e.target.value)}
-        placeholder="Search observers…"
+        placeholder={t("stats.searchObservers")}
         className="mb-2 w-full rounded border border-border bg-bg-base px-2 py-1 font-mono text-[12px] text-text-normal placeholder:text-text-dim"
       />
       <div className="flex flex-col gap-0.5">
-        {loading && <div className="py-6 text-center font-mono text-[11px] text-text-dim">{searching ? "Searching…" : "Loading…"}</div>}
+        {loading && <div className="py-6 text-center font-mono text-[11px] text-text-dim">{t(searching ? "routes.searching" : "common.loading")}</div>}
         {searching && search.isError && (
-          <div className="py-6 text-center font-mono text-[11px] text-danger">Search failed</div>
+          <div className="py-6 text-center font-mono text-[11px] text-danger">{t("stats.searchFailed")}</div>
         )}
         {!loading && !(searching && search.isError) && rows.length === 0 && (
-          <div className="py-6 text-center font-mono text-[11px] text-text-dim">{searching ? "No matches" : "No observers"}</div>
+          <div className="py-6 text-center font-mono text-[11px] text-text-dim">{t(searching ? "common.noMatches" : "entities.noObservers")}</div>
         )}
         {rows.map((r) => {
           const active = r.id === selectedId;
@@ -112,6 +114,7 @@ function ObserverList({
 }
 
 function ObserverHeader({ observer }: { observer: Observer }) {
+  const { t } = useTranslation();
   useTick(); // keep the recency-derived status badge fresh
   const status = deriveObserverStatus(observer);
   const radio = [
@@ -126,7 +129,7 @@ function ObserverHeader({ observer }: { observer: Observer }) {
       title={
         <span className="flex items-center gap-2">
           <span className="text-text-bright normal-case">{observer.displayName ?? observer.id.slice(0, 8)}</span>
-          <Badge variant={status === "online" ? "live" : "offline"}>{status}</Badge>
+          <Badge variant={status === "online" ? "live" : "offline"}>{t(`options.${status}`)}</Badge>
           {observer.observerType && <Badge variant="default">{observer.observerType}</Badge>}
         </span>
       }
@@ -135,10 +138,10 @@ function ObserverHeader({ observer }: { observer: Observer }) {
       }
     >
       <div className="flex flex-wrap items-center gap-x-6 gap-y-1.5 font-mono text-[12px]">
-        <Metric label="Battery" value={observer.batteryLevel != null ? formatBattery(observer.batteryLevel) : "—"} />
-        <Metric label="Uptime" value={observer.uptimeSeconds != null ? formatUptime(observer.uptimeSeconds) : "—"} />
-        <Metric label="Observations" value={observer.observationCount.toLocaleString()} />
-        {radio.length > 0 && <Metric label="Radio" value={radio.join(" · ")} />}
+        <Metric label={t("details.battery")} value={observer.batteryLevel != null ? formatBattery(observer.batteryLevel) : "—"} />
+        <Metric label={t("details.uptime")} value={observer.uptimeSeconds != null ? formatUptime(observer.uptimeSeconds) : "—"} />
+        <Metric label={t("details.observations")} value={observer.observationCount.toLocaleString()} />
+        {radio.length > 0 && <Metric label={t("entities.radio")} value={radio.join(" · ")} />}
       </div>
     </Card>
   );
@@ -161,6 +164,7 @@ interface ObserverTabProps {
 }
 
 export function ObserverTab({ range, selectedObserverId, onSelectObserver, wsManager }: ObserverTabProps) {
+  const { t } = useTranslation();
   const colors = useChartColors();
   useLiveObserver(wsManager, selectedObserverId, range);
   const topObservers = useTopObservers(range, 15);
@@ -178,10 +182,10 @@ export function ObserverTab({ range, selectedObserverId, onSelectObserver, wsMan
   // use the response's interval, not the range prop — keepPreviousData can briefly show the old range's points
   const bucketed = telemetry.data != null && telemetry.data.interval !== "1h";
   const airtime = useMemo(() => airtimeOption(points, colors, bucketed), [points, colors, bucketed]);
-  const battery = useMemo(() => batteryOption(points, colors), [points, colors]);
-  const noise = useMemo(() => noiseFloorOption(points, colors), [points, colors]);
-  const queue = useMemo(() => queueOption(points, colors), [points, colors]);
-  const recvErrors = useMemo(() => receiveErrorsOption(points, colors, bucketed), [points, colors, bucketed]);
+  const battery = useMemo(() => batteryOption(points, colors, `${t("details.battery")} V`), [points, colors, t]);
+  const noise = useMemo(() => noiseFloorOption(points, colors, `${t("details.noiseFloor")} dBm`), [points, colors, t]);
+  const queue = useMemo(() => queueOption(points, colors, t("details.queue")), [points, colors, t]);
+  const recvErrors = useMemo(() => receiveErrorsOption(points, colors, bucketed, t("details.receiveErrors")), [points, colors, bucketed, t]);
 
   // Bots / MQTT bridges report status but no device telemetry — show one clear empty state rather
   // than five flat-zero charts. When some telemetry exists, gate each chart on its own metric.
@@ -199,20 +203,20 @@ export function ObserverTab({ range, selectedObserverId, onSelectObserver, wsMan
 
       <div className="flex min-w-0 flex-1 flex-col gap-3.5">
         {!selectedObserverId ? (
-          <Card title="Telemetry">
-            <EmptyState title="Select an observer" subtitle="Pick an observer to view its telemetry" />
+          <Card title={t("stats.telemetry")}>
+            <EmptyState title={t("stats.selectObserver")} subtitle={t("stats.selectObserverHint")} />
           </Card>
         ) : (
           <>
             {observer.data && <ObserverHeader observer={observer.data} />}
             {noTelemetry ? (
-              <Card title="Telemetry">
-                <EmptyState title="No telemetry reported" subtitle="This observer publishes status but no device telemetry" />
+              <Card title={t("stats.telemetry")}>
+                <EmptyState title={t("stats.noTelemetry")} subtitle={t("stats.noTelemetryHint")} />
               </Card>
             ) : (
               <>
                 <ChartCard
-                  title={<>Airtime TX / RX · {range}</>}
+                  title={t("stats.airtimeTxRx", { range })}
                   height={180}
                   option={airtime}
                   isLoading={telemetry.isLoading}
@@ -220,10 +224,10 @@ export function ObserverTab({ range, selectedObserverId, onSelectObserver, wsMan
                   isEmpty={missing((p) => p.airtimeTxPct, (p) => p.airtimeRxPct)}
                 />
                 <div className="grid grid-cols-1 gap-3.5 lg:grid-cols-2">
-                  <ChartCard title="Battery" height={168} option={battery} isLoading={telemetry.isLoading} isError={telemetry.isError} isEmpty={missing((p) => p.batteryMv)} />
-                  <ChartCard title="Noise floor" height={168} option={noise} isLoading={telemetry.isLoading} isError={telemetry.isError} isEmpty={missing((p) => p.noiseFloorDb)} />
-                  <ChartCard title="Queue length" height={168} option={queue} isLoading={telemetry.isLoading} isError={telemetry.isError} isEmpty={missing((p) => p.queueLength)} />
-                  <ChartCard title="Receive errors" height={168} option={recvErrors} isLoading={telemetry.isLoading} isError={telemetry.isError} isEmpty={missing((p) => p.receiveErrors)} />
+                  <ChartCard title={t("details.battery")} height={168} option={battery} isLoading={telemetry.isLoading} isError={telemetry.isError} isEmpty={missing((p) => p.batteryMv)} />
+                  <ChartCard title={t("details.noiseFloor")} height={168} option={noise} isLoading={telemetry.isLoading} isError={telemetry.isError} isEmpty={missing((p) => p.noiseFloorDb)} />
+                  <ChartCard title={t("stats.queueLength")} height={168} option={queue} isLoading={telemetry.isLoading} isError={telemetry.isError} isEmpty={missing((p) => p.queueLength)} />
+                  <ChartCard title={t("stats.receiveErrors")} height={168} option={recvErrors} isLoading={telemetry.isLoading} isError={telemetry.isError} isEmpty={missing((p) => p.receiveErrors)} />
                 </div>
               </>
             )}

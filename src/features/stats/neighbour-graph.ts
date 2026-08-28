@@ -3,6 +3,7 @@ import { NODE_TYPE_NAMES, NODE_TYPES } from "../../lib/node-types";
 import { blend, nodeTypeColor, tooltipStyle, withAlpha, type ChartColors } from "./chartTheme";
 import { OBS_STOPS, AGE } from "../map/neighbor-thresholds";
 import type { EChartsOption } from "./echarts-setup";
+import type { TFunction } from "i18next";
 
 const MONO = "JetBrains Mono, monospace";
 
@@ -172,10 +173,10 @@ export function buildEgoGraph(
 
 // One legend/category per device type (in NODE_TYPES order) plus an "Other" bucket for unknowns; the
 // GraphNode.category index lines up with this list.
-function graphCategories(c: ChartColors) {
+function graphCategories(c: ChartColors, t?: TFunction) {
   return [
     ...NODE_TYPES.map((t) => ({ name: t.label, itemStyle: { color: nodeTypeColor(t.name, c) } })),
-    { name: "Other", itemStyle: { color: c.primaryDim } },
+    { name: t?.("common.other") ?? "Other", itemStyle: { color: c.primaryDim } },
   ];
 }
 
@@ -185,7 +186,7 @@ function graphCategories(c: ChartColors) {
 export function neighbourGraphOption(
   graph: NeighbourGraph,
   c: ChartColors,
-  opts: { ego?: boolean } = {},
+  opts: { ego?: boolean; t?: TFunction } = {},
 ): EChartsOption {
   const ego = !!opts.ego;
   const big = graph.nodes.length > 500; // settle without animating once the full mesh gets dense
@@ -207,16 +208,22 @@ export function neighbourGraphOption(
           const obs = param.data.obs as number | undefined;
           if (obs == null) return ""; // uniform mesh edge — nothing to show
           const days = Math.round((param.data.ageDays as number) ?? 0);
-          return `${obs} obs · ${days === 0 ? "seen today" : `seen ${days}d ago`}`;
+          const observationLabel = opts.t?.("stats.observationAbbrev", { count: obs }) ?? `${obs} obs`;
+          const seenLabel = days === 0
+            ? (opts.t?.("stats.seenToday") ?? "seen today")
+            : (opts.t?.("stats.seenDaysAgo", { count: days }) ?? `seen ${days}d ago`);
+          return `${observationLabel} · ${seenLabel}`;
         }
         const d = param.data as unknown as GraphNode;
-        const type = d.nodeTypeName || "unknown";
-        return d.degree > 0 ? `${d.name}\n${type} · ${d.degree} neighbour${d.degree === 1 ? "" : "s"}` : `${d.name}\n${type}`;
+        const type = d.nodeTypeName || (opts.t?.("options.unknown") ?? "unknown");
+        const neighbours = opts.t?.("entities.neighborCount", { count: d.degree })
+          ?? `${d.degree} neighbour${d.degree === 1 ? "" : "s"}`;
+        return d.degree > 0 ? `${d.name}\n${type} · ${neighbours}` : `${d.name}\n${type}`;
       },
     },
     legend: [
       {
-        data: graphCategories(c).map((cat) => cat.name),
+        data: graphCategories(c, opts.t).map((cat) => cat.name),
         bottom: 4,
         left: "center",
         icon: "circle",
@@ -233,7 +240,7 @@ export function neighbourGraphOption(
         roam: true,
         draggable: true,
         scaleLimit: { min: 0.2, max: 8 },
-        categories: graphCategories(c),
+      categories: graphCategories(c, opts.t),
         force: ego
           ? { repulsion: 320, edgeLength: 120, gravity: 0.05, friction: 0.15, layoutAnimation: true }
           : { repulsion: big ? 60 : 120, edgeLength: big ? [20, 60] : [40, 90], gravity: 0.08, friction: 0.2, layoutAnimation: !big },

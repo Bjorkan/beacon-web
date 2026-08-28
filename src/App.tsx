@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef, lazy, Suspense } from "react";
+import { useTranslation } from "react-i18next";
 import { BrowserRouter, useSearchParams } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { RegionProvider, useRegion, useRegionSelection } from "./hooks/useRegion";
@@ -53,6 +54,11 @@ const queryClient = new QueryClient({
 const wsManager = new WsManager(WS_URL);
 
 const WS_EVENTS = ["packetObservation", "channelMessage", "observerStatus", "nodeUpdate"];
+
+function TabLoading({ title }: { title: string }) {
+  const { t } = useTranslation();
+  return <EmptyState title={title} subtitle={t("common.loading")} />;
+}
 
 // Compute the initial region selection on first load: URL params win (shareable links), then the
 // persisted selection, then the pre-multi-select single-IATA key (migrated), else all regions.
@@ -308,7 +314,7 @@ function AppInner() {
       <AppShell activeTab={activeTab} onTabChange={handleTabChange} wsManager={wsManager}>
         <div className="relative flex flex-1 min-h-0">
           <div key={activeTab} className="flex flex-1 min-h-0 fade-in">
-            <Suspense fallback={<EmptyState title={activeTab} subtitle="Loading…" />}>
+            <Suspense fallback={<TabLoading title={activeTab} />}>
               {tabContent[activeTab]}
             </Suspense>
           </div>

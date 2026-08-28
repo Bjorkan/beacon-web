@@ -1,4 +1,5 @@
 import { useState, useCallback, useEffect, useMemo } from "react";
+import { useTranslation } from "react-i18next";
 import { useSearchParams } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { usePackets } from "./usePackets";
@@ -39,6 +40,7 @@ interface PacketListProps {
 // main packet view: filters, banner, virtual list
 
 export function PacketList({ wsManager, onAnalyze, onViewPath, selectedObservationId, onSelectObservation }: PacketListProps) {
+  const { t } = useTranslation();
   const [searchParams, setSearchParams] = useSearchParams();
   const queryClient = useQueryClient();
   const { filters, setFilter, setSearch, setSearchField, clearFilters } = usePacketFilters();
@@ -169,8 +171,8 @@ export function PacketList({ wsManager, onAnalyze, onViewPath, selectedObservati
 
         {laggedCount > 0 && (
           <div className="mx-4 px-3 py-1.5 bg-warn/6 border border-warn/12 text-warn text-xs font-medium font-mono rounded-b flex items-center justify-between">
-            <span>{laggedCount} packet{laggedCount === 1 ? "" : "s"} dropped — data may be incomplete</span>
-            <button type="button" className="underline cursor-pointer" onClick={dismissLagged}>dismiss</button>
+            <span>{t("packets.dropped", { count: laggedCount })}</span>
+            <button type="button" className="underline cursor-pointer" onClick={dismissLagged}>{t("common.dismiss")}</button>
           </div>
         )}
 
@@ -181,8 +183,8 @@ export function PacketList({ wsManager, onAnalyze, onViewPath, selectedObservati
             onClick={handleScrollToTop}
           >
             <span aria-hidden>▲</span>
-            {bannerCount} new packet{bannerCount === 1 ? "" : "s"}
-            <span className="text-primary/60 font-normal">· scroll to top</span>
+            {t("packets.new", { count: bannerCount })}
+            <span className="text-primary/60 font-normal">· {t("packets.scrollTop")}</span>
           </button>
         )}
 
@@ -209,7 +211,7 @@ export function PacketList({ wsManager, onAnalyze, onViewPath, selectedObservati
           loading={isLoading || isFetchingNextPage}
           error={isError}
           count={packets.length}
-          noun="packets"
+          noun={t("packets.noun")}
           position="bottom-3 right-3"
         />
       </div>

@@ -1,4 +1,5 @@
 import { formatHex } from "../../lib/formatters";
+import { useTranslation } from "react-i18next";
 import { Timestamp } from "../../components/Timestamp";
 import { Badge } from "../../components/Badge";
 import { ScopeTag } from "../../components/ScopeTag";
@@ -18,6 +19,7 @@ interface PacketTableRowProps {
 // Single-line table row sharing GRID_TEMPLATE with the sticky header. The observer lives in the
 // expansion instead, which frees the wide column for the packet's endpoints.
 export function PacketTableRow({ packet, expanded, isFresh, onToggle }: PacketTableRowProps) {
+  const { t } = useTranslation();
   // ?? not ||, so a legitimate 0-hop direct packet still shows its count
   const pathLength = packet.latestObserver?.pathLength;
   const na = <span className="text-text-dim">n/a</span>;
@@ -51,7 +53,7 @@ export function PacketTableRow({ packet, expanded, isFresh, onToggle }: PacketTa
           </Badge>
         </span>
         <span className="font-mono text-[10px] text-text-muted uppercase tracking-wider">
-          {packet.routeTypeName || "Unknown"}
+          {packet.routeTypeName || t("packets.unknown")}
           {packet.scope && <ScopeTag>{packet.scope}</ScopeTag>}
         </span>
         <span className="font-mono text-text-muted">×{packet.observationCount}</span>

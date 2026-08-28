@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import type { PacketDetail } from "../../types/api";
 import { ModalOverlay } from "../../components/ModalOverlay";
 import { CloseButton } from "../../components/CloseButton";
@@ -35,6 +36,7 @@ export function PacketPathMapModal({ detail, onClose, initialSelectedKey }: {
   onClose: () => void;
   initialSelectedKey?: string | null;
 }) {
+  const { t } = useTranslation();
   const paths = useMemo(() => buildPacketPaths(detail), [detail]);
   const [selectedKey, setSelectedKey] = useState<string | null>(
     // deep-link value that matches a known path isolates it; anything else (incl. "all") shows All
@@ -52,16 +54,16 @@ export function PacketPathMapModal({ detail, onClose, initialSelectedKey }: {
   }, [onClose]);
 
   return (
-    <ModalOverlay label="Packet path map" onClose={onClose}>
+    <ModalOverlay label={t("map.packetPathLabel")} onClose={onClose}>
       <div className="h-full w-full md:w-[860px] md:max-w-[92vw] bg-bg-surface flex flex-col">
         <div className="flex items-center justify-between px-3 py-2 border-b border-border-subtle shrink-0">
-          <span className="text-[13px] font-mono font-medium text-text-dim uppercase tracking-wider">Packet Path</span>
+          <span className="text-[13px] font-mono font-medium text-text-dim uppercase tracking-wider">{t("map.packetPath")}</span>
           <div className="flex items-center gap-1.5">
             <CopyLinkButton
               params={() => ({ tab: "Packets", hash: detail.packetHash, path: selectedKey ?? "all", analyze: null })}
-              ariaLabel="Copy path link"
+              ariaLabel={t("map.copyPathLink")}
             />
-            <CloseButton onClose={onClose} label="Close path map" className="-mr-1" />
+            <CloseButton onClose={onClose} label={t("map.closePath")} className="-mr-1" />
           </div>
         </div>
 
@@ -71,14 +73,14 @@ export function PacketPathMapModal({ detail, onClose, initialSelectedKey }: {
           </div>
           <div className="md:w-[220px] md:border-l border-t md:border-t-0 border-border flex flex-col min-h-0 overflow-y-auto">
             <div className="sticky top-0 bg-bg-surface z-10 border-b border-border-subtle">
-              <Row active={selectedKey === null} label="All paths" onClick={() => setSelectedKey(null)} />
+              <Row active={selectedKey === null} label={t("map.allPaths")} onClick={() => setSelectedKey(null)} />
             </div>
             {paths.map((p) => (
               <Row
                 key={p.key}
                 active={selectedKey === p.key}
                 color={p.color}
-                label={p.label}
+                label={p.key === "trace" ? t("map.traceRoute") : p.label}
                 meta={formatPropagation(p.propagationMs)}
                 onClick={() => setSelectedKey(p.key)}
               />

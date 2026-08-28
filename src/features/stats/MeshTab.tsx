@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import { useTranslation } from "react-i18next";
 import { formatCount } from "../../lib/formatters";
 import { useChartColors, nodeTypeColor } from "./chartTheme";
 import { useStatsOverview, useStatsObservations, usePayloadBreakdown, useTopNodes, useTopObservers, useRadioPresets, useScopes, useNodeTypes } from "./useStats";
@@ -30,6 +31,7 @@ interface MeshTabProps {
 }
 
 export function MeshTab({ range, onSelectObserver, wsManager }: MeshTabProps) {
+  const { t } = useTranslation();
   const colors = useChartColors();
   useLiveOverview(wsManager);
   const overview = useStatsOverview();
@@ -45,7 +47,10 @@ export function MeshTab({ range, onSelectObserver, wsManager }: MeshTabProps) {
   const nodeTypes = useNodeTypes();
 
   const obs = useMemo(() => aggregateByHour(observations.data ?? []), [observations.data]);
-  const obsOption = useMemo(() => observationsAreaOption(obs, colors), [obs, colors]);
+  const obsOption = useMemo(() => observationsAreaOption(obs, colors, {
+    observations: t("stats.observations"),
+    uniquePackets: t("stats.uniquePackets"),
+  }), [obs, colors, t]);
 
   const nodeRows = useMemo(
     () =>
@@ -92,13 +97,16 @@ export function MeshTab({ range, onSelectObserver, wsManager }: MeshTabProps) {
     [nodeTypes.data, colors],
   );
   const typeTotal = useMemo(() => typeRows.reduce((a, t) => a + t.value, 0), [typeRows]);
-  const typesOption = useMemo(() => donutOption(typeRows, colors, formatCount(typeTotal), "NODES"), [typeRows, colors, typeTotal]);
+  const typesOption = useMemo(() => donutOption(typeRows, colors, formatCount(typeTotal), t("stats.nodes").toUpperCase()), [typeRows, colors, typeTotal, t]);
 
   const presetRows = useMemo(
     () => aggregatePresets(radioPresets.data ?? []).slice(0, 8).map((r) => ({ name: formatPreset(r.preset), nodes: r.nodes, observers: r.observers })),
     [radioPresets.data],
   );
-  const presetsOption = useMemo(() => presetBarsOption(presetRows, colors), [presetRows, colors]);
+  const presetsOption = useMemo(() => presetBarsOption(presetRows, colors, undefined, {
+    nodes: t("stats.nodes"),
+    observers: t("stats.observers"),
+  }), [presetRows, colors, t]);
 
   const scopeRows = useMemo(
     () => [...(scopes.data ?? [])].sort((a, b) => b.packetCount - a.packetCount),
@@ -117,14 +125,14 @@ export function MeshTab({ range, onSelectObserver, wsManager }: MeshTabProps) {
   return (
     <div className="mx-auto flex max-w-[1100px] flex-col gap-3.5 px-4 py-4">
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <StatCard label="Total packets" sublabel={ovWindow} accent="var(--color-primary)" value={kpiLoading ? "—" : formatCount(ov?.totalPackets)} />
-        <StatCard label="Observations" sublabel={ovWindow} accent="var(--color-green)" value={kpiLoading ? "—" : formatCount(ov?.totalObservations)} spark={obsSpark} />
-        <StatCard label="Active observers" sublabel={ovWindow} accent="var(--color-secondary)" value={kpiLoading ? "—" : (ov?.activeObservers ?? "—")} spark={observerSpark} />
-        <StatCard label="Active IATAs" sublabel={ovWindow} accent="var(--color-warn)" value={kpiLoading ? "—" : (ov?.activeIatas ?? "—")} />
+        <StatCard label={t("stats.totalPackets")} sublabel={ovWindow} accent="var(--color-primary)" value={kpiLoading ? "—" : formatCount(ov?.totalPackets)} />
+        <StatCard label={t("stats.observations")} sublabel={ovWindow} accent="var(--color-green)" value={kpiLoading ? "—" : formatCount(ov?.totalObservations)} spark={obsSpark} />
+        <StatCard label={t("stats.activeObservers")} sublabel={ovWindow} accent="var(--color-secondary)" value={kpiLoading ? "—" : (ov?.activeObservers ?? "—")} spark={observerSpark} />
+        <StatCard label={t("stats.activeIatas")} sublabel={ovWindow} accent="var(--color-warn)" value={kpiLoading ? "—" : (ov?.activeIatas ?? "—")} />
       </div>
 
       <ChartCard
-        title={<>Observations · {range}</>}
+        title={`${t("stats.observations")} · ${range}`}
         height={200}
         option={obsOption}
         isLoading={observations.isLoading}
@@ -134,9 +142,9 @@ export function MeshTab({ range, onSelectObserver, wsManager }: MeshTabProps) {
 
       <div className="grid grid-cols-1 gap-3.5 lg:grid-cols-2">
         {/* range-driven charts lead the grid; the all-time ones follow below */}
-        <ChartCard title={<>Top observers · {range}</>} height={208} option={observersOption} isLoading={topObservers.isLoading} isError={topObservers.isError} isEmpty={observerRows.length === 0} onEvents={observerEvents} />
+        <ChartCard title={t("stats.topObservers", { range })} height={208} option={observersOption} isLoading={topObservers.isLoading} isError={topObservers.isError} isEmpty={observerRows.length === 0} onEvents={observerEvents} />
         <ChartCard
-          title={<>Payload types · {range}</>}
+          title={t("stats.payloadTypes", { range })}
           right={<span className="font-mono text-[10px] text-text-muted">{formatCount(payloadTotal)} obs</span>}
           height={208}
           option={payloadOption}
@@ -145,25 +153,25 @@ export function MeshTab({ range, onSelectObserver, wsManager }: MeshTabProps) {
           isEmpty={payloadItems.length === 0}
         />
         {/* counts are all-time; the server's 7d filter only prunes the roster to recently-heard nodes */}
-        <ChartCard title="Top nodes · all time" height={208} option={nodesOption} isLoading={topNodes.isLoading} isError={topNodes.isError} isEmpty={nodeRows.length === 0} />
-        <ChartCard title="Node types · all time" height={208} option={typesOption} isLoading={nodeTypes.isLoading} isError={nodeTypes.isError} isEmpty={typeRows.length === 0} />
-        <ChartCard title="Radio presets · all time" height={208} option={presetsOption} isLoading={radioPresets.isLoading} isError={radioPresets.isError} isEmpty={presetRows.length === 0} />
+        <ChartCard title={t("stats.topNodesAllTime")} height={208} option={nodesOption} isLoading={topNodes.isLoading} isError={topNodes.isError} isEmpty={nodeRows.length === 0} />
+        <ChartCard title={t("stats.nodeTypesAllTime")} height={208} option={typesOption} isLoading={nodeTypes.isLoading} isError={nodeTypes.isError} isEmpty={typeRows.length === 0} />
+        <ChartCard title={t("stats.radioPresetsAllTime")} height={208} option={presetsOption} isLoading={radioPresets.isLoading} isError={radioPresets.isError} isEmpty={presetRows.length === 0} />
 
-        <Card title={<>Scopes · all regions · all time</>}>
+        <Card title={t("stats.scopesAllTime")}>
           {scopes.isError ? (
-            <div className="py-4 text-center font-mono text-[11px] text-text-dim">Failed to load</div>
+            <div className="py-4 text-center font-mono text-[11px] text-text-dim">{t("common.failedToLoad")}</div>
           ) : scopes.isLoading ? (
-            <div className="py-4 text-center font-mono text-[11px] text-text-dim">Loading…</div>
+            <div className="py-4 text-center font-mono text-[11px] text-text-dim">{t("common.loading")}</div>
           ) : scopeRows.length === 0 ? (
-            <div className="py-4 text-center font-mono text-[11px] text-text-dim">No data</div>
+            <div className="py-4 text-center font-mono text-[11px] text-text-dim">{t("common.noData")}</div>
           ) : (
             <table className="w-full font-mono text-[11px]">
               <thead>
                 <tr className="text-text-muted">
                   <th className="pb-1.5 text-left font-semibold uppercase tracking-wider">Scope</th>
-                  <th className="pb-1.5 text-right font-semibold uppercase tracking-wider">Packets</th>
-                  <th className="pb-1.5 text-right font-semibold uppercase tracking-wider">Observers</th>
-                  <th className="pb-1.5 text-right font-semibold uppercase tracking-wider">Nodes</th>
+                  <th className="pb-1.5 text-right font-semibold uppercase tracking-wider">{t("stats.packets")}</th>
+                  <th className="pb-1.5 text-right font-semibold uppercase tracking-wider">{t("stats.observers")}</th>
+                  <th className="pb-1.5 text-right font-semibold uppercase tracking-wider">{t("stats.nodes")}</th>
                 </tr>
               </thead>
               <tbody>

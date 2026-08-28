@@ -2,6 +2,17 @@ import { act, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { LanguageSelector } from "../src/components/LanguageSelector";
 import i18n, { availableLanguages, LANGUAGE_STORAGE_KEY } from "../src/i18n";
+import english from "../src/locales/en/translation.json";
+import swedish from "../src/locales/sv/translation.json";
+
+function translationKeys(value: object, prefix = ""): string[] {
+  return Object.entries(value).flatMap(([key, child]) => {
+    const path = prefix ? `${prefix}.${key}` : key;
+    return child != null && typeof child === "object"
+      ? translationKeys(child as object, path)
+      : [path];
+  });
+}
 
 describe("internationalization", () => {
   const values = new Map<string, string>();
@@ -29,6 +40,16 @@ describe("internationalization", () => {
       { code: "en", name: "English", direction: "ltr" },
       { code: "sv", name: "Svenska", direction: "ltr" },
     ]);
+  });
+
+  it("keeps the Swedish catalog aligned with the English source catalog", () => {
+    expect(translationKeys(swedish).sort()).toEqual(translationKeys(english).sort());
+  });
+
+  it("preserves established MeshCore terms in translated sentences", () => {
+    expect(swedish.observers.advertsHeard).toContain("adverts");
+    expect(swedish.stats.repeatersOutOfSync).toContain("Repeaters");
+    expect(swedish.stats.repeatersOutOfSync).toContain("room servers");
   });
 
   it("switches language, persists the choice, and updates the document language", async () => {

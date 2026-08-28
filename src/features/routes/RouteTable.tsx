@@ -1,4 +1,6 @@
 import { useState, useMemo, useCallback, useEffect, useRef, memo } from "react";
+import { type TFunction } from "i18next";
+import { useTranslation } from "react-i18next";
 import { useQuery } from "@tanstack/react-query";
 import { getKnownRoutesPage, searchKnownRoutes, searchCrossIATARoutes, getIatas } from "../../api/client";
 import { useRegion } from "../../hooks/useRegion";
@@ -50,6 +52,7 @@ const RouteHopChain = memo(function RouteHopChain({ route }: { route: KnownRoute
 
 // A cross-IATA route: source segment → boundary hop (the two nodes that bridge the IATAs) → target segment.
 function CrossRouteCard({ route }: { route: CrossIATARoute }) {
+  const { t } = useTranslation();
   const { crossHop } = route;
   return (
     <div className="bg-bg-base border border-border rounded px-3 py-2 flex flex-col gap-1.5">
@@ -59,7 +62,7 @@ function CrossRouteCard({ route }: { route: CrossIATARoute }) {
           <span className="text-text-dim" aria-hidden>→</span>
           <Badge variant="default">{crossHop.toIata}</Badge>
         </div>
-        <span className="font-mono text-[11px] text-text-dim">{route.totalHops} hops</span>
+        <span className="font-mono text-[11px] text-text-dim">{t("packets.hop", { count: route.totalHops })}</span>
       </div>
       <div className="flex flex-wrap items-center gap-1 font-mono text-[13px]">
         <HopChain hops={route.sourceSegment} />
@@ -74,7 +77,8 @@ function CrossRouteCard({ route }: { route: CrossIATARoute }) {
   );
 }
 
-const COLUMNS: Column<KnownRoute>[] = [
+function routeColumns(t: TFunction): Column<KnownRoute>[] {
+  return [
   {
     header: "IATA",
     sortValue: (r) => r.iata,
@@ -82,11 +86,13 @@ const COLUMNS: Column<KnownRoute>[] = [
   },
   {
     header: "Hops",
+    label: t("packets.hops"),
     sortValue: (r) => r.hopCount,
     cell: (r) => r.hopCount,
   },
   {
     header: "Route",
+    label: t("routes.route"),
     cell: (r) => <RouteHopChain route={r} />,
   },
   {
@@ -97,30 +103,33 @@ const COLUMNS: Column<KnownRoute>[] = [
   },
   {
     header: "First seen",
+    label: t("routes.firstSeen"),
     className: "text-text-muted",
     sortValue: (r) => r.firstSeen,
     cell: (r) => <Timestamp value={r.firstSeen} />,
   },
   {
     header: "Last seen",
+    label: t("routes.lastSeen"),
     className: "text-text-muted",
     sortValue: (r) => r.lastSeen,
     cell: (r) => <Timestamp value={r.lastSeen} />,
   },
-];
+  ];
+}
 
-function renderRouteCard(r: KnownRoute) {
+function renderRouteCard(r: KnownRoute, t: TFunction) {
   return (
     <div className="flex flex-col gap-1.5">
       <div className="flex items-center justify-between gap-2">
         <Badge variant="default">{r.iata}</Badge>
-        <span className="font-mono text-[11px] text-text-dim">{r.hopCount} hops · {r.observationCount.toLocaleString()} obs</span>
+        <span className="font-mono text-[11px] text-text-dim">{t("routes.summary", { hops: r.hopCount, observations: r.observationCount.toLocaleString() })}</span>
       </div>
       <RouteHopChain route={r} />
       <div className="flex items-center gap-2 font-mono text-[11px] text-text-muted">
-        <span>first <Timestamp value={r.firstSeen} /></span>
+        <span>{t("common.first")} <Timestamp value={r.firstSeen} /></span>
         <span aria-hidden>·</span>
-        <span>last <Timestamp value={r.lastSeen} /></span>
+        <span>{t("common.last")} <Timestamp value={r.lastSeen} /></span>
       </div>
     </div>
   );
@@ -141,7 +150,9 @@ function directedPairs(iatas: string[]): [string, string][] {
 }
 
 export function RouteTable() {
+  const { t } = useTranslation();
   const { iatas, regionKey } = useRegion();
+  const columns = useMemo(() => routeColumns(t), [t]);
 
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
 
@@ -254,10 +265,10 @@ export function RouteTable() {
       {/* stacks into two rows on mobile (the inputs would otherwise wrap around the arrow); one row at md+ */}
       <div className="flex flex-col md:flex-row md:flex-wrap md:items-center gap-1.5 gap-y-1.5 px-4 py-2 border-b border-border-subtle bg-bg-base shrink-0">
         <div className="flex items-center gap-1.5">
-          <span className="text-text-muted text-[11px] uppercase tracking-wider mr-1 shrink-0">Find path</span>
+          <span className="text-text-muted text-[11px] uppercase tracking-wider mr-1 shrink-0">{t("routes.findPath")}</span>
           <input
             className={`${inputClass} flex-1 min-w-0 md:flex-none md:w-24`}
-            placeholder="from hash"
+            placeholder={t("routes.fromHash")}
             value={from}
             onChange={(e) => setFrom(e.target.value)}
             onKeyDown={onKeyDown}
@@ -265,7 +276,7 @@ export function RouteTable() {
           <span className="text-text-dim text-xs shrink-0" aria-hidden>→</span>
           <input
             className={`${inputClass} flex-1 min-w-0 md:flex-none md:w-24`}
-            placeholder="to hash"
+            placeholder={t("routes.toHash")}
             value={to}
             onChange={(e) => setTo(e.target.value)}
             onKeyDown={onKeyDown}
@@ -285,7 +296,7 @@ export function RouteTable() {
             disabled={!canSearch}
             className="text-[11px] font-mono px-2 py-1 rounded-sm border border-border bg-bg-surface text-text-normal hover:border-primary-dim disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors"
           >
-            Search
+            {t("routes.search")}
           </button>
           {search && (
             <button
@@ -293,7 +304,7 @@ export function RouteTable() {
               onClick={clearSearch}
               className="text-[11px] font-mono px-2 py-1 rounded-sm text-text-dim hover:text-text-normal cursor-pointer transition-colors"
             >
-              Clear
+              {t("common.clear")}
             </button>
           )}
         </div>
@@ -303,29 +314,29 @@ export function RouteTable() {
         {isCross ? (
           <div className="flex-1 min-w-0 overflow-y-auto p-3 flex flex-col gap-2">
             {crossLoading ? (
-              <div className="font-mono text-[13px] text-text-dim">Searching…</div>
+              <div className="font-mono text-[13px] text-text-dim">{t("routes.searching")}</div>
             ) : crossRoutes && crossRoutes.length > 0 ? (
               crossRoutes.map((r, i) => <CrossRouteCard key={i} route={r} />)
             ) : (
-              <div className="font-mono text-[13px] text-text-dim">No cross-IATA routes</div>
+              <div className="font-mono text-[13px] text-text-dim">{t("routes.noCrossIata")}</div>
             )}
           </div>
         ) : (
           <div className="relative flex-1 min-w-0 flex flex-col min-h-0">
             <DataTable
-              columns={COLUMNS}
+              columns={columns}
               rows={rows}
               rowKey={(r) => String(r.id)}
               selectedKey={selectedKey}
               onSelect={setSelectedKey}
               isLoading={search ? searchLoading : listLoading}
-              emptyLabel={search ? "No matching routes" : "No routes"}
+              emptyLabel={t(search ? "routes.noMatching" : "routes.none")}
               defaultSort={{ header: "Last seen", direction: "desc" }}
               onEndReached={search ? undefined : loadMore}
-              renderCard={renderRouteCard}
+              renderCard={(route) => renderRouteCard(route, t)}
             />
             {!search && (
-              <LoadingPill loading={isPaging} error={isError} count={loadedCount} noun="routes" position="bottom-3 right-3" />
+              <LoadingPill loading={isPaging} error={isError} count={loadedCount} noun={t("routes.noun")} position="bottom-3 right-3" />
             )}
           </div>
         )}

@@ -1,5 +1,6 @@
 import type { Observer, AdvertObservation } from "./types";
 import { useQuery } from "@tanstack/react-query";
+import { useTranslation } from "react-i18next";
 import { getObserver, getObserverAdverts } from "../../api/client";
 import { Badge } from "../../components/Badge";
 import { DetailPanel, Section, Field } from "../../components/DetailPanel";
@@ -14,6 +15,7 @@ import { IataChip } from "../../components/IataChip";
 import { ScopeTag } from "../../components/ScopeTag";
 
 function AdvertRow({ advert, onClick }: { advert: AdvertObservation; onClick?: () => void }) {
+  const { t } = useTranslation();
   const level = snrLevel(advert.snr);
   return (
     <div
@@ -22,7 +24,7 @@ function AdvertRow({ advert, onClick }: { advert: AdvertObservation; onClick?: (
     >
       <div className="flex items-center gap-2 text-[11px] mb-1.5">
         <span className={`font-mono font-semibold tracking-wider truncate ${advert.nodeName ? "text-primary" : "text-text-dim italic"}`}>
-          {advert.nodeName ?? (advert.nodePublicKey ? formatHex(advert.nodePublicKey) : "unknown")}
+          {advert.nodeName ?? (advert.nodePublicKey ? formatHex(advert.nodePublicKey) : t("packets.unknown"))}
         </span>
         <IataChip>{advert.iata}</IataChip>
         <Timestamp value={advert.heardAt} className="text-text-dim ml-auto font-mono text-[11px]" />
@@ -37,7 +39,7 @@ function AdvertRow({ advert, onClick }: { advert: AdvertObservation; onClick?: (
           <span className={`font-medium ${level ? SIGNAL_LEVEL_CLASSES[level] : "text-text-normal"}`}>{advert.rssi ?? "—"}</span>
         </div>
         <div className="flex flex-col">
-          <span className="text-text-dim text-[10px] font-medium uppercase tracking-wider">Hops</span>
+          <span className="text-text-dim text-[10px] font-medium uppercase tracking-wider">{t("packets.hops")}</span>
           <span className="font-medium text-text-normal">{advert.hopCount ?? "—"}</span>
         </div>
       </div>
@@ -77,6 +79,7 @@ function formatAirtime(secs: number): string {
 }
 
 function RadioSection({ observer, noiseFloor }: { observer: Observer; noiseFloor?: number | null }) {
+  const { t } = useTranslation();
   const parts = [
     observer.radioFreqMhz && `${observer.radioFreqMhz} MHz`,
     observer.radioSf && `SF${observer.radioSf}`,
@@ -85,13 +88,13 @@ function RadioSection({ observer, noiseFloor }: { observer: Observer; noiseFloor
   ].filter(Boolean) as string[];
 
   return (
-    <Section title="Radio">
+    <Section title={t("entities.radio")}>
       <div className="font-mono text-[13px] text-text-muted">
         {parts.join(" · ")}
       </div>
       {noiseFloor != null && (
         <div className="font-mono text-[13px] mt-1">
-          <Field label="Noise floor" value={`${noiseFloor} dBm`} />
+          <Field label={t("details.noiseFloor")} value={`${noiseFloor} dBm`} />
         </div>
       )}
     </Section>
@@ -106,6 +109,7 @@ interface ObserverDetailPanelProps {
 }
 
 export function ObserverDetailPanel({ observerId, onClose, onAnalyzePacket, onViewStats }: ObserverDetailPanelProps) {
+  const { t } = useTranslation();
   const { data: observer, isLoading } = useQuery({
     queryKey: ["observer", observerId],
     queryFn: () => getObserver(observerId),
@@ -124,12 +128,12 @@ export function ObserverDetailPanel({ observerId, onClose, onAnalyzePacket, onVi
 
   return (
     <DetailPanel
-      title="Observer Detail"
+      title={t("observers.detail")}
       onClose={onClose}
-      headerAction={<CopyLinkButton params={{ tab: "Observers", observer: observerId }} ariaLabel="Copy observer link" />}
+      headerAction={<CopyLinkButton params={{ tab: "Observers", observer: observerId }} ariaLabel={t("observers.copyLink")} />}
       isLoading={isLoading}
       notFound={!observer}
-      notFoundLabel="Observer not found"
+      notFoundLabel={t("observers.notFound")}
       notFoundIcon={
         <svg width="28" height="28" viewBox="0 0 24 24" fill="none" className="text-border">
           <circle cx="12" cy="8" r="4" stroke="currentColor" strokeWidth="1.2" />
@@ -139,23 +143,23 @@ export function ObserverDetailPanel({ observerId, onClose, onAnalyzePacket, onVi
     >
       {observer && (
         <>
-          <Section title="Summary" first>
+          <Section title={t("details.summary")} first>
               <div className="flex items-center gap-2 mb-2">
                 <span className="font-mono text-xs font-semibold text-primary tracking-wider">
                   {observer.displayName ?? observer.id.slice(0, 8)}
                 </span>
                 <Badge variant={status === "online" ? "live" : "offline"}>
-                  {status}
+                  {status ? t(`options.${status}`) : status}
                 </Badge>
               </div>
               <div className="flex items-center gap-2 mb-1.5">
                 <div className="font-mono text-[13px] text-text-muted truncate min-w-0 flex-1" title={observer.publicKey}>
                   {observer.publicKey}
                 </div>
-                <CopyButton value={observer.publicKey} ariaLabel="Copy public key" className="shrink-0" />
+                <CopyButton value={observer.publicKey} ariaLabel={t("nodes.copyPublicKey")} className="shrink-0" />
               </div>
               <div className="flex items-center gap-3 font-mono text-[13px]">
-                <Field label="Observations" value={observer.observationCount.toLocaleString()} />
+                <Field label={t("details.observations")} value={observer.observationCount.toLocaleString()} />
               </div>
               <div className="flex flex-wrap items-center gap-2 mt-1.5">
                 {observer.observerType && <Badge variant="default">{observer.observerType}</Badge>}
@@ -173,7 +177,7 @@ export function ObserverDetailPanel({ observerId, onClose, onAnalyzePacket, onVi
                   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden>
                     <path d="M4 20V4M4 20h16M8 16v-4M13 16V8M18 16v-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
                   </svg>
-                  Statistics
+                  {t("details.statistics")}
                 </button>
               )}
             </Section>
@@ -183,45 +187,45 @@ export function ObserverDetailPanel({ observerId, onClose, onAnalyzePacket, onVi
             )}
 
             {(observer.firmwareVersion || observer.softwareVersion || observer.hardwareModel) && (
-              <Section title="Firmware">
+              <Section title={t("details.firmware")}>
                 <div className="flex flex-col gap-0.5 font-mono text-[13px]">
-                  {observer.firmwareVersion && <Field label="Version" value={observer.firmwareVersion} />}
-                  {observer.softwareVersion && <Field label="Software" value={observer.softwareVersion} />}
-                  {observer.hardwareModel && <Field label="Hardware" value={observer.hardwareModel} />}
+                  {observer.firmwareVersion && <Field label={t("details.version")} value={observer.firmwareVersion} />}
+                  {observer.softwareVersion && <Field label={t("details.software")} value={observer.softwareVersion} />}
+                  {observer.hardwareModel && <Field label={t("details.hardware")} value={observer.hardwareModel} />}
                 </div>
               </Section>
             )}
 
-            <Section title="Status">
+            <Section title={t("entities.status")}>
               <div className="flex flex-wrap gap-x-4 gap-y-0.5 font-mono text-[13px]">
-                {observer.batteryLevel != null && <Field label="Battery" value={formatBattery(observer.batteryLevel)} />}
-                {observer.uptimeSeconds != null && <Field label="Uptime" value={formatUptime(observer.uptimeSeconds)} />}
-                {stats?.queue_len != null && <Field label="Queue" value={stats.queue_len} />}
+                {observer.batteryLevel != null && <Field label={t("details.battery")} value={formatBattery(observer.batteryLevel)} />}
+                {observer.uptimeSeconds != null && <Field label={t("details.uptime")} value={formatUptime(observer.uptimeSeconds)} />}
+                {stats?.queue_len != null && <Field label={t("details.queue")} value={stats.queue_len} />}
               </div>
               {observer.lastStatusAt && (
                 <div className="font-mono text-[13px] mt-1">
-                  <Field label="Last status" value={<Timestamp value={observer.lastStatusAt} />} />
+                  <Field label={t("details.lastStatus")} value={<Timestamp value={observer.lastStatusAt} />} />
                 </div>
               )}
             </Section>
 
             {stats && (stats.rx_air_secs != null || stats.tx_air_secs != null || stats.recv_errors != null) && (
-              <Section title="Airtime">
+              <Section title={t("details.airtime")}>
                 <div className="flex flex-wrap gap-x-4 gap-y-0.5 font-mono text-[13px]">
                   {stats.rx_air_secs != null && <Field label="RX" value={formatAirtime(stats.rx_air_secs)} />}
                   {stats.tx_air_secs != null && <Field label="TX" value={formatAirtime(stats.tx_air_secs)} />}
                 </div>
                 {(stats.recv_errors != null || stats.errors != null) && (
                   <div className="flex flex-wrap gap-x-4 gap-y-0.5 font-mono text-[13px] mt-1">
-                    {stats.recv_errors != null && <Field label="Recv errors" value={stats.recv_errors.toLocaleString()} />}
-                    {stats.errors != null && <Field label="Errors" value={stats.errors.toLocaleString()} />}
+                    {stats.recv_errors != null && <Field label={t("details.receiveErrors")} value={stats.recv_errors.toLocaleString()} />}
+                    {stats.errors != null && <Field label={t("details.errors")} value={stats.errors.toLocaleString()} />}
                   </div>
                 )}
               </Section>
             )}
 
             {observer.brokers.length > 0 && (
-              <Section title="Brokers">
+              <Section title={t("details.brokers")}>
                 <div className="flex flex-col gap-1.5">
                   {[...observer.brokers].sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true })).map((b) => {
                     const variant = brokerStatusVariant(b.lastPacketAt);
@@ -229,8 +233,8 @@ export function ObserverDetailPanel({ observerId, onClose, onAnalyzePacket, onVi
                       <div key={b.name} className="flex items-center gap-3">
                         <Badge variant={variant}>{b.name}</Badge>
                         <div className="flex items-center gap-3 font-mono text-[13px]">
-                          <Field label="Seen" value={<Timestamp value={b.lastSeenAt} />} />
-                          <Field label="Packet" value={b.lastPacketAt ? <Timestamp value={b.lastPacketAt} /> : "—"} />
+                          <Field label={t("details.seen")} value={<Timestamp value={b.lastSeenAt} />} />
+                          <Field label={t("details.packet")} value={b.lastPacketAt ? <Timestamp value={b.lastPacketAt} /> : "—"} />
                         </div>
                       </div>
                     );
@@ -239,7 +243,7 @@ export function ObserverDetailPanel({ observerId, onClose, onAnalyzePacket, onVi
               </Section>
             )}
 
-            <Section title="Adverts heard">
+            <Section title={t("observers.advertsHeard")}>
               {adverts && adverts.items.length > 0 ? (
                 <div className="flex flex-col gap-1.5">
                   {adverts.items.map((a) => (
@@ -251,15 +255,15 @@ export function ObserverDetailPanel({ observerId, onClose, onAnalyzePacket, onVi
                   ))}
                 </div>
               ) : (
-                <div className="font-mono text-[13px] text-text-dim">No adverts heard</div>
+                <div className="font-mono text-[13px] text-text-dim">{t("observers.noAdvertsHeard")}</div>
               )}
             </Section>
 
-            <Section title="Timestamps">
+            <Section title={t("details.timestamps")}>
               <div className="flex items-center gap-3 font-mono text-[13px]">
-                <Field label="First" value={<Timestamp value={observer.firstSeen} />} />
+                <Field label={t("common.first")} value={<Timestamp value={observer.firstSeen} />} />
                 <span className="text-[6px] text-border" aria-hidden>·</span>
-                <Field label="Last" value={<Timestamp value={observer.lastSeen} />} />
+                <Field label={t("common.last")} value={<Timestamp value={observer.lastSeen} />} />
               </div>
             </Section>
         </>

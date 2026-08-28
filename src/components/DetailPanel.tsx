@@ -1,4 +1,5 @@
 import { useState, type ReactNode } from "react";
+import { useTranslation } from "react-i18next";
 import { CloseButton } from "./CloseButton";
 
 // shared scaffolding for the right-hand entity detail panels (observers, nodes, …)
@@ -20,11 +21,12 @@ export function Field({ label, value }: { label: string; value: ReactNode }) {
 
 // Minimize/expand toggle for the mobile overlay only; at md+ the panel is a sidebar so it's hidden.
 function MinimizeButton({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => void }) {
+  const { t } = useTranslation();
   return (
     <button
       type="button"
       onClick={onToggle}
-      aria-label={collapsed ? "Expand detail panel" : "Minimize detail panel"}
+      aria-label={collapsed ? t("detailPanel.expand") : t("detailPanel.minimize")}
       className="md:hidden flex items-center justify-center w-9 h-9 rounded text-text-muted hover:text-text-bright hover:bg-text-normal/5 cursor-pointer transition-colors"
     >
       <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
@@ -49,7 +51,8 @@ interface DetailPanelProps {
   children: ReactNode;
 }
 
-export function DetailPanel({ title, onClose, collapsible, isLoading, notFound, notFoundIcon, notFoundLabel = "Not found", headerAction, children }: DetailPanelProps) {
+export function DetailPanel({ title, onClose, collapsible, isLoading, notFound, notFoundIcon, notFoundLabel, headerAction, children }: DetailPanelProps) {
+  const { t } = useTranslation();
   const [collapsed, setCollapsed] = useState(false);
   // collapse only touches the mobile overlay: shrink to a bottom bar and hide the body. The md:*
   // classes below always win at desktop width, so a lingering collapsed state never hides the sidebar.
@@ -62,7 +65,7 @@ export function DetailPanel({ title, onClose, collapsible, isLoading, notFound, 
           {headerAction}
           <div className="flex items-center gap-0.5">
             {collapsible && <MinimizeButton collapsed={collapsed} onToggle={() => setCollapsed((v) => !v)} />}
-            <CloseButton onClose={onClose} label="Close detail panel" />
+            <CloseButton onClose={onClose} label={t("detailPanel.close")} />
           </div>
         </div>
       </div>
@@ -70,12 +73,12 @@ export function DetailPanel({ title, onClose, collapsible, isLoading, notFound, 
       <div className={`flex-1 overflow-y-auto min-h-0 ${minimized ? "hidden md:block" : ""}`}>
         {isLoading ? (
           <div className="flex flex-col items-center justify-center h-full gap-2.5 text-text-dim">
-            <span className="text-[13px] font-mono">Loading...</span>
+            <span className="text-[13px] font-mono">{t("common.loading")}</span>
           </div>
         ) : notFound ? (
           <div className="flex flex-col items-center justify-center h-full gap-2.5 text-text-dim">
             {notFoundIcon}
-            <span className="text-[13px] font-mono">{notFoundLabel}</span>
+            <span className="text-[13px] font-mono">{notFoundLabel ?? t("common.notFound")}</span>
           </div>
         ) : (
           children
