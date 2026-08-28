@@ -1,12 +1,13 @@
-// Meshat.se wordmark: rounded logo tile + wordmark, inlined from the original SVG so colors
-// follow the active theme — an <img> can't inherit CSS, which made the mark vanish in light
-// mode. The tile uses --palette-primary, the text currentColor; the glyph stays white on the tile.
+// Meshat.se wordmark: rounded logo tile + wordmark, inlined from the original SVG so the text can
+// follow the active theme — an <img> can't inherit CSS, which made the mark vanish in light mode.
+// The tile keeps the fixed brand green (#1f7a3d) with the white glyph in both themes; only the
+// wordmark text recolors (currentColor).
 export function MeshatWordmark({ className }: { className?: string }) {
   return (
     <span className={`inline-flex h-7 items-center text-text-bright ${className ?? ""}`}>
       <svg viewBox="0 0 393 120" className="block h-full w-auto max-w-full" role="img" aria-label="Meshat.se">
         <g transform="translate(12 12) scale(4)">
-          <rect width="24" height="24" rx="5" fill="var(--palette-primary)" />
+          <rect width="24" height="24" rx="5" fill="#1f7a3d" />
           <g
             transform="translate(2 2) scale(0.8333333333)"
             fill="none"
