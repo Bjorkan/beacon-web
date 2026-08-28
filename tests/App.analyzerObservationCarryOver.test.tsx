@@ -1,6 +1,8 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, fireEvent, within } from "@testing-library/react";
+import { createMemoryHistory } from "@tanstack/react-router";
 import { App } from "../src/App";
+import { createAppRouter } from "../src/router";
 import type { PacketSummary, PacketDetail } from "../src/types/api";
 
 // Full-app wiring test for the App.tsx <-> PacketExpansion <-> PacketAnalyzerDrawer coupling.
@@ -115,7 +117,6 @@ vi.mock("../src/features/packets/PacketVirtualList", async () => {
 
 beforeEach(() => {
   vi.stubGlobal("localStorage", { getItem: () => null, setItem: () => {}, removeItem: () => {}, clear: () => {} });
-  window.history.pushState({}, "", "/?tab=Packets");
 });
 
 afterEach(() => {
@@ -127,7 +128,8 @@ describe("opening the analyzer from an expanded row", () => {
   // observation inside the expanded row landed the analyzer on observations[0] instead of the one
   // clicked. Selecting an observation is now what opens the analyzer, so the two happen together.
   it("keeps the observation selected in the expanded row", async () => {
-    render(<App />);
+    const appRouter = createAppRouter(createMemoryHistory({ initialEntries: ["/packets"] }));
+    render(<App appRouter={appRouter} />);
 
     fireEvent.click(await screen.findByRole("button", { name: "AA11" }));
     fireEvent.click(await screen.findByText("Observer Three"));

@@ -4,8 +4,6 @@ import {
   isAllRegions,
   resolveIatas,
   regionKey,
-  parseSelection,
-  selectionToParams,
   serializeSelection,
   deserializeSelection,
   type RegionSelection,
@@ -60,48 +58,6 @@ describe("regionKey", () => {
 
   it("joins the resolved IATAs for a stable query key", () => {
     expect(regionKey(["YVR", "YYJ"])).toBe("YVR,YYJ");
-  });
-});
-
-describe("parseSelection", () => {
-  it("reads ?iata as a comma-separated, upper-cased IATA list", () => {
-    expect(parseSelection(new URLSearchParams("iata=YVR,yyj"))).toEqual({ regions: [], iatas: ["YVR", "YYJ"] });
-  });
-
-  it("reads ?regions as a comma-separated slug list", () => {
-    expect(parseSelection(new URLSearchParams("regions=western-canada,cascadia"))).toEqual({
-      regions: ["western-canada", "cascadia"],
-      iatas: [],
-    });
-  });
-
-  it("folds a legacy single ?region into an IATA (back-compat with old shared links)", () => {
-    expect(parseSelection(new URLSearchParams("region=yvr"))).toEqual({ regions: [], iatas: ["YVR"] });
-  });
-
-  it("combines regions and iatas, and is empty for no params", () => {
-    expect(parseSelection(new URLSearchParams("regions=cascadia&iata=YYZ"))).toEqual({
-      regions: ["cascadia"],
-      iatas: ["YYZ"],
-    });
-    expect(parseSelection(new URLSearchParams(""))).toEqual(ALL_REGIONS);
-  });
-});
-
-describe("selectionToParams", () => {
-  it("writes iata + regions and drops the legacy region param", () => {
-    const base = new URLSearchParams("region=OLD&tab=Packets");
-    const next = selectionToParams({ regions: ["cascadia"], iatas: ["YVR", "YYJ"] }, base);
-    expect(next.get("iata")).toBe("YVR,YYJ");
-    expect(next.get("regions")).toBe("cascadia");
-    expect(next.has("region")).toBe(false);
-    expect(next.get("tab")).toBe("Packets"); // unrelated params are preserved
-  });
-
-  it("clears the params for the all-regions selection", () => {
-    const next = selectionToParams(ALL_REGIONS, new URLSearchParams("iata=YVR&regions=cascadia"));
-    expect(next.has("iata")).toBe(false);
-    expect(next.has("regions")).toBe(false);
   });
 });
 

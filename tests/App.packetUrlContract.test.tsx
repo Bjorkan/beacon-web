@@ -1,6 +1,8 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { createMemoryHistory } from "@tanstack/react-router";
 import { App } from "../src/App";
+import { createAppRouter } from "../src/router";
 import type { PacketSummary, PacketDetail } from "../src/types/api";
 
 // The Packets tab's URL contract, exercised through a real App: ?hash expands a row, ?analyze=1 adds
@@ -135,30 +137,33 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
+function renderApp(url: string) {
+  const appRouter = createAppRouter(createMemoryHistory({ initialEntries: [url] }));
+  render(<App appRouter={appRouter} />);
+  return appRouter;
+}
+
 describe("Packets deep links", () => {
   it("restores the expanded row and the drawer from ?hash&analyze=1", async () => {
-    window.history.pushState({}, "", "/?tab=Packets&hash=AA11&analyze=1");
-    render(<App />);
+    renderApp("/?tab=Packets&hash=AA11&analyze=1");
 
     expect(await screen.findByTestId("packet-expansion")).toBeInTheDocument();
     expect(screen.getByTestId("packet-analyzer-drawer")).toBeInTheDocument();
   });
 
   it("expands the row without the drawer from ?hash alone", async () => {
-    window.history.pushState({}, "", "/?tab=Packets&hash=AA11");
-    render(<App />);
+    renderApp("/?tab=Packets&hash=AA11");
 
     expect(await screen.findByTestId("packet-expansion")).toBeInTheDocument();
-    expect(screen.queryByTestId("packet-analyzer-drawer")).not.toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByTestId("packet-analyzer-drawer")).not.toBeInTheDocument());
   });
 
   it("opens nothing when ?analyze=1 arrives without a hash", async () => {
-    window.history.pushState({}, "", "/?tab=Packets&analyze=1");
-    render(<App />);
+    renderApp("/?tab=Packets&analyze=1");
 
     expect(await screen.findByRole("button", { name: "AA11" })).toBeInTheDocument();
     expect(screen.queryByTestId("packet-expansion")).not.toBeInTheDocument();
-    expect(screen.queryByTestId("packet-analyzer-drawer")).not.toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByTestId("packet-analyzer-drawer")).not.toBeInTheDocument());
   });
 });
 
@@ -167,23 +172,21 @@ describe("leaving the Packets tab", () => {
   // to drop ?analyze or the analyzer covers the tab the user just asked for.
   it("closes the analyzer on mobile", async () => {
     setMobile(true);
-    window.history.pushState({}, "", "/?tab=Packets&hash=AA11&analyze=1");
-    render(<App />);
+    renderApp("/?tab=Packets&hash=AA11&analyze=1");
     expect(await screen.findByTestId("packet-analyzer-drawer")).toBeInTheDocument();
 
     fireEvent.click(screen.getAllByRole("tab", { name: "Channels" })[0]!);
 
-    expect(screen.queryByTestId("packet-analyzer-drawer")).not.toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByTestId("packet-analyzer-drawer")).not.toBeInTheDocument());
   });
 
   it("keeps the analyzer open on desktop", async () => {
     setMobile(false);
-    window.history.pushState({}, "", "/?tab=Packets&hash=AA11&analyze=1");
-    render(<App />);
+    renderApp("/?tab=Packets&hash=AA11&analyze=1");
     expect(await screen.findByTestId("packet-analyzer-drawer")).toBeInTheDocument();
 
     fireEvent.click(screen.getAllByRole("tab", { name: "Channels" })[0]!);
 
-    expect(screen.getByTestId("packet-analyzer-drawer")).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByTestId("packet-analyzer-drawer")).toBeInTheDocument());
   });
 });

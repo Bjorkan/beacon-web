@@ -1,6 +1,5 @@
-import { useCallback, useMemo } from "react";
+import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
-import { useSearchParams } from "react-router-dom";
 import { CloseButton } from "../../components/CloseButton";
 import { CopyLinkButton } from "../../components/CopyLinkButton";
 import type { PacketDetail } from "../../types/api";
@@ -42,19 +41,8 @@ interface PacketAnalyzerDrawerProps {
 
 export function PacketAnalyzerDrawer({ detail, selectedObservationId, onClose, onSelectObservation, onViewNode, onViewPath, loading }: PacketAnalyzerDrawerProps) {
   const { t } = useTranslation();
-  const [, setSearchParams] = useSearchParams();
 
   const hasPath = useMemo(() => (detail ? buildPacketPaths(detail).length > 0 : false), [detail]);
-
-  // drop ?analyze so a reload doesn't reopen the drawer; ?hash stays, leaving the row expanded
-  const handleClose = useCallback(() => {
-    setSearchParams((p) => {
-      const n = new URLSearchParams(p);
-      n.delete("analyze");
-      return n;
-    }, { replace: true });
-    onClose();
-  }, [setSearchParams, onClose]);
 
   const selectedObs = detail?.observations.find((o) => o.id === selectedObservationId)
     ?? detail?.observations[0]
@@ -74,8 +62,8 @@ export function PacketAnalyzerDrawer({ detail, selectedObservationId, onClose, o
       <div className="flex items-center justify-between px-3 py-2 border-b border-border-subtle shrink-0">
         <span className="text-[13px] font-mono font-medium text-text-dim uppercase tracking-wider">{t("packets.analyzer")}</span>
         <div className="flex items-center gap-1.5">
-          {detail && <CopyLinkButton params={{ tab: "Packets", hash: detail.packetHash, analyze: "1" }} ariaLabel={t("packets.copyLink")} />}
-          <CloseButton onClose={handleClose} label={t("packets.closeAnalyzer")} className="-mr-1" />
+          {detail && <CopyLinkButton to="/packets" params={{ hash: detail.packetHash, analyze: "1" }} ariaLabel={t("packets.copyLink")} />}
+          <CloseButton onClose={onClose} label={t("packets.closeAnalyzer")} className="-mr-1" />
         </div>
       </div>
 

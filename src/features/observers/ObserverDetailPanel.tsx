@@ -122,7 +122,7 @@ export function ObserverDetailPanel({ observerId, onClose, onAnalyzePacket, onVi
     <DetailPanel
       title={t("observers.detail")}
       onClose={onClose}
-      headerAction={<CopyLinkButton params={{ tab: "Observers", observer: observerId }} ariaLabel={t("observers.copyLink")} />}
+      headerAction={<CopyLinkButton to={`/observers/${encodeURIComponent(observerId)}`} params={{}} ariaLabel={t("observers.copyLink")} />}
       isLoading={isLoading}
       notFound={!observer}
       notFoundLabel={t("observers.notFound")}

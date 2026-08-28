@@ -1,5 +1,9 @@
 import { describe, it, expect } from "vitest";
-import { parseMapView, buildMapParams, type MapViewSnapshot } from "../../../src/features/map/map-url";
+import { parseMapViewSearch, buildMapParams, type MapViewSnapshot } from "../../../src/features/map/map-url";
+
+function parseMapView(params: URLSearchParams) {
+  return parseMapViewSearch(Object.fromEntries(params.entries()));
+}
 
 // URLSearchParams from a build result, skipping deleted (null) keys — models what the copy button does.
 function toParams(built: Record<string, string | null>): URLSearchParams {

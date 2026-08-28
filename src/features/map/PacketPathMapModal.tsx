@@ -60,7 +60,8 @@ export function PacketPathMapModal({ detail, onClose, initialSelectedKey }: {
           <span className="text-[13px] font-mono font-medium text-text-dim uppercase tracking-wider">{t("map.packetPath")}</span>
           <div className="flex items-center gap-1.5">
             <CopyLinkButton
-              params={() => ({ tab: "Packets", hash: detail.packetHash, path: selectedKey ?? "all", analyze: null })}
+              to="/packets"
+              params={() => ({ hash: detail.packetHash, path: selectedKey ?? "all", analyze: null })}
               ariaLabel={t("map.copyPathLink")}
             />
             <CloseButton onClose={onClose} label={t("map.closePath")} className="-mr-1" />

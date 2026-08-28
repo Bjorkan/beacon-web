@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect, useMemo } from "react";
 import { useTranslation } from "react-i18next";
-import { useSearchParams } from "react-router-dom";
+import { useNavigate, useSearch } from "@tanstack/react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { packetQueries } from "../../api/queries";
 import { usePackets } from "./usePackets";
@@ -42,7 +42,8 @@ interface PacketListProps {
 
 export function PacketList({ wsManager, onAnalyze, onViewPath, selectedObservationId, onSelectObservation }: PacketListProps) {
   const { t } = useTranslation();
-  const [searchParams, setSearchParams] = useSearchParams();
+  const search = useSearch({ from: "__root__" });
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { filters, setFilter, setSearch, setSearchField, clearFilters } = usePacketFilters();
   // single-value selections go to the server so scrolling pages through matching history
@@ -80,16 +81,20 @@ export function PacketList({ wsManager, onAnalyze, onViewPath, selectedObservati
   );
 
   // ?hash is the selected packet — it expands the row inline. The analyzer is a separate state (?analyze=1).
-  const expandedHash = searchParams.get("hash");
+  const expandedHash = search.hash ?? null;
 
   const handleToggleExpand = useCallback((hash: string) => {
     const next = expandedHash === hash ? null : hash;
-    setSearchParams((p) => {
-      const n = new URLSearchParams(p);
-      if (next) n.set("hash", next); else n.delete("hash");
-      return n;
-    }, { replace: true });
-  }, [expandedHash, setSearchParams]);
+    navigate({
+      to: ".",
+      search: (prev: Record<string, unknown>) => {
+        const n = { ...prev };
+        if (next) n.hash = next; else n.hash = undefined;
+        return n;
+      },
+      replace: true,
+    });
+  }, [expandedHash, navigate]);
 
   // Shared with the expanded row's own usePacketDetail, so reading it here costs no extra request.
   const { data: expandedDetail } = usePacketDetail(expandedHash);

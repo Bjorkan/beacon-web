@@ -1,32 +1,19 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
-import { MemoryRouter, useLocation } from "react-router-dom";
 import { PacketAnalyzerDrawer } from "../../../src/features/packets/PacketAnalyzerDrawer";
 import type { PacketDetail } from "../../../src/types/api";
 import { PayloadType, RouteType } from "../../../src/types/enums";
 
-function LocationProbe() {
-  const location = useLocation();
-  return <div data-testid="search">{location.search}</div>;
-}
-
 describe("PacketAnalyzerDrawer close", () => {
-  it("removes ?analyze but keeps ?hash, and calls onClose", () => {
+  it("delegates URL-backed closing to its route owner", () => {
     const onClose = vi.fn();
     render(
-      <MemoryRouter initialEntries={["/?tab=Packets&hash=abc123&analyze=1"]}>
-        <PacketAnalyzerDrawer detail={undefined} selectedObservationId={null} onClose={onClose} />
-        <LocationProbe />
-      </MemoryRouter>,
+      <PacketAnalyzerDrawer detail={undefined} selectedObservationId={null} onClose={onClose} />,
     );
 
     fireEvent.click(screen.getByLabelText("Close analyzer"));
 
     expect(onClose).toHaveBeenCalledOnce();
-    const search = screen.getByTestId("search").textContent ?? "";
-    expect(search).not.toContain("analyze=");
-    expect(search).toContain("hash=abc123"); // row stays expanded
-    expect(search).toContain("tab=Packets"); // other params survive
   });
 });
 
@@ -54,15 +41,13 @@ describe("PacketAnalyzerDrawer copy link", () => {
 
   it("copies a link that reopens the drawer over the expanded row", () => {
     render(
-      <MemoryRouter initialEntries={["/?tab=Packets&hash=abcdef12&analyze=1"]}>
-        <PacketAnalyzerDrawer detail={makeDetail([])} selectedObservationId={null} onClose={() => {}} />
-      </MemoryRouter>,
+      <PacketAnalyzerDrawer detail={makeDetail([])} selectedObservationId={null} onClose={() => {}} />,
     );
 
     fireEvent.click(screen.getByRole("button", { name: "Copy packet link" }));
 
     const copied = new URL(writeText.mock.calls[0]![0] as string);
-    expect(copied.searchParams.get("tab")).toBe("Packets");
+    expect(copied.pathname).toBe("/packets");
     expect(copied.searchParams.get("hash")).toBe("abcdef12");
     expect(copied.searchParams.get("analyze")).toBe("1"); // the drawer is part of the shared state
   });
@@ -72,9 +57,7 @@ describe("PacketAnalyzerDrawer view-path button", () => {
   it("enables the button and calls onViewPath when a path is drawable", () => {
     const onViewPath = vi.fn();
     render(
-      <MemoryRouter initialEntries={["/?tab=Packets"]}>
-        <PacketAnalyzerDrawer detail={makeDetail([hop("a", -79, 43), hop("b", -75, 45)])} selectedObservationId={null} onClose={() => {}} onViewPath={onViewPath} />
-      </MemoryRouter>,
+      <PacketAnalyzerDrawer detail={makeDetail([hop("a", -79, 43), hop("b", -75, 45)])} selectedObservationId={null} onClose={() => {}} onViewPath={onViewPath} />,
     );
     const btn = screen.getByRole("button", { name: /view path on map/i });
     expect(btn).toBeEnabled();
@@ -84,9 +67,7 @@ describe("PacketAnalyzerDrawer view-path button", () => {
 
   it("disables the button when no path is drawable", () => {
     render(
-      <MemoryRouter initialEntries={["/?tab=Packets"]}>
-        <PacketAnalyzerDrawer detail={makeDetail([hop("a", -79, 43)])} selectedObservationId={null} onClose={() => {}} onViewPath={() => {}} />
-      </MemoryRouter>,
+      <PacketAnalyzerDrawer detail={makeDetail([hop("a", -79, 43)])} selectedObservationId={null} onClose={() => {}} onViewPath={() => {}} />,
     );
     expect(screen.getByRole("button", { name: /view path on map/i })).toBeDisabled();
   });
@@ -113,9 +94,7 @@ describe("PacketAnalyzerDrawer TRACE path data", () => {
 
   it("renders TRACE path bytes as resolved Path Data, not raw 'Path SNR Data'", () => {
     render(
-      <MemoryRouter initialEntries={["/?tab=Packets"]}>
-        <PacketAnalyzerDrawer detail={traceDetail()} selectedObservationId={null} onClose={() => {}} />
-      </MemoryRouter>,
+      <PacketAnalyzerDrawer detail={traceDetail()} selectedObservationId={null} onClose={() => {}} />,
     );
     expect(screen.queryByText("Path SNR Data")).not.toBeInTheDocument();
     expect(screen.getByText("Path Data")).toBeInTheDocument();

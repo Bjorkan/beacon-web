@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo } from "react";
+import { useState, useCallback, useEffect, useMemo } from "react";
 import { type TFunction } from "i18next";
 import { useTranslation } from "react-i18next";
 import { useQueryClient, type InfiniteData } from "@tanstack/react-query";
@@ -162,7 +162,7 @@ export function NodeTable({ wsManager, selectedNodeId, onSelectNode }: NodeTable
 
   // page the region's nodes 50 at a time (filters stay server-side, in the query key); rows stream
   // in as each batch lands. Loads once per filter set — WS updates keep them live, no 30s refetch.
-  const { items: nodes, loadedCount, isPaging, isError, isLoading } = useInfinitePages<NodeSummary>({
+  const { items: nodes, loadedCount, isPaging, isError, isLoading, hasMore, loadMore } = useInfinitePages<NodeSummary>({
     options: nodeQueries.list({
       regionKey,
       iatas,
@@ -174,6 +174,7 @@ export function NodeTable({ wsManager, selectedNodeId, onSelectNode }: NodeTable
     }),
     getId: nodeId,
     keepPrevious: true,
+    auto: false,
   });
 
   // scope options are the configured scopes; the filter itself is applied client-side on defaultScope
@@ -183,6 +184,12 @@ export function NodeTable({ wsManager, selectedNodeId, onSelectNode }: NodeTable
     () => (scopeFilter ? nodes.filter((n) => n.defaultScope === scopeFilter) : nodes),
     [nodes, scopeFilter],
   );
+
+  // Scope has no server-side node filter. If the loaded page is sparse after applying it, continue
+  // paging until there is a useful viewport of matches or the result set is exhausted.
+  useEffect(() => {
+    if (scopeFilter && displayNodes.length < 50 && hasMore && !isPaging) loadMore();
+  }, [scopeFilter, displayNodes.length, hasMore, isPaging, loadMore]);
   const columns = useMemo(() => nodeColumns(t), [t]);
 
   const handleNodeUpdate = useCallback(
@@ -236,6 +243,8 @@ export function NodeTable({ wsManager, selectedNodeId, onSelectNode }: NodeTable
           isLoading={isLoading}
           emptyLabel={t("entities.noNodes")}
           defaultSort={{ header: "Name" }}
+          virtualize
+          onEndReached={loadMore}
           renderCard={(node) => renderNodeCard(node, t)}
         />
         <LoadingPill loading={isPaging} error={isError} count={loadedCount} noun={t("entities.nodes")} position="bottom-3 right-3" />

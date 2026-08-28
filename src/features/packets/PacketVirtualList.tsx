@@ -51,6 +51,8 @@ export function PacketVirtualList({
   const atTopRef = useRef(true);
   const prevFirstKeyRef = useRef<string | undefined>(packets[0]?.packetHash);
 
+  // React Compiler deliberately skips components using TanStack Virtual's imperative API.
+  // eslint-disable-next-line react-hooks/incompatible-library
   const virtualizer = useVirtualizer({
     count: packets.length,
     getScrollElement: () => parentRef.current,

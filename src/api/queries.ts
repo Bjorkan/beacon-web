@@ -412,7 +412,7 @@ export const routeQueries = {
       QueryKey,
       number | undefined
     >({
-      queryKey: ["routes", args.iata] as const,
+      queryKey: ["routes", args.iata, args.hopCount ?? ""] as const,
       queryFn: ({ pageParam }) =>
         getKnownRoutesPage({
           iata: args.iata,
@@ -438,7 +438,6 @@ export const routeQueries = {
         "routes-cross",
         args ? args.iatas.slice().sort().join(",") : null,
         args?.fromHash,
-        args?.toHash,
         args?.toHash,
       ] as const,
       queryFn: async () => {

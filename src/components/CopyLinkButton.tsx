@@ -7,11 +7,13 @@ import { VARIANT_CLASSES } from "./badge-utils";
 // `params` may be a static map or a thunk evaluated on click — the thunk form can read live state
 // (e.g. the map camera) and use a null value to delete a key that's now at its default.
 export function CopyLinkButton({
+  to,
   params,
   label,
   copiedLabel,
   ariaLabel,
 }: {
+  to?: string;
   params: Record<string, string> | (() => Record<string, string | null>);
   label?: string;
   copiedLabel?: string;
@@ -24,6 +26,7 @@ export function CopyLinkButton({
 
   const handleCopy = useCallback(() => {
     const url = new URL(window.location.href);
+    if (to) url.pathname = to;
     const resolved = typeof params === "function" ? params() : params;
     for (const [key, value] of Object.entries(resolved)) {
       if (value === null) url.searchParams.delete(key);
@@ -32,7 +35,7 @@ export function CopyLinkButton({
     navigator.clipboard.writeText(url.toString());
     setCopied(true);
     setTimeout(() => setCopied(false), 1500);
-  }, [params]);
+  }, [params, to]);
 
   return (
     <button

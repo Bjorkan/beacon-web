@@ -92,7 +92,7 @@ export function NodeDetailPanel({ nodeId, onClose, onViewObserver, onViewNode, o
       title={t("nodes.detail")}
       onClose={onClose}
       collapsible
-      headerAction={<CopyLinkButton params={{ tab: "Nodes", node: nodeId }} ariaLabel={t("nodes.copyLink")} />}
+      headerAction={<CopyLinkButton to={`/nodes/${encodeURIComponent(nodeId)}`} params={{}} ariaLabel={t("nodes.copyLink")} />}
       isLoading={isLoading}
       notFound={!node}
       notFoundLabel={t("nodes.notFound")}

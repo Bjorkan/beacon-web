@@ -186,7 +186,7 @@ export function RouteTable() {
   });
 
   const { data: crossRoutes, isLoading: crossLoading } = useQuery(
-    routeQueries.cross(search ? { iatas: search.iatas, fromHash: search.from, toHash: search.to } : null),
+    routeQueries.cross(search && isCross ? { iatas: search.iatas, fromHash: search.from, toHash: search.to } : null),
   );
 
   // IATA options for the path-search multi-select, from /iatas (shares the region picker's cached

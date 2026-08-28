@@ -30,11 +30,19 @@ export interface MapViewSnapshot {
 
 const NEIGHBOR_MODES: NeighborLinesMode[] = ["on", "selected", "off"];
 
-function parseCoord(lat: string | null, lng: string | null): [number, number] | undefined {
+function parseCoord(
+  lat: string | null,
+  lng: string | null,
+): [number, number] | undefined {
   if (lat === null || lng === null) return undefined;
   const latN = Number.parseFloat(lat);
   const lngN = Number.parseFloat(lng);
-  if (!Number.isFinite(latN) || !Number.isFinite(lngN) || Math.abs(latN) > 90 || Math.abs(lngN) > 180) {
+  if (
+    !Number.isFinite(latN) ||
+    !Number.isFinite(lngN) ||
+    Math.abs(latN) > 90 ||
+    Math.abs(lngN) > 180
+  ) {
     return undefined;
   }
   return [lngN, latN];
@@ -53,34 +61,53 @@ function parseBool(raw: string | null): boolean | undefined {
   return undefined;
 }
 
-export function parseMapView(params: URLSearchParams): ParsedMapView {
+// Lenient parsing over the plain search object TanStack Router hands to the /map route.
+export function parseMapViewSearch(
+  search: Record<string, unknown>,
+): ParsedMapView {
+  const get = (key: string) => {
+    const value = search[key];
+    if (typeof value === "string" || typeof value === "number") return String(value);
+    if (typeof value === "boolean") return value ? "on" : "off";
+    return null;
+  };
+  return parseMapViewValues(get);
+}
+
+function parseMapViewValues(
+  get: (key: string) => string | null,
+): ParsedMapView {
   const view: ParsedMapView = {};
 
-  const center = parseCoord(params.get("lat"), params.get("lng"));
+  const center = parseCoord(get("lat"), get("lng"));
   if (center) view.center = center;
 
-  const zoom = parseZoom(params.get("zoom"));
+  const zoom = parseZoom(get("zoom"));
   if (zoom !== undefined) view.zoom = zoom;
 
-  const clustered = parseBool(params.get("clustering"));
+  const clustered = parseBool(get("clustering"));
   if (clustered !== undefined) view.clustered = clustered;
 
-  const type = params.get("node_type")?.toLowerCase();
-  if (type && NODE_TYPE_NAMES.includes(type as (typeof NODE_TYPE_NAMES)[number])) view.nodeType = type;
+  const type = get("node_type")?.toLowerCase();
+  if (
+    type &&
+    NODE_TYPE_NAMES.includes(type as (typeof NODE_TYPE_NAMES)[number])
+  )
+    view.nodeType = type;
 
-  const neighbor = params.get("neighbor_lines")?.toLowerCase();
+  const neighbor = get("neighbor_lines")?.toLowerCase();
   if (neighbor && NEIGHBOR_MODES.includes(neighbor as NeighborLinesMode)) {
     view.neighborLines = neighbor as NeighborLinesMode;
   }
 
-  const style = params.get("style")?.toLowerCase();
+  const style = get("style")?.toLowerCase();
   const match = style && MAP_STYLES.find((s) => s.id.toLowerCase() === style);
   if (match) view.styleId = match.id;
 
-  const flow = parseBool(params.get("flow"));
+  const flow = parseBool(get("flow"));
   if (flow !== undefined) view.flow = flow;
 
-  const borders = parseBool(params.get("borders"));
+  const borders = parseBool(get("borders"));
   if (borders !== undefined) view.borders = borders;
 
   return view;
@@ -95,7 +122,9 @@ function round(n: number, dp: number): string {
 // Authoritative param map for a copy-link snapshot: every managed key set to its current value, with
 // node_type deleted (null) when All so a stale ?node_type can't survive. Region/tab are handled by the
 // caller (the URL is built from the address bar, which already carries ?iata).
-export function buildMapParams(view: MapViewSnapshot): Record<string, string | null> {
+export function buildMapParams(
+  view: MapViewSnapshot,
+): Record<string, string | null> {
   return {
     lat: round(view.center[1], 5),
     lng: round(view.center[0], 5),

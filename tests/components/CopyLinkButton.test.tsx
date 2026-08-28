@@ -32,6 +32,15 @@ describe("CopyLinkButton", () => {
     expect(copied.searchParams.get("node")).toBe("abc123");
   });
 
+  it("can target a canonical route while preserving shared search state", () => {
+    window.history.replaceState({}, "", "/packets?iata=ARN");
+    render(<CopyLinkButton to="/nodes/node-7" params={{}} />);
+    fireEvent.click(screen.getByRole("button"));
+    const copied = new URL(writeText.mock.calls[0][0]);
+    expect(copied.pathname).toBe("/nodes/node-7");
+    expect(copied.searchParams.get("iata")).toBe("ARN");
+  });
+
   it("swaps to 'Copied' after clicking, then reverts", () => {
     vi.useFakeTimers();
     try {

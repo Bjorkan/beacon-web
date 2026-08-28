@@ -1,6 +1,5 @@
 import { useCallback, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient, type InfiniteData } from "@tanstack/react-query";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { useMapLibre } from "./useMapLibre";
@@ -13,7 +12,7 @@ import { PacketFlowButton } from "./PacketFlowButton";
 import { useMapNodesData } from "./useMapNodesData";
 import { nodesToFeatureCollection, filterByNodeType, buildNeighborEdges, buildFocusedNeighborEdges, type NeighborEdgeProps } from "./node-geojson";
 import { MapSettingsPanel } from "./MapSettingsPanel";
-import { parseMapView, buildMapParams, type MapViewSnapshot } from "./map-url";
+import { buildMapParams, type MapViewSnapshot, type ParsedMapView } from "./map-url";
 import { MAP_BORDERS_STORAGE_KEY, mapStyleForTheme, resolveMapStyle, MAP_NEIGHBOR_LINES_STORAGE_KEY, MAP_CLUSTER_STORAGE_KEY, MAP_NODE_TYPE_STORAGE_KEY, DEFAULT_CENTER, DEFAULT_ZOOM, type NeighborLinesMode } from "./types";
 import type { FeatureCollection, LineString } from "geojson";
 import { EmptyState } from "../../components/EmptyState";
@@ -32,18 +31,18 @@ const EMPTY_EDGES: FeatureCollection<LineString, NeighborEdgeProps> = { type: "F
 
 interface MapViewProps {
   wsManager: WsManager;
-  // shared with the Nodes tab (lifted to AppInner) so the open NodeDetailPanel stays live
+  // shared with the Nodes tab (lifted to the nodes route) so the open NodeDetailPanel stays live
   selectedNodeId: string | null;
   onSelectNode: (id: string) => void;
+  // validated /map search params, parsed by the router (parseMapViewSearch)
+  urlView: ParsedMapView;
 }
 
-export function MapView({ wsManager, selectedNodeId, onSelectNode }: MapViewProps) {
+export function MapView({ wsManager, selectedNodeId, onSelectNode, urlView }: MapViewProps) {
   const { t } = useTranslation();
   // Deep-link params, read once at mount (like the region's ?iata seed). Each setting below is seeded
   // URL -> localStorage -> default; the URL wins for this session but is never written back to
   // localStorage, so a shared link can't clobber the visitor's saved prefs.
-  const [searchParams] = useSearchParams();
-  const [urlView] = useState(() => parseMapView(searchParams));
 
   const [typeFilter, setTypeFilter] = useState(
     () => urlView.nodeType ?? localStorage.getItem(MAP_NODE_TYPE_STORAGE_KEY) ?? "",
@@ -172,7 +171,7 @@ export function MapView({ wsManager, selectedNodeId, onSelectNode }: MapViewProp
   const isDark = resolveMapStyle(styleId).dark; // drives marker theming + maplibre control chrome
 
   // Snapshot the current view (live camera + settings) into deep-link params for the copy button.
-  // Evaluated at click, so it reads the real camera; forces tab=Map so the link lands on the map.
+  // Evaluated at click, so it reads the real camera. The current route is already /map.
   const buildShareParams = useCallback((): Record<string, string | null> => {
     const map = mapRef.current;
     const center = map?.getCenter();
@@ -186,7 +185,7 @@ export function MapView({ wsManager, selectedNodeId, onSelectNode }: MapViewProp
       flow: packetFlow,
       borders,
     };
-    return { tab: "Map", ...buildMapParams(snapshot) };
+    return buildMapParams(snapshot);
   }, [mapRef, clustered, typeFilter, neighborLines, styleId, packetFlow, borders]);
 
   useMapNodes(mapRef, isReady, geojson, isDark, themeKey, clustered, onSelectNode, selectedNodeId, `${regionKey}:${typeFilter}`);

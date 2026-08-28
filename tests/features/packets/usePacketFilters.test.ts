@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
-import { renderHook } from "@testing-library/react";
+import { renderHook, waitFor } from "@testing-library/react";
 import { createElement, type ReactNode } from "react";
-import { MemoryRouter } from "react-router-dom";
+import { TestRouter } from "../../helpers/test-router";
 import { matchesFilters, toServerFilter, usePacketFilters } from "../../../src/features/packets/usePacketFilters";
 import { EMPTY_FILTERS } from "../../../src/features/packets/types";
 import type { PayloadTypeValue, RouteTypeValue } from "../../../src/types/enums";
@@ -87,20 +87,20 @@ describe("toServerFilter", () => {
 
 function routerAt(url: string) {
   return ({ children }: { children: ReactNode }) =>
-    createElement(MemoryRouter, { initialEntries: [url] }, children);
+    createElement(TestRouter, { initialEntry: url }, children);
 }
 
 describe("usePacketFilters — sf param", () => {
-  it("accepts sf=hash", () => {
+  it("accepts sf=hash", async () => {
     const { result } = renderHook(() => usePacketFilters(), { wrapper: routerAt("/?sf=hash") });
-    expect(result.current.filters.searchField).toBe("hash");
+    await waitFor(() => expect(result.current?.filters.searchField).toBe("hash"));
   });
 
-  it("falls back to hash for unimplemented sf values", () => {
+  it("falls back to hash for unimplemented sf values", async () => {
     // path/payload search isn't implemented — accepting them would silently match everything
     for (const sf of ["path", "payload", "bogus"]) {
       const { result } = renderHook(() => usePacketFilters(), { wrapper: routerAt(`/?sf=${sf}&q=ab`) });
-      expect(result.current.filters.searchField).toBe("hash");
+      await waitFor(() => expect(result.current?.filters.searchField).toBe("hash"));
     }
   });
 });

@@ -75,7 +75,7 @@ describe("usePackets gap healing", () => {
     // simulate deep scroll state, then a lag notice
     seedThreePages(qc);
     getPackets.mockClear();
-    result.current.handleLagged({ v: 1, type: "lagged", droppedCount: 5, since: 0, lastObservationId: 0 });
+    act(() => result.current.handleLagged({ v: 1, type: "lagged", droppedCount: 5, since: 0, lastObservationId: 0 }));
 
     await waitFor(() => expect(getPackets).toHaveBeenCalled());
     await waitFor(() => {
@@ -204,7 +204,7 @@ describe("usePackets server filter", () => {
       pageParams: [undefined, 200, 100],
     });
     getPackets.mockClear();
-    result.current.handleLagged({ v: 1, type: "lagged", droppedCount: 5, since: 0, lastObservationId: 0 });
+    act(() => result.current.handleLagged({ v: 1, type: "lagged", droppedCount: 5, since: 0, lastObservationId: 0 }));
 
     await waitFor(() => expect(getPackets).toHaveBeenCalled());
     await waitFor(() => {

@@ -37,36 +37,6 @@ export function regionKey(iatas: string[] | undefined): string {
   return iatas && iatas.length > 0 ? iatas.join(",") : "*";
 }
 
-function splitCsv(value: string | null): string[] {
-  if (!value) return [];
-  return value
-    .split(",")
-    .map((s) => s.trim())
-    .filter(Boolean);
-}
-
-// Read a selection from URL params. ?iata is a comma-separated IATA list, ?regions a slug list. A
-// legacy single ?region is folded in as an IATA so old shared links (?region=YVR) keep working.
-export function parseSelection(params: URLSearchParams): RegionSelection {
-  const regions = splitCsv(params.get("regions"));
-  const iatas = splitCsv(params.get("iata")).map((c) => c.toUpperCase());
-  const legacy = params.get("region")?.trim();
-  if (legacy) iatas.push(legacy.toUpperCase());
-  return { regions, iatas };
-}
-
-// Apply a selection onto a copy of the given params: set ?iata/?regions (or drop them when empty) and
-// always clear the legacy ?region. Unrelated params are left untouched.
-export function selectionToParams(selection: RegionSelection, base: URLSearchParams): URLSearchParams {
-  const next = new URLSearchParams(base);
-  if (selection.iatas.length > 0) next.set("iata", selection.iatas.join(","));
-  else next.delete("iata");
-  if (selection.regions.length > 0) next.set("regions", selection.regions.join(","));
-  else next.delete("regions");
-  next.delete("region");
-  return next;
-}
-
 export function serializeSelection(selection: RegionSelection): string {
   return JSON.stringify(selection);
 }

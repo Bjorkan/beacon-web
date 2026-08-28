@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo } from "react";
+import { useState, useCallback, useEffect, useMemo } from "react";
 import { type TFunction } from "i18next";
 import { useTranslation } from "react-i18next";
 import { useQuery, useQueryClient, type InfiniteData } from "@tanstack/react-query";
@@ -13,7 +13,6 @@ import { Badge } from "../../components/Badge";
 import { DataTable, type Column } from "../../components/DataTable";
 import { LoadingPill } from "../../components/LoadingPill";
 import { ObserverFilterBar } from "./ObserverFilterBar";
-import { ObserverDetailPanel } from "./ObserverDetailPanel";
 import { patchObserverSummary } from "./observer-updates";
 import { deriveObserverStatus } from "./observer-status";
 import { useTick } from "../../hooks/useTick";
@@ -28,8 +27,6 @@ interface ObserverTableProps {
   wsManager: WsManager;
   selectedObserverId: string | null;
   onSelectObserver: (id: string | null) => void;
-  onAnalyzePacket?: (hash: string) => void;
-  onViewStats?: (observerId: string) => void;
 }
 
 function observerColumns(t: TFunction): Column<ObserverSummary>[] {
@@ -103,7 +100,7 @@ function renderObserverCard(obs: ObserverSummary, t: TFunction) {
   );
 }
 
-export function ObserverTable({ wsManager, selectedObserverId, onSelectObserver, onAnalyzePacket, onViewStats }: ObserverTableProps) {
+export function ObserverTable({ wsManager, selectedObserverId, onSelectObserver }: ObserverTableProps) {
   const { t } = useTranslation();
   const { iatas, regionKey } = useRegion();
   const queryClient = useQueryClient();
@@ -138,10 +135,11 @@ export function ObserverTable({ wsManager, selectedObserverId, onSelectObserver,
       }),
     [regionKey, iatas, statusFilter, typeFilter, brokerFilter, search, searchField],
   );
-  const { items: observers, loadedCount, isPaging, isError, isLoading } = useInfinitePages<ObserverSummary>({
+  const { items: observers, loadedCount, isPaging, isError, isLoading, hasMore, loadMore } = useInfinitePages<ObserverSummary>({
     options: listOptions,
     getId: observerId,
     keepPrevious: true,
+    auto: false,
   });
 
   const typeOptions = useMemo(() => {
@@ -159,6 +157,12 @@ export function ObserverTable({ wsManager, selectedObserverId, onSelectObserver,
     () => (scopeFilter ? observers.filter((o) => o.scopes?.includes(scopeFilter)) : observers),
     [observers, scopeFilter],
   );
+
+  // Scope is client-side because the observers endpoint has no corresponding filter. Keep pulling
+  // pages only while an active scope filter has too few visible matches.
+  useEffect(() => {
+    if (scopeFilter && displayObservers.length < 50 && hasMore && !isPaging) loadMore();
+  }, [scopeFilter, displayObservers.length, hasMore, isPaging, loadMore]);
   const columns = useMemo(() => observerColumns(t), [t]);
 
   // patch the live status into the paged cache (mirrors NodeTable). A brand-new observer not on any
@@ -210,19 +214,13 @@ export function ObserverTable({ wsManager, selectedObserverId, onSelectObserver,
           isLoading={isLoading}
           emptyLabel={t("entities.noObservers")}
           defaultSort={{ header: "Name" }}
+          virtualize
+          onEndReached={loadMore}
           renderCard={(observer) => renderObserverCard(observer, t)}
         />
         <LoadingPill loading={isPaging} error={isError} count={loadedCount} noun={t("entities.observers")} position="bottom-3 right-3" />
       </div>
 
-      {selectedObserverId && (
-        <ObserverDetailPanel
-          observerId={selectedObserverId}
-          onClose={() => onSelectObserver(null)}
-          onAnalyzePacket={onAnalyzePacket}
-          onViewStats={onViewStats}
-        />
-      )}
     </div>
   );
 }

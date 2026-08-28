@@ -1,4 +1,5 @@
-import { useMemo, useState, type ReactNode } from "react";
+import { useMemo, useRef, useState, type ReactNode } from "react";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import { EmptyState } from "./EmptyState";
 import { SkeletonRows } from "./SkeletonRows";
 import { useIsMobile } from "../hooks/useMediaQuery";
@@ -24,6 +25,8 @@ interface DataTableProps<T> {
   defaultSort?: { header: string; direction?: SortDirection };
   // called when the scroll position nears the bottom, for on-demand paging (omit = no infinite scroll)
   onEndReached?: () => void;
+  // Large entity datasets opt in; small analytics/routes tables keep the simpler full rendering.
+  virtualize?: boolean;
   // when set, rows render as stacked cards below the md breakpoint instead of a table; sort UI lives
   // in <thead>, so cards keep the defaultSort
   renderCard?: (row: T) => ReactNode;
@@ -34,8 +37,9 @@ const END_REACHED_THRESHOLD_PX = 200;
 
 // selectable, sticky-header list table shared by the entity tabs (observers, nodes, …)
 
-export function DataTable<T>({ columns, rows, rowKey, selectedKey, onSelect, isLoading, emptyLabel, defaultSort, onEndReached, renderCard }: DataTableProps<T>) {
+export function DataTable<T>({ columns, rows, rowKey, selectedKey, onSelect, isLoading, emptyLabel, defaultSort, onEndReached, virtualize = false, renderCard }: DataTableProps<T>) {
   const asCards = useIsMobile() && !!renderCard;
+  const scrollRef = useRef<HTMLDivElement>(null);
   const [sort, setSort] = useState<{ header: string; direction: SortDirection }>(() => ({
     header: defaultSort?.header ?? "",
     direction: defaultSort?.direction ?? "asc",
@@ -66,6 +70,19 @@ export function DataTable<T>({ columns, rows, rowKey, selectedKey, onSelect, isL
     });
   }, [rows, columns, sort]);
 
+  // React Compiler deliberately skips components using TanStack Virtual's imperative API.
+  // eslint-disable-next-line react-hooks/incompatible-library
+  const virtualizer = useVirtualizer({
+    count: virtualize ? (sortedRows?.length ?? 0) : 0,
+    getScrollElement: () => scrollRef.current,
+    estimateSize: () => (asCards ? 76 : 39),
+    overscan: 8,
+    getItemKey: (index) => {
+      const row = sortedRows?.[index];
+      return row ? rowKey(row) : index;
+    },
+  });
+
   function handleScroll(e: React.UIEvent<HTMLDivElement>) {
     if (!onEndReached) return;
     const el = e.currentTarget;
@@ -74,29 +91,36 @@ export function DataTable<T>({ columns, rows, rowKey, selectedKey, onSelect, isL
 
   if (isLoading) {
     return (
-      <div className="flex-1 overflow-y-auto">
+      <div ref={scrollRef} className="flex-1 overflow-y-auto">
         <SkeletonRows />
       </div>
     );
   }
 
   if (asCards) {
+    const virtualItems = virtualizer.getVirtualItems();
     return (
-      <div className="flex-1 overflow-y-auto" onScroll={handleScroll}>
+      <div ref={scrollRef} className="flex-1 overflow-y-auto" onScroll={handleScroll} data-virtualized={virtualize || undefined}>
         {sortedRows && sortedRows.length > 0 ? (
-          <div className="flex flex-col divide-y divide-border/40">
-            {sortedRows.map((row) => {
+          <div
+            className={virtualize ? "relative" : "flex flex-col divide-y divide-border/40"}
+            style={virtualize ? { height: virtualizer.getTotalSize() } : undefined}
+          >
+            {(virtualize ? virtualItems.map((item) => ({ row: sortedRows[item.index]!, item })) : sortedRows.map((row) => ({ row, item: null }))).map(({ row, item }) => {
               const key = rowKey(row);
               const isSelected = key === selectedKey;
               return (
                 <button
                   key={key}
+                  ref={item ? virtualizer.measureElement : undefined}
+                  data-index={item?.index}
                   type="button"
-                  className={`w-full text-left px-3 py-2.5 border-l-2 cursor-pointer transition-colors ${
+                  className={`w-full text-left px-3 py-2.5 border-l-2 cursor-pointer transition-colors ${virtualize ? "border-b border-b-border/40" : ""} ${
                     isSelected
                       ? "bg-primary/10 border-l-primary"
                       : "border-l-transparent hover:bg-primary/5 hover:border-l-primary/50"
                   }`}
+                  style={item ? { position: "absolute", top: 0, left: 0, transform: `translateY(${item.start}px)` } : undefined}
                   onClick={() => onSelect(isSelected ? null : key)}
                 >
                   {renderCard!(row)}
@@ -111,8 +135,17 @@ export function DataTable<T>({ columns, rows, rowKey, selectedKey, onSelect, isL
     );
   }
 
+  const virtualItems = virtualizer.getVirtualItems();
+  const topPadding = virtualItems[0]?.start ?? 0;
+  const bottomPadding = virtualItems.length > 0
+    ? virtualizer.getTotalSize() - virtualItems[virtualItems.length - 1]!.end
+    : 0;
+  const tableRows = virtualize
+    ? virtualItems.map((item) => ({ row: sortedRows![item.index]!, item }))
+    : (sortedRows ?? []).map((row) => ({ row, item: null }));
+
   return (
-    <div className="flex-1 overflow-y-auto overflow-x-auto" onScroll={handleScroll}>
+    <div ref={scrollRef} className="flex-1 overflow-y-auto overflow-x-auto" onScroll={handleScroll} data-virtualized={virtualize || undefined}>
       {sortedRows && sortedRows.length > 0 ? (
         <table className="w-full text-xs font-mono">
           <thead className="sticky top-0 bg-bg-surface z-10">
@@ -140,12 +173,17 @@ export function DataTable<T>({ columns, rows, rowKey, selectedKey, onSelect, isL
             </tr>
           </thead>
           <tbody>
-            {sortedRows.map((row) => {
+            {virtualize && topPadding > 0 && (
+              <tr aria-hidden><td colSpan={columns.length} style={{ height: topPadding, padding: 0, border: 0 }} /></tr>
+            )}
+            {tableRows.map(({ row, item }) => {
               const key = rowKey(row);
               const isSelected = key === selectedKey;
               return (
                 <tr
                   key={key}
+                  ref={item ? virtualizer.measureElement : undefined}
+                  data-index={item?.index}
                   className={`border-b border-border/40 border-l-2 cursor-pointer transition-colors ${
                     isSelected
                       ? "bg-primary/10 border-l-primary"
@@ -159,6 +197,9 @@ export function DataTable<T>({ columns, rows, rowKey, selectedKey, onSelect, isL
                 </tr>
               );
             })}
+            {virtualize && bottomPadding > 0 && (
+              <tr aria-hidden><td colSpan={columns.length} style={{ height: bottomPadding, padding: 0, border: 0 }} /></tr>
+            )}
           </tbody>
         </table>
       ) : (
