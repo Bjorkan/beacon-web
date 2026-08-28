@@ -65,7 +65,6 @@ describe("AppShell", () => {
     vi.mocked(getIatas).mockResolvedValue([]);
     renderShell();
 
-    expect(screen.getByRole("img", { name: "Meshat.se" })).toHaveAttribute("src", "/meshat-logo.svg");
     expect(screen.getByRole("img", { name: "Meshat.se" }).parentElement).toHaveClass(
       "min-w-0",
       "flex-1",

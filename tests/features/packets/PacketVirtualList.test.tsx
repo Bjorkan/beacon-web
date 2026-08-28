@@ -1,3 +1,4 @@
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, act } from "@testing-library/react";
 import { PacketVirtualList } from "../../../src/features/packets/PacketVirtualList";
@@ -8,6 +9,12 @@ const usePacketDetail = vi.fn(() => ({ data: { packetHash: "AA11", header: { pay
 vi.mock("../../../src/features/packets/usePacketDetail", () => ({
   usePacketDetail: (h: string | null) => usePacketDetail(h),
 }));
+
+// Rows resolve region names through the shared iatas query; provide one client for every render.
+const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+function renderWithClient(ui: React.ReactElement) {
+  return render(<QueryClientProvider client={client}>{ui}</QueryClientProvider>);
+}
 
 const VIEWPORT_H = 1300;
 const ROW_H = 60;
@@ -95,7 +102,7 @@ beforeEach(() => {
 
 describe("PacketVirtualList expansion", () => {
   it("mounts the expansion inside the measured wrapper", () => {
-    render(<PacketVirtualList packets={[pkt("AA11")]} expandedHash="AA11" {...makeHandlers()} />);
+    renderWithClient(<PacketVirtualList packets={[pkt("AA11")]} expandedHash="AA11" {...makeHandlers()} />);
 
     const wrapper = screen.getByTestId("packet-item-AA11");
     expect(wrapper).toHaveAttribute("data-index", "0");
@@ -103,14 +110,14 @@ describe("PacketVirtualList expansion", () => {
   });
 
   it("expands only the row named by expandedHash", () => {
-    render(<PacketVirtualList packets={many(30)} expandedHash="AA3" {...makeHandlers()} />);
+    renderWithClient(<PacketVirtualList packets={many(30)} expandedHash="AA3" {...makeHandlers()} />);
 
     expect(screen.getAllByTestId("packet-expansion")).toHaveLength(1);
     expect(screen.getByTestId("packet-item-AA3").querySelector("[data-testid='packet-expansion']")).not.toBeNull();
   });
 
   it("renders no expansion when nothing is expanded", () => {
-    render(<PacketVirtualList packets={many(30)} expandedHash={null} {...makeHandlers()} />);
+    renderWithClient(<PacketVirtualList packets={many(30)} expandedHash={null} {...makeHandlers()} />);
 
     expect(screen.queryByTestId("packet-expansion")).toBeNull();
   });
@@ -118,12 +125,16 @@ describe("PacketVirtualList expansion", () => {
   it("counts the expanded height in the virtualizer's total size", () => {
     const packets = many(30);
     const handlers = makeHandlers();
-    const { container, rerender } = render(
+    const { container, rerender } = renderWithClient(
       <PacketVirtualList packets={packets} expandedHash={null} {...handlers} />,
     );
     const collapsed = totalSize(container);
 
-    rerender(<PacketVirtualList packets={packets} expandedHash="AA3" {...handlers} />);
+    rerender(
+      <QueryClientProvider client={client}>
+        <PacketVirtualList packets={packets} expandedHash="AA3" {...handlers} />
+      </QueryClientProvider>,
+    );
     flushResize();
 
     expect(totalSize(container)).toBe(collapsed + (EXPANDED_H - ROW_H));
@@ -139,7 +150,7 @@ describe("PacketVirtualList expansion", () => {
       },
     });
     const handlers = makeHandlers();
-    render(<PacketVirtualList packets={[pkt("AA11")]} expandedHash="AA11" {...handlers} />);
+    renderWithClient(<PacketVirtualList packets={[pkt("AA11")]} expandedHash="AA11" {...handlers} />);
 
     // clicking an observation is what opens the analyzer now — there is no button for it
     fireEvent.click(screen.getByText("o1"));
@@ -153,7 +164,7 @@ describe("PacketVirtualList expansion", () => {
 
 describe("PacketVirtualList header", () => {
   it("renders the sticky header once, outside measured item space", () => {
-    const { container } = render(
+    const { container } = renderWithClient(
       <PacketVirtualList packets={many(30)} expandedHash={null} {...makeHandlers()} />,
     );
 
@@ -169,7 +180,7 @@ describe("PacketVirtualList header", () => {
 describe("PacketVirtualList scrolling", () => {
   it("pages when scrolled near the bottom", () => {
     const handlers = makeHandlers();
-    const { container } = render(
+    const { container } = renderWithClient(
       <PacketVirtualList packets={many(30)} expandedHash={null} {...handlers} hasNextPage />,
     );
 
@@ -182,7 +193,7 @@ describe("PacketVirtualList scrolling", () => {
 
   it("does not page while a page is already in flight", () => {
     const handlers = makeHandlers();
-    const { container } = render(
+    const { container } = renderWithClient(
       <PacketVirtualList packets={many(30)} expandedHash={null} {...handlers} hasNextPage isFetchingNextPage />,
     );
 
@@ -195,7 +206,7 @@ describe("PacketVirtualList scrolling", () => {
 
   it("reports at-top and scrolled-away as the scroll position moves", () => {
     const handlers = makeHandlers();
-    const { container } = render(
+    const { container } = renderWithClient(
       <PacketVirtualList packets={many(30)} expandedHash={null} {...handlers} />,
     );
 
@@ -214,12 +225,16 @@ describe("PacketVirtualList scrolling", () => {
   it("does not page when a row collapses near the bottom", () => {
     const packets = many(30);
     const handlers = makeHandlers();
-    const { rerender } = render(
+    const { rerender } = renderWithClient(
       <PacketVirtualList packets={packets} expandedHash="AA29" {...handlers} hasNextPage />,
     );
     handlers.fetchNextPage.mockClear();
 
-    rerender(<PacketVirtualList packets={packets} expandedHash={null} {...handlers} hasNextPage />);
+    rerender(
+      <QueryClientProvider client={client}>
+        <PacketVirtualList packets={packets} expandedHash={null} {...handlers} hasNextPage />
+      </QueryClientProvider>,
+    );
     flushResize();
 
     expect(handlers.fetchNextPage).not.toHaveBeenCalled();
@@ -249,7 +264,7 @@ describe("PacketVirtualList responsive row", () => {
   it("renders the card row below md", () => {
     setMobile(true);
     const handlers = makeHandlers();
-    const { container } = render(
+    const { container } = renderWithClient(
       <PacketVirtualList packets={[pkt("AA11")]} expandedHash={null} {...handlers} />,
     );
 
@@ -263,7 +278,7 @@ describe("PacketVirtualList responsive row", () => {
   });
 
   it("renders the grid row at md and up", () => {
-    const { container } = render(
+    const { container } = renderWithClient(
       <PacketVirtualList packets={[pkt("AA11")]} expandedHash={null} {...makeHandlers()} />,
     );
 
@@ -273,7 +288,7 @@ describe("PacketVirtualList responsive row", () => {
 
   it("expands the card row below md", () => {
     setMobile(true);
-    render(<PacketVirtualList packets={[pkt("AA11")]} expandedHash="AA11" {...makeHandlers()} />);
+    renderWithClient(<PacketVirtualList packets={[pkt("AA11")]} expandedHash="AA11" {...makeHandlers()} />);
 
     expect(screen.getByTestId("packet-expansion")).toBeInTheDocument();
   });

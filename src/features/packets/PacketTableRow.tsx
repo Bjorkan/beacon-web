@@ -1,5 +1,7 @@
 import { formatHex } from "../../lib/formatters";
 import { useTranslation } from "react-i18next";
+import { useQuery } from "@tanstack/react-query";
+import { getIatas } from "../../api/client";
 import { Timestamp } from "../../components/Timestamp";
 import { Badge } from "../../components/Badge";
 import { ScopeTag } from "../../components/ScopeTag";
@@ -17,9 +19,16 @@ interface PacketTableRowProps {
 
 // Single-line table row sharing GRID_TEMPLATE with the sticky header. The observer and the packet's
 // endpoints live in the expansion / analyzer instead — endpoint resolution is n/a for most
-// packets, so it gets no column of its own.
+// packets, so it gets no column of its own. The region column shows the IATA's full display name.
 export function PacketTableRow({ packet, expanded, isFresh, onToggle }: PacketTableRowProps) {
   const { t } = useTranslation();
+  // Shared cache with MapView's iatas query — one request serves every row.
+  const { data: iataNames } = useQuery({
+    queryKey: ["iatas"],
+    queryFn: getIatas,
+    staleTime: 60_000,
+    select: (rows) => new Map(rows.map((r) => [r.iata, r.displayName ?? r.iata])),
+  });
   // ?? not ||, so a legitimate 0-hop direct packet still shows its count
   const pathLength = packet.latestObserver?.pathLength;
   const na = <span className="text-text-dim">n/a</span>;
@@ -52,15 +61,17 @@ export function PacketTableRow({ packet, expanded, isFresh, onToggle }: PacketTa
             {PAYLOAD_TYPE_NAMES[packet.payloadType as PayloadTypeValue] ?? packet.payloadTypeName}
           </Badge>
         </span>
-        <span className="font-mono text-[10px] text-text-muted uppercase tracking-wider">
-          {packet.routeTypeName || t("packets.unknown")}
-          {packet.scope && <ScopeTag>{packet.scope}</ScopeTag>}
+        <span className="flex min-w-0 items-center gap-1 overflow-hidden">
+          <span className="truncate">{packet.routeTypeName || t("packets.unknown")}</span>
+          {packet.scope && <ScopeTag className="shrink-0">{packet.scope}</ScopeTag>}
         </span>
         <span className="font-mono text-text-muted">×{packet.observationCount}</span>
         <span className="font-mono text-text-muted">{pathLength?.hopCount ?? na}</span>
         <span className="font-mono text-text-muted">{pathLength?.hashSize ?? na}</span>
-        <span className="font-mono font-bold text-primary tracking-wider">
-          {packet.latestObserver?.iata ?? <span className="font-normal">{na}</span>}
+        <span className="min-w-0 truncate">
+          {iataNames?.get(packet.latestObserver?.iata ?? "") ?? packet.latestObserver?.iata ?? (
+            <span className="font-normal text-text-muted">{na}</span>
+          )}
         </span>
         <span className="text-right text-text-muted">
           <Timestamp value={packet.lastHeardAt} />
