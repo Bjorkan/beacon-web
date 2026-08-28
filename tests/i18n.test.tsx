@@ -37,8 +37,8 @@ describe("internationalization", () => {
 
   it("discovers bundled locale files without a hand-maintained registry", () => {
     expect(availableLanguages).toEqual([
-      { code: "en", name: "English", direction: "ltr" },
       { code: "sv", name: "Svenska", direction: "ltr" },
+      { code: "en", name: "English", direction: "ltr" },
     ]);
   });
 
@@ -50,6 +50,8 @@ describe("internationalization", () => {
     expect(swedish.observers.advertsHeard).toContain("adverts");
     expect(swedish.stats.repeatersOutOfSync).toContain("Repeaters");
     expect(swedish.stats.repeatersOutOfSync).toContain("room servers");
+    expect(swedish.navigation.tabs.traces).toBe("Traces");
+    expect(swedish.stats.payloadTypes).toContain("Payload");
   });
 
   it("switches language, persists the choice, and updates the document language", async () => {
