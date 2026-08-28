@@ -26,10 +26,11 @@ interface Flow {
   lastNode: number;
 }
 
-// Live mode (MeshMapper LiveViz style): dim every node, then per observed packet shoot an orange dot
-// along its real hop path with a fading dashed trail, flashing each node to full opacity as the dot
-// crosses it. Enabling it opts the WS connection into resolvedPath data. Geometry is pure
-// (packet-flow.ts); here we own the maplibre layers, the dimming, the rAF loop, and the subscription.
+// Live mode (MeshMapper LiveViz style): per observed packet, shoot an orange dot along its real hop
+// path with a fading dashed trail, blooming a soft halo behind each node the dot crosses (via the
+// glow feature-state; the nodes themselves always stay fully visible). Enabling it opts the WS
+// connection into resolvedPath data. Geometry is pure (packet-flow.ts); here we own the maplibre
+// layers, the rAF loop, and the subscription.
 export function useMapPacketFlow(
   mapRef: React.RefObject<MapLibreMap | null>,
   isReady: boolean,
@@ -165,8 +166,8 @@ export function useMapPacketFlow(
     return () => wsManager.setResolvePath(false);
   }, [enabled, wsManager]);
 
-  // Base-node dimming (fade all, lift the flashing node) is owned by useMapNodes so live mode and
-  // selection focus share one opacity owner; here we only feed it the per-node glow feature-state.
+  // The per-node glow feature-state fed here is the pulse: useMapNodes renders it as a soft halo
+  // that blooms behind the node while the dot is inbound and eases out with the trail.
 
   // launch a flow per observed packet; tear the animation down when disabled
   useEffect(() => {

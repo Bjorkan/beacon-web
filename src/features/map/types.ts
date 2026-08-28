@@ -142,11 +142,9 @@ export const PACKET_FLOW_MAX = 120; // cap on concurrent packet animations (busy
 // Idle individual-node opacity while Live is on. Kept low because with clustering off, co-located
 // markers overlap and their alphas composite toward bright; a crossed node still pops to full via
 // the max(dim, feature-state glow) expression.
-export const LIVE_DIM_OPACITY = 0.08;
+export const NODES_GLOW_LAYER_ID = "nodes-glow";
 // Clusters dim further: many overlapping semi-transparent hexagons composite toward opaque, so a
 // dense cluster field stops being see-through. A lower per-cluster alpha keeps the stack translucent.
-export const LIVE_CLUSTER_DIM_OPACITY = 0.07;
-
 export const CLUSTER_RADIUS = 50; // px
 // Keep clustering alive across the whole reachable zoom range (default max is 22). maplibre drops
 // clustering above clusterMaxZoom, which would leave co-located nodes as stacked, un-spiderfy-able

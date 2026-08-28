@@ -4,6 +4,7 @@ import type {
   GeoJSONSource,
   ExpressionSpecification,
   SymbolLayerSpecification,
+  CircleLayerSpecification,
   MapLayerMouseEvent,
 } from "maplibre-gl";
 import Spiderfy from "@nazka/map-gl-js-spiderfy";
@@ -21,8 +22,8 @@ import {
   NODES_SOURCE_MAXZOOM,
   SPIDERFY_MIN_ZOOM,
   NODE_LABEL_MIN_ZOOM,
-  LIVE_DIM_OPACITY,
-  LIVE_CLUSTER_DIM_OPACITY,
+  NODES_GLOW_LAYER_ID,
+  PACKET_FLOW_COLOR,
   NODE_TYPE_NAMES,
   NODE_ICON_UNKNOWN,
   nodeIconId,
@@ -85,8 +86,6 @@ const ICON_IMAGE: ExpressionSpecification = [
 
 // Node labels fade in only past NODE_LABEL_MIN_ZOOM.
 const LABEL_OPACITY: ExpressionSpecification = ["step", ["zoom"], 0, NODE_LABEL_MIN_ZOOM, 1];
-// Live mode: dim to the idle floor, but lift a currently-flashing node to full (feature-state glow 0..1).
-const LIVE_ICON_OPACITY: ExpressionSpecification = ["max", LIVE_DIM_OPACITY, ["coalesce", ["feature-state", "glow"], 0]];
 
 const SPIDER_LEAVES_LAYOUT: SymbolLayerSpecification["layout"] = {
   "icon-image": ICON_IMAGE,
@@ -105,10 +104,6 @@ export function useMapNodes(
   clustered: boolean,
   onSelectNode: (id: string) => void,
   selectedNodeId: string | null,
-  // live packet-flow on: fade every node (a crossed one lifts via feature-state glow)
-  live: boolean,
-  // selection focus: keep only these node ids lit and fade the rest; null = off
-  focusIds: string[] | null,
   // identity of the dataset (region + type filter); an open spiderfy fan closes when it changes,
   // since its leaves were drawn from the previous dataset
   resetKey = "",
@@ -156,7 +151,7 @@ export function useMapNodes(
     // maplibre fixes `cluster` at source creation, so toggling clustering means recreating the
     // source. The spiderfy effect below also keys on `clustered` and re-applies itself around this.
     if (appliedClusteredRef.current !== clustered && map.getSource(NODES_SOURCE_ID)) {
-      for (const id of [NODES_SELECTED_LAYER_ID, NODES_CLUSTER_LAYER_ID, NODES_POINT_LAYER_ID]) {
+      for (const id of [NODES_GLOW_LAYER_ID, NODES_SELECTED_LAYER_ID, NODES_CLUSTER_LAYER_ID, NODES_POINT_LAYER_ID]) {
         if (map.getLayer(id)) map.removeLayer(id);
       }
       map.removeSource(NODES_SOURCE_ID);
@@ -225,6 +220,29 @@ export function useMapNodes(
         },
       } as SymbolLayerSpecification);
     }
+
+    // Live packet-flow pulse: a soft halo behind each node that blooms with the glow feature-state
+    // (fed by useMapPacketFlow's rAF loop as a dot crosses the node) and eases back out after. This
+    // is the only node-level live animation — nodes themselves are never dimmed.
+    const flowColor = cssVar("--palette-warn", PACKET_FLOW_COLOR);
+    if (!map.getLayer(NODES_GLOW_LAYER_ID)) {
+      map.addLayer(
+        {
+          id: NODES_GLOW_LAYER_ID,
+          type: "circle",
+          source: NODES_SOURCE_ID,
+          filter: ["!", ["has", "point_count"]],
+          paint: {
+            "circle-radius": ["+", 9, ["*", 15, ["coalesce", ["feature-state", "glow"], 0]]],
+            "circle-color": flowColor,
+            "circle-opacity": ["*", ["coalesce", ["feature-state", "glow"], 0], 0.4],
+            "circle-blur": 1,
+          },
+        } as CircleLayerSpecification,
+        NODES_CLUSTER_LAYER_ID, // beneath the markers
+      );
+    }
+    map.setPaintProperty(NODES_GLOW_LAYER_ID, "circle-color", flowColor);
 
     // Ring under the selected node's icon. Only matches an unclustered point (clusters carry no id);
     // color tracks --palette-primary.
@@ -323,30 +341,22 @@ export function useMapNodes(
     syncLeafSelectionRing(map, selectedNodeId);
   }, [mapRef, isReady, selectedNodeId]);
 
-  // Base-layer opacity for the two "fade all but a subset" dim modes. Single owner of icon/text
-  // opacity so live mode and selection focus never fight over the paint property; re-applies after a
-  // style/theme/clustering rebuild via the deps. Live wins over focus. The live-mode packet glow
-  // rides feature-state (set by useMapPacketFlow's loop), so it needs no re-run here.
+  // Nodes are always fully visible — a selection spotlights via its ring only, and live mode
+  // animates through the glow halo instead of dimming anything. This effect just restores the
+  // constant styling after a style/theme/clustering rebuild (the glow halo rides feature-state,
+  // so it needs no re-run between rebuilds).
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !isReady) return;
-    // lit for the focus set, dimmed otherwise
-    const focusCase = (lit: ExpressionSpecification | number, dim: ExpressionSpecification | number) =>
-      ["case", ["in", ["get", "id"], ["literal", focusIds ?? []]], lit, dim] as ExpressionSpecification;
-
-    const iconOpacity: ExpressionSpecification | number = live ? LIVE_ICON_OPACITY : focusIds ? focusCase(1, LIVE_DIM_OPACITY) : 1;
-    const labelOpacity: ExpressionSpecification | number = live ? 0 : focusIds ? focusCase(LABEL_OPACITY, 0) : LABEL_OPACITY;
-    const dimActive = live || Boolean(focusIds);
     if (map.getLayer(NODES_POINT_LAYER_ID)) {
-      map.setPaintProperty(NODES_POINT_LAYER_ID, "icon-opacity", iconOpacity);
-      map.setPaintProperty(NODES_POINT_LAYER_ID, "text-opacity", labelOpacity);
+      map.setPaintProperty(NODES_POINT_LAYER_ID, "icon-opacity", 1);
+      map.setPaintProperty(NODES_POINT_LAYER_ID, "text-opacity", LABEL_OPACITY);
     }
-    // a cluster can't tell which nodes it holds, so both modes just dim it flat (matches live mode)
     if (map.getLayer(NODES_CLUSTER_LAYER_ID)) {
-      map.setPaintProperty(NODES_CLUSTER_LAYER_ID, "icon-opacity", dimActive ? LIVE_CLUSTER_DIM_OPACITY : 1);
-      map.setPaintProperty(NODES_CLUSTER_LAYER_ID, "text-opacity", dimActive ? 0 : 1);
+      map.setPaintProperty(NODES_CLUSTER_LAYER_ID, "icon-opacity", 1);
+      map.setPaintProperty(NODES_CLUSTER_LAYER_ID, "text-opacity", 1);
     }
-  }, [mapRef, isReady, live, focusIds, clustered, themeKey]);
+  }, [mapRef, isReady, clustered, themeKey]);
 
   // Push new node data into the source as it arrives; the source re-clusters automatically.
   useEffect(() => {

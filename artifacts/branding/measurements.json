@@ -1,0 +1,19 @@
+{
+  "firstWave": {
+    "innerAnimation": "meshat-radio-wave",
+    "outerAnimation": "meshat-radio-wave",
+    "innerOpacity": "0.00305534",
+    "outerOpacity": "0"
+  },
+  "secondWave": {
+    "innerOpacity": "0.916851",
+    "outerOpacity": "0.744183"
+  },
+  "header": {
+    "viewportWidth": 390,
+    "documentScrollWidth": 390,
+    "logoSource": "/meshat-logo.svg",
+    "logoWidth": 91.6875,
+    "statusWidth": 0
+  }
+}
