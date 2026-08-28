@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { AppShell } from "../../src/components/AppShell";
@@ -20,6 +20,8 @@ const wsManager = {
   getLastEventTimestamp: () => Date.now(),
 } as unknown as WsManager;
 
+const defaultMatchMedia = window.matchMedia;
+
 function renderShell() {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
@@ -39,6 +41,10 @@ beforeEach(() => {
   vi.mocked(getRegion).mockReset();
 });
 
+afterEach(() => {
+  window.matchMedia = defaultMatchMedia;
+});
+
 describe("AppShell", () => {
   it("footer shows the package.json version", () => {
     vi.mocked(getIatas).mockResolvedValue([]);
@@ -53,6 +59,17 @@ describe("AppShell", () => {
 
     await waitFor(() => expect(screen.getByText("Failed to load")).toBeInTheDocument());
     expect(screen.queryByText("Loading…")).not.toBeInTheDocument();
+  });
+
+  it("keeps the primary header controls visible and hides GitHub when mobile space is tight", () => {
+    vi.mocked(getIatas).mockResolvedValue([]);
+    renderShell();
+
+    expect(screen.getByText("BEACON")).not.toHaveClass("hidden");
+    expect(screen.getByText("REGION")).not.toHaveClass("hidden");
+    expect(screen.getByRole("button", { name: /REGION/ })).toHaveClass("max-w-full", "min-w-0", "overflow-hidden");
+    expect(screen.getByText("LIVE").parentElement).toHaveClass("shrink-0");
+    expect(screen.getByRole("link", { name: "GitHub" })).toHaveClass("hidden", "sm:inline-flex", "shrink-0");
   });
 });
 
@@ -91,6 +108,30 @@ describe("region picker filter", () => {
     renderShell();
     const input = await openPicker();
     expect(input).toHaveFocus();
+  });
+
+  it("does not autofocus the filter input on a touch device", async () => {
+    window.matchMedia = vi.fn().mockImplementation((query: string) => ({
+      matches: query === "(hover: hover) and (pointer: fine)" ? false : defaultMatchMedia(query).matches,
+      media: query,
+      onchange: null,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    }));
+
+    renderShell();
+    const input = await openPicker();
+
+    expect(input).not.toHaveFocus();
+    expect(input.parentElement?.parentElement).toHaveClass(
+      "max-sm:fixed",
+      "max-sm:inset-x-3",
+      "max-sm:w-auto",
+    );
+    expect(screen.getByRole("button", { name: /REGION/ })).toHaveFocus();
   });
 
   it("hands focus back to the trigger when the panel closes", async () => {
