@@ -89,15 +89,17 @@ function RegionSelector() {
   return (
     <Dropdown
       width="w-60"
+      className="min-w-0"
+      mobileViewport
       renderTrigger={({ toggle }) => (
         <button
           type="button"
-          className="flex items-center gap-1.5 bg-bg-raised border border-border rounded px-3 py-1 text-text-bright font-mono text-xs font-semibold hover:border-text-dim/30 transition-colors"
+          className="flex max-w-full min-w-0 items-center gap-1.5 overflow-hidden bg-bg-raised border border-border rounded px-2 sm:px-3 py-1 text-text-bright font-mono text-xs font-semibold hover:border-text-dim/30 transition-colors"
           onClick={toggle}
         >
           <span className="text-text-muted font-normal text-[11px]">REGION</span>
-          {regionSummaryLabel(selection)}
-          <span className="text-text-dim text-[11px]">▾</span>
+          <span className="truncate">{regionSummaryLabel(selection)}</span>
+          <span className="text-text-dim text-[11px] shrink-0">▾</span>
         </button>
       )}
     >
@@ -113,10 +115,13 @@ function RegionSelectorPanel() {
   const [query, setQuery] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // Take focus for typing, then hand it back on close — same restore rule as useFocusTrap.
+  // Take focus when a physical keyboard is likely available, then hand it back on close. Avoiding
+  // programmatic focus on touch devices prevents iOS Safari from opening the keyboard and zooming
+  // the page around this compact input.
   useEffect(() => {
     const restoreTo = document.activeElement as HTMLElement | null;
-    inputRef.current?.focus();
+    const hasPrecisePointer = window.matchMedia("(hover: hover) and (pointer: fine)").matches;
+    if (hasPrecisePointer) inputRef.current?.focus();
     return () => {
       if (restoreTo && restoreTo !== document.body && document.contains(restoreTo)) restoreTo.focus();
     };
@@ -330,18 +335,20 @@ interface AppShellProps {
 export function AppShell({ activeTab, onTabChange, wsManager, children }: AppShellProps) {
   return (
     <div className="flex flex-col h-dvh">
-      <header className="flex items-center justify-between gap-2 px-3 md:px-4 h-[42px] bg-bg-surface border-b border-border shrink-0">
-        <BeaconWordmark iconSize={22} textClassName="text-sm" />
-        <div className="flex items-center gap-1.5 md:gap-3 min-w-0">
+      <header className="flex items-center gap-2 px-2 sm:px-3 md:px-4 h-[42px] bg-bg-surface border-b border-border shrink-0">
+        <BeaconWordmark iconSize={22} textClassName="text-sm" className="shrink-0" />
+        <div className="flex flex-1 items-center justify-end gap-1.5 md:gap-3 min-w-0">
           <RegionSelector />
           <ThemePicker />
-          <LiveBadge wsManager={wsManager} />
+          <div className="shrink-0">
+            <LiveBadge wsManager={wsManager} />
+          </div>
           <a
             href={GITHUB_URL}
             target="_blank"
             rel="noopener noreferrer"
             aria-label="GitHub"
-            className="text-text-muted hover:text-text-normal transition-colors shrink-0"
+            className="hidden sm:inline-flex text-text-muted hover:text-text-normal transition-colors shrink-0"
           >
             <svg viewBox="0 0 16 16" width="18" height="18" fill="currentColor" aria-hidden="true">
               <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8Z" />
