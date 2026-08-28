@@ -1,7 +1,7 @@
 [
   {
     "id": "meshat-dark",
-    "name": "Meshat Dark",
+    "name": "Dark",
     "vars": {
       "--palette-bg-base": "#111827",
       "--palette-bg-surface": "#1F2937",
@@ -22,7 +22,7 @@
   },
   {
     "id": "meshat-light",
-    "name": "Meshat Light",
+    "name": "Light",
     "vars": {
       "--palette-bg-base": "#EEF2F7",
       "--palette-bg-surface": "#FFFFFF",

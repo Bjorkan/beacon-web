@@ -75,7 +75,9 @@
     "current": "Language: {{name}}"
   },
   "theme": {
-    "label": "Theme"
+    "label": "Theme",
+    "switchToDark": "Switch to dark mode",
+    "switchToLight": "Switch to light mode"
   },
   "errors": {
     "render": "Something went wrong rendering this view."

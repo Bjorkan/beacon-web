@@ -75,7 +75,9 @@
     "current": "Språk: {{name}}"
   },
   "theme": {
-    "label": "Tema"
+    "label": "Tema",
+    "switchToDark": "Växla till mörkt läge",
+    "switchToLight": "Växla till ljust läge"
   },
   "errors": {
     "render": "Något gick fel när vyn skulle visas."

@@ -294,12 +294,46 @@ function RegionSelectorPanel() {
   );
 }
 
+function ThemeToggleIcon({ variant }: { variant: "sun" | "moon" }) {
+  return variant === "sun" ? (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden>
+      <circle cx="12" cy="12" r="4" />
+      <path d="M12 2v2m0 16v2M4.93 4.93l1.41 1.41m11.32 11.32 1.41 1.41M2 12h2m16 0h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41" />
+    </svg>
+  ) : (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
+    </svg>
+  );
+}
+
 function ThemePicker() {
   const { t } = useTranslation();
   const { themeId, themes, setThemeId } = useTheme();
-  const current = themes.find((t) => t.id === themeId);
   const list = selectableThemes(themes, ENABLED_THEME_IDS);
+  const dark = list.find((t) => /dark/i.test(t.id));
+  const light = list.find((t) => /light/i.test(t.id));
+  const isDark = /dark/i.test(themeId);
 
+  // Exactly a light/dark pair (the Meshat deployment): a single sun/moon toggle is clearer than
+  // a picker. Any other theme set falls back to the full dropdown.
+  if (list.length === 2 && dark && light) {
+    const target = isDark ? light : dark;
+    const label = t(isDark ? "theme.switchToLight" : "theme.switchToDark");
+    return (
+      <button
+        type="button"
+        aria-label={label}
+        title={label}
+        className="flex items-center justify-center bg-bg-raised border border-border rounded px-2 py-1.5 text-text-muted hover:text-text-normal hover:border-text-dim transition-colors"
+        onClick={() => setThemeId(target.id)}
+      >
+        <ThemeToggleIcon variant={isDark ? "sun" : "moon"} />
+      </button>
+    );
+  }
+
+  const current = themes.find((t) => t.id === themeId);
   return (
     <Dropdown
       renderTrigger={({ toggle }) => (
