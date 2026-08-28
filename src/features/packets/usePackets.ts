@@ -187,7 +187,7 @@ export function usePackets(frozen: boolean = false, serverFilter: PacketServerFi
       setLaggedCount((prev) => prev + data.droppedCount);
       queryClient.resetQueries({ queryKey: packetQueries.all() });
     },
-    [queryClient, regionKey],
+    [queryClient],
   );
 
   // The WS handler is down whenever this tab is unmounted, so cached history may hide a gap right

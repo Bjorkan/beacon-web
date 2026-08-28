@@ -96,7 +96,7 @@ export function ChannelList({ wsManager, onAnalyze }: ChannelListProps) {
         }));
         // append to the newest InfiniteData page; MessagePanel re-sorts by sentAt, so the page is arbitrary
         queryClient.setQueryData<InfiniteData<CursorPage<ChannelMessage>>>(
-          ["channel-messages", selectedId, regionKey],
+          channelQueries.messages({ channelId: selectedId ?? undefined, regionKey, iatas }).queryKey,
           (old) => {
             if (!old) return old;
             if (old.pages.some((p) => p.items.some((msg) => msg.packetHash === data.packetHash))) return old;
@@ -106,7 +106,7 @@ export function ChannelList({ wsManager, onAnalyze }: ChannelListProps) {
         );
       }
     },
-    [queryClient, selectedId, regionKey],
+    [queryClient, selectedId, regionKey, iatas],
   );
 
   useWsChannelMessageHandler(wsManager, handleChannelMessage);
