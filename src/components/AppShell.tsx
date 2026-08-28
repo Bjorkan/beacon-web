@@ -31,7 +31,12 @@ function LiveBadge({ wsManager }: { wsManager: WsManager }) {
 
   if (status === "connected") {
     return (
-      <div className="flex items-center gap-1.5 font-mono text-[11px] text-green bg-green/8 border border-green/15 px-2 py-0.5 rounded-sm">
+      <div
+        className="flex items-center gap-1.5 font-mono text-[11px] text-green bg-green/8 border border-green/15 px-2 py-0.5 rounded-sm"
+        role="status"
+        aria-label="Live"
+        title="Live"
+      >
         <span className="w-1.5 h-1.5 rounded-full bg-green animate-pulse" />
         LIVE
       </div>
@@ -40,14 +45,24 @@ function LiveBadge({ wsManager }: { wsManager: WsManager }) {
 
   if (status === "connecting") {
     return (
-      <div className="flex items-center gap-1.5 font-mono text-[11px] text-warn bg-warn/7 border border-warn/15 px-2 py-0.5 rounded-sm">
+      <div
+        className="flex items-center gap-1.5 font-mono text-[11px] text-warn bg-warn/7 border border-warn/15 px-2 py-0.5 rounded-sm"
+        role="status"
+        aria-label="Connection stale"
+        title={`Stale ${staleStr}`}
+      >
         STALE {staleStr}
       </div>
     );
   }
 
   return (
-    <div className="flex items-center gap-1.5 font-mono text-[11px] text-danger bg-danger/8 border border-danger/15 px-2 py-0.5 rounded-sm">
+    <div
+      className="flex items-center gap-1.5 font-mono text-[11px] text-danger bg-danger/8 border border-danger/15 px-2 py-0.5 rounded-sm"
+      role="status"
+      aria-label="Offline"
+      title="Offline"
+    >
       OFFLINE
     </div>
   );
@@ -89,7 +104,7 @@ function RegionSelector() {
   return (
     <Dropdown
       width="w-60"
-      className="min-w-0"
+      className="min-w-0 max-w-[7.5rem] shrink-0 sm:max-w-none"
       mobileViewport
       renderTrigger={({ toggle }) => (
         <button
@@ -191,7 +206,7 @@ function RegionSelectorPanel() {
             }
           }}
           placeholder="Filter IATA or name…"
-          className="w-full text-[11px] font-mono bg-bg-surface border border-border rounded px-2 py-1 text-text-bright placeholder:text-text-dim"
+          className="w-full text-base sm:text-[11px] font-mono bg-bg-surface border border-border rounded px-2 py-1 text-text-bright placeholder:text-text-dim"
         />
       </div>
 
@@ -336,11 +351,15 @@ export function AppShell({ activeTab, onTabChange, wsManager, children }: AppShe
   return (
     <div className="flex flex-col h-dvh">
       <header className="flex items-center gap-2 px-2 sm:px-3 md:px-4 h-[42px] bg-bg-surface border-b border-border shrink-0">
-        <BeaconWordmark iconSize={22} textClassName="text-sm" className="shrink-0" />
-        <div className="flex flex-1 items-center justify-end gap-1.5 md:gap-3 min-w-0">
+        <BeaconWordmark
+          iconSize={22}
+          textClassName="truncate whitespace-nowrap text-sm"
+          className="min-w-0 flex-1 overflow-hidden"
+        />
+        <div className="flex shrink-0 items-center justify-end gap-1.5 md:gap-3">
           <RegionSelector />
           <ThemePicker />
-          <div className="shrink-0">
+          <div className="hidden sm:block shrink-0">
             <LiveBadge wsManager={wsManager} />
           </div>
           <a

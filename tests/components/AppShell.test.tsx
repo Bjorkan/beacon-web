@@ -65,10 +65,19 @@ describe("AppShell", () => {
     vi.mocked(getIatas).mockResolvedValue([]);
     renderShell();
 
-    expect(screen.getByText("BEACON")).not.toHaveClass("hidden");
+    expect(screen.getByText("BEACON")).toHaveClass("truncate", "whitespace-nowrap");
+    expect(screen.getByText("BEACON").parentElement).toHaveClass("min-w-0", "flex-1", "overflow-hidden");
     expect(screen.getByText("REGION")).not.toHaveClass("hidden");
     expect(screen.getByRole("button", { name: /REGION/ })).toHaveClass("max-w-full", "min-w-0", "overflow-hidden");
-    expect(screen.getByText("LIVE").parentElement).toHaveClass("shrink-0");
+    expect(screen.getByRole("button", { name: /REGION/ }).parentElement).toHaveClass(
+      "max-w-[7.5rem]",
+      "shrink-0",
+    );
+    expect(screen.getByRole("status", { name: "Live" }).parentElement).toHaveClass(
+      "hidden",
+      "sm:block",
+      "shrink-0",
+    );
     expect(screen.getByRole("link", { name: "GitHub" })).toHaveClass("hidden", "sm:inline-flex", "shrink-0");
   });
 });
@@ -126,6 +135,7 @@ describe("region picker filter", () => {
     const input = await openPicker();
 
     expect(input).not.toHaveFocus();
+    expect(input).toHaveClass("text-base", "sm:text-[11px]");
     expect(input.parentElement?.parentElement).toHaveClass(
       "max-sm:fixed",
       "max-sm:inset-x-3",
