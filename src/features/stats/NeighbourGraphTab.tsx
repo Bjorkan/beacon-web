@@ -3,7 +3,7 @@ import { useTranslation } from "react-i18next";
 import { useQuery } from "@tanstack/react-query";
 import { useRegion } from "../../hooks/useRegion";
 import { useMapNodesData } from "../map/useMapNodesData";
-import { getNodeNeighbors } from "../../api/client";
+import { nodeQueries } from "../../api/queries";
 import { useChartColors } from "./chartTheme";
 import { buildNeighbourGraph, buildEgoGraph, neighbourGraphOption } from "./neighbour-graph";
 import { NeighbourGraph } from "./NeighbourGraph";
@@ -50,10 +50,8 @@ export function NeighbourGraphTab() {
   // Selected node's neighbours (shared cache with the map + node panel); dataUpdatedAt stands in for
   // "now" so the freshness fade is pure at render time.
   const { data: neighbours, dataUpdatedAt } = useQuery({
-    queryKey: ["node-neighbors", selectedId],
-    queryFn: () => getNodeNeighbors(selectedId!),
+    ...nodeQueries.neighbors(selectedId ?? ""),
     enabled: !!selectedId,
-    staleTime: 30_000,
   });
   const ego = useMemo(() => {
     if (!selectedId || !neighbours) return null;

@@ -1,11 +1,16 @@
 import { useCallback, useEffect, useMemo } from "react";
-import { useInfiniteQuery, keepPreviousData, type QueryKey } from "@tanstack/react-query";
+import { useInfiniteQuery, keepPreviousData, type UseInfiniteQueryOptions, type InfiniteData, type QueryKey } from "@tanstack/react-query";
 import type { CursorPage } from "../types/api";
 
 interface UseInfinitePagesOptions<T> {
-  queryKey: QueryKey;
-  // fetch one page; cursor is the previous page's nextCursor (undefined for the first page)
-  queryFn: (cursor: number | undefined) => Promise<CursorPage<T>>;
+  // centralized factory output (src/api/queries.ts) — key + fn + pagination mechanics in one object
+  options: UseInfiniteQueryOptions<
+    CursorPage<T>,
+    Error,
+    InfiniteData<CursorPage<T>>,
+    QueryKey,
+    number | undefined
+  >;
   // stable id accessor for dedup — pass a module-level fn so the memo isn't rebuilt every render
   getId: (item: T) => string;
   // keep the prior key's rows on screen while a new key (e.g. a filter change) loads its first page
@@ -23,14 +28,10 @@ interface UseInfinitePagesOptions<T> {
 // load only the first page and pull the rest on demand via loadMore(). Loads once per key (staleTime
 // Infinity, no maxPages); dedupes by id because a non-unique cursor can repeat a row across a page
 // boundary. Shared by the map and the entity tables.
-export function useInfinitePages<T>({ queryKey, queryFn, getId, keepPrevious, auto = true, enabled = true }: UseInfinitePagesOptions<T>) {
+export function useInfinitePages<T>({ options, getId, keepPrevious, auto = true, enabled = true }: UseInfinitePagesOptions<T>) {
   const { data, fetchNextPage, hasNextPage, isFetching, isFetchingNextPage, isError, isFetchNextPageError, isLoading } =
     useInfiniteQuery({
-      queryKey,
-      queryFn: ({ pageParam }) => queryFn(pageParam),
-      getNextPageParam: (last) => last.nextCursor ?? undefined,
-      initialPageParam: undefined as number | undefined,
-      staleTime: Infinity,
+      ...options,
       enabled,
       placeholderData: keepPrevious ? keepPreviousData : undefined,
     });

@@ -1,7 +1,7 @@
 import { formatHex } from "../../lib/formatters";
 import { useTranslation } from "react-i18next";
 import { useQuery } from "@tanstack/react-query";
-import { getIatas } from "../../api/client";
+import { iataQueries } from "../../api/queries";
 import { Timestamp } from "../../components/Timestamp";
 import { Badge } from "../../components/Badge";
 import { ScopeTag } from "../../components/ScopeTag";
@@ -24,9 +24,7 @@ export function PacketTableRow({ packet, expanded, isFresh, onToggle }: PacketTa
   const { t } = useTranslation();
   // Shared cache with MapView's iatas query — one request serves every row.
   const { data: iataNames } = useQuery({
-    queryKey: ["iatas"],
-    queryFn: getIatas,
-    staleTime: 60_000,
+    ...iataQueries.list(),
     select: (rows) => new Map(rows.map((r) => [r.iata, r.displayName ?? r.iata])),
   });
   // ?? not ||, so a legitimate 0-hop direct packet still shows its count

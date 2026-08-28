@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { act, renderHook, waitFor } from "@testing-library/react";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { QueryClient, QueryClientProvider, infiniteQueryOptions } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 import { useInfinitePages } from "../../src/hooks/useInfinitePages";
 
@@ -17,6 +17,19 @@ function wrapper() {
   );
 }
 
+// Factory-style options, exactly the shape src/api/queries.ts produces for paginated endpoints.
+// The spy receives the fetch context, so cursor assertions read `calls[n][0].pageParam`.
+function optionsFor(queryKey: unknown[], queryFn: ReturnType<typeof vi.fn>) {
+  return infiniteQueryOptions({
+    queryKey: queryKey as never,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    queryFn: (ctx: any) => queryFn(ctx.pageParam),
+    getNextPageParam: (last: { nextCursor: number | null }) => last.nextCursor ?? undefined,
+    initialPageParam: undefined as number | undefined,
+    staleTime: Infinity,
+  });
+}
+
 describe("useInfinitePages", () => {
   it("auto-chains pages, concatenates items, and forwards the prev page's nextCursor", async () => {
     const queryFn = vi.fn();
@@ -25,7 +38,7 @@ describe("useInfinitePages", () => {
       .mockResolvedValueOnce({ items: [row("c")], nextCursor: null, hasMore: false });
 
     const { result } = renderHook(
-      () => useInfinitePages({ queryKey: ["t", 1], queryFn, getId: rowId }),
+      () => useInfinitePages<Row>({ options: optionsFor(["t", 1], queryFn), getId: rowId }),
       { wrapper: wrapper() },
     );
 
@@ -33,8 +46,8 @@ describe("useInfinitePages", () => {
     expect(result.current.items.map(rowId)).toEqual(["a", "b", "c"]);
     expect(result.current.loadedCount).toBe(3);
     expect(queryFn).toHaveBeenCalledTimes(2);
-    expect(queryFn).toHaveBeenNthCalledWith(1, undefined); // first page sends no cursor
-    expect(queryFn).toHaveBeenNthCalledWith(2, 2); // second page uses page 1's nextCursor
+    expect(queryFn.mock.calls[0]![0]).toBeUndefined(); // first page sends no cursor
+    expect(queryFn.mock.calls[1]![0]).toBe(2); // second page uses page 1's nextCursor
   });
 
   it("dedupes items repeated across a page boundary (cursor is a non-unique timestamp)", async () => {
@@ -44,7 +57,7 @@ describe("useInfinitePages", () => {
       .mockResolvedValueOnce({ items: [row("b"), row("c")], nextCursor: null, hasMore: false });
 
     const { result } = renderHook(
-      () => useInfinitePages({ queryKey: ["t", 2], queryFn, getId: rowId }),
+      () => useInfinitePages<Row>({ options: optionsFor(["t", 2], queryFn), getId: rowId }),
       { wrapper: wrapper() },
     );
 
@@ -59,7 +72,7 @@ describe("useInfinitePages", () => {
       .mockRejectedValue(new Error("boom"));
 
     const { result } = renderHook(
-      () => useInfinitePages({ queryKey: ["t", 3], queryFn, getId: rowId }),
+      () => useInfinitePages<Row>({ options: optionsFor(["t", 3], queryFn), getId: rowId }),
       { wrapper: wrapper() },
     );
 
@@ -76,7 +89,7 @@ describe("useInfinitePages", () => {
       .mockResolvedValueOnce({ items: [row("c")], nextCursor: null, hasMore: false });
 
     const { result } = renderHook(
-      () => useInfinitePages({ queryKey: ["t", "ondemand"], queryFn, getId: rowId, auto: false }),
+      () => useInfinitePages<Row>({ options: optionsFor(["t", "ondemand"], queryFn), getId: rowId, auto: false }),
       { wrapper: wrapper() },
     );
 
@@ -90,7 +103,7 @@ describe("useInfinitePages", () => {
 
     await waitFor(() => expect(result.current.items.map(rowId)).toEqual(["a", "b", "c"]));
     expect(queryFn).toHaveBeenCalledTimes(2);
-    expect(queryFn).toHaveBeenNthCalledWith(2, 2); // loadMore used page 1's nextCursor
+    expect(queryFn.mock.calls[1]![0]).toBe(2); // loadMore used page 1's nextCursor
     expect(result.current.hasMore).toBe(false);
   });
 
@@ -100,7 +113,7 @@ describe("useInfinitePages", () => {
 
     const { result, rerender } = renderHook(
       ({ k }: { k: string }) =>
-        useInfinitePages({ queryKey: ["kp", k], queryFn, getId: rowId, keepPrevious: true }),
+        useInfinitePages<Row>({ options: optionsFor(["kp", k], queryFn), getId: rowId, keepPrevious: true }),
       { wrapper: wrapper(), initialProps: { k: "A" } },
     );
 

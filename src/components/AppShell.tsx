@@ -11,7 +11,7 @@ import { Dropdown } from "./Dropdown";
 import { BottomNav } from "./BottomNav";
 import { MeshatWordmark } from "./MeshatWordmark";
 import { LanguageSelector } from "./LanguageSelector";
-import { getIatas } from "../api/client";
+import { iataQueries } from "../api/queries";
 import { ENABLED_TABS, ENABLED_THEME_IDS, selectableThemes, APP_NAME, GITHUB_URL } from "../lib/constants";
 import type { WsManager } from "../api/ws-manager";
 
@@ -148,11 +148,7 @@ function RegionSelectorPanel() {
     };
   }, []);
 
-  const { data: iatas, isError: iatasError } = useQuery({
-    queryKey: ["iatas"],
-    queryFn: getIatas,
-    staleTime: 60_000,
-  });
+  const { data: iatas, isError: iatasError } = useQuery(iataQueries.list());
 
   const toggleRegion = (slug: string) => {
     const has = selection.regions.includes(slug);

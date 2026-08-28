@@ -1,6 +1,6 @@
 import { useState, useCallback, useMemo, useEffect, useRef } from "react";
 import { useQuery, useQueryClient, type InfiniteData } from "@tanstack/react-query";
-import { getChannels } from "../../api/client";
+import { channelQueries } from "../../api/queries";
 import { useRegion } from "../../hooks/useRegion";
 import { useIsMobile } from "../../hooks/useMediaQuery";
 import { useWsChannelMessageHandler } from "../../hooks/useWsHandlers";
@@ -46,11 +46,7 @@ export function ChannelList({ wsManager, onAnalyze }: ChannelListProps) {
     setHeardCounts({});
   }, []);
 
-  const { data: channels, isLoading } = useQuery({
-    queryKey: ["channels", regionKey],
-    queryFn: () => getChannels({ iatas }),
-    staleTime: 60_000,
-  });
+  const { data: channels, isLoading } = useQuery(channelQueries.list({ regionKey, iatas }));
 
   // "Public" pinned first, then named channels, then unnamed by most recent
   const sortedChannels = useMemo(
@@ -77,11 +73,11 @@ export function ChannelList({ wsManager, onAnalyze }: ChannelListProps) {
   const handleChannelMessage = useCallback(
     (data: ChannelMessage) => {
       // bump lastSeen, or refetch the list if this is a channel we haven't seen yet
-      queryClient.setQueryData<ChannelSummary[]>(["channels", regionKey], (old) => {
+      queryClient.setQueryData<ChannelSummary[]>(channelQueries.list({ regionKey, iatas }).queryKey, (old) => {
         if (!old) return old;
         const idx = old.findIndex((ch) => ch.channelHash === data.channelHash);
         if (idx === -1) {
-          queryClient.invalidateQueries({ queryKey: ["channels", regionKey] });
+          queryClient.invalidateQueries({ queryKey: channelQueries.all() });
           return old;
         }
         const updated = [...old];
@@ -90,7 +86,7 @@ export function ChannelList({ wsManager, onAnalyze }: ChannelListProps) {
       });
 
       // use cache directly to avoid stale closure over selectedChannel
-      const cached = queryClient.getQueryData<ChannelSummary[]>(["channels", regionKey]);
+      const cached = queryClient.getQueryData<ChannelSummary[]>(channelQueries.list({ regionKey, iatas }).queryKey);
       const selected = cached?.find((ch) => ch.id === selectedId);
       if (selected && data.channelHash === selected.channelHash) {
         // same message, multiple observer paths — count the reach

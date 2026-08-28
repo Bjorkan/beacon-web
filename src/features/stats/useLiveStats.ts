@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
+import { observerQueries, statsQueries, telemetryQueries } from "../../api/queries";
 import { useRegion } from "../../hooks/useRegion";
 import { useWsPacketHandler, useWsObserverStatusHandler } from "../../hooks/useWsHandlers";
 import type { WsManager } from "../../api/ws-manager";
@@ -21,7 +22,7 @@ export function useLiveOverview(wsManager: WsManager) {
     const { packets, obs } = pending.current;
     if (!packets && !obs) return;
     pending.current = { packets: 0, obs: 0 };
-    qc.setQueryData<StatsOverview>(["stats-overview", regionKey], (old) =>
+    qc.setQueryData<StatsOverview>(statsQueries.overview(regionKey).queryKey, (old) =>
       old
         ? { ...old, totalPackets: old.totalPackets + packets, totalObservations: old.totalObservations + obs }
         : old,
@@ -60,8 +61,8 @@ export function useLiveObserver(wsManager: WsManager, observerId: string | null,
   const onStatus = useCallback(
     (data: WsObserverStatus["data"]) => {
       if (!observerId || data.observerId !== observerId) return;
-      qc.invalidateQueries({ queryKey: ["observer", observerId] });
-      qc.invalidateQueries({ queryKey: ["observer-telemetry", observerId, range] });
+      qc.invalidateQueries({ queryKey: observerQueries.detail(observerId).queryKey });
+      qc.invalidateQueries({ queryKey: telemetryQueries.range(observerId, range).queryKey });
     },
     [qc, observerId, range],
   );

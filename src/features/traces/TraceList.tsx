@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { useQuery } from "@tanstack/react-query";
-import { getTraces } from "../../api/client";
+import { traceQueries } from "../../api/queries";
 import { useRegion } from "../../hooks/useRegion";
 import { SkeletonRows } from "../../components/SkeletonRows";
 import { EmptyState } from "../../components/EmptyState";
@@ -108,11 +108,7 @@ export function TraceList({ onAnalyze, onViewNode }: TraceListProps) {
     }
   }, [regionKey]);
 
-  const { data: tags, isLoading } = useQuery({
-    queryKey: ["traces", regionKey, typeFilter],
-    queryFn: () => getTraces(iatas, { limit: TRACE_LIST_LIMIT, type: typeFilter || undefined }),
-    staleTime: 30_000,
-  });
+  const { data: tags, isLoading } = useQuery(traceQueries.list({ regionKey, iatas, type: typeFilter, limit: TRACE_LIST_LIMIT }));
 
   return (
     <div className="flex flex-1 min-h-0">

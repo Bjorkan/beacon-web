@@ -1,7 +1,7 @@
 import type { Observer, AdvertObservation } from "./types";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
-import { getObserver, getObserverAdverts } from "../../api/client";
+import { observerQueries } from "../../api/queries";
 import { Badge } from "../../components/Badge";
 import { DetailPanel, Section, Field } from "../../components/DetailPanel";
 import { CopyButton } from "../../components/CopyButton";
@@ -110,17 +110,9 @@ interface ObserverDetailPanelProps {
 
 export function ObserverDetailPanel({ observerId, onClose, onAnalyzePacket, onViewStats }: ObserverDetailPanelProps) {
   const { t } = useTranslation();
-  const { data: observer, isLoading } = useQuery({
-    queryKey: ["observer", observerId],
-    queryFn: () => getObserver(observerId),
-    staleTime: 30_000,
-  });
+  const { data: observer, isLoading } = useQuery(observerQueries.detail(observerId));
 
-  const { data: adverts } = useQuery({
-    queryKey: ["observer-adverts", observerId],
-    queryFn: () => getObserverAdverts(observerId, { limit: 50 }),
-    staleTime: 30_000,
-  });
+  const { data: adverts } = useQuery(observerQueries.adverts(observerId));
 
   useTick(); // re-derive the status badge as lastStatusAt ages
   const stats = observer ? getStats(observer.statusMetadata) : null;

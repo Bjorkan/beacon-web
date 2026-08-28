@@ -21,7 +21,7 @@ import { LoadingPill } from "../../components/LoadingPill";
 import { useRegion } from "../../hooks/useRegion";
 import { useTheme } from "../../hooks/useTheme";
 import { useWsNodeUpdateHandler } from "../../hooks/useWsHandlers";
-import { getIatas, getNodeNeighbors } from "../../api/client";
+import { iataQueries, nodeQueries } from "../../api/queries";
 import { upsertNodePages } from "../nodes/node-updates";
 import type { WsManager } from "../../api/ws-manager";
 import type { NodeSummary } from "../nodes/types";
@@ -100,7 +100,7 @@ export function MapView({ wsManager, selectedNodeId, onSelectNode }: MapViewProp
   // The basemap follows the app theme (Meshat Dark → dark tiles, Meshat Light → light tiles); a
   // ?style= deep link still wins for the session. Nothing is persisted — switching theme swaps tiles.
   const styleId = urlView.styleId ?? mapStyleForTheme(themeId);
-  const { data: iatas } = useQuery({ queryKey: ["iatas"], queryFn: getIatas, staleTime: 60_000 });
+  const { data: iatas } = useQuery(iataQueries.list());
 
   // nodes for the selected region (its own key, independent of the Nodes-table filters/page cap).
   // Pages in 50 at a time so the map fills batch by batch; nodesKey matches the hook's query key.
@@ -117,7 +117,7 @@ export function MapView({ wsManager, selectedNodeId, onSelectNode }: MapViewProp
       );
       // mirror NodeTable: refresh the shared detail panel when the open node changes live
       if (selectedNodeId === data.nodeId) {
-        queryClient.invalidateQueries({ queryKey: ["node", data.nodeId] });
+        queryClient.invalidateQueries({ queryKey: nodeQueries.detail(data.nodeId).queryKey });
       }
     },
     [queryClient, nodesKey, selectedNodeId],
@@ -133,10 +133,8 @@ export function MapView({ wsManager, selectedNodeId, onSelectNode }: MapViewProp
   // detail endpoint carries (the list's neighborIds are bare uuids). Shares the panel's query cache
   // (same key), so selecting a node — which opens the panel — usually has this already warm.
   const { data: focusNeighbors } = useQuery({
-    queryKey: ["node-neighbors", selectedNodeId],
-    queryFn: () => getNodeNeighbors(selectedNodeId!),
+    ...nodeQueries.neighbors(selectedNodeId ?? ""),
     enabled: neighborLines === "selected" && !!selectedNodeId,
-    staleTime: 30_000,
   });
 
   // "on" is a pure client-side render over already-loaded nodes (neighborIds ship with every map

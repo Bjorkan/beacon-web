@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
-import { getNode, getNodeObservations, getNodeNeighbors } from "../../api/client";
+import { nodeQueries } from "../../api/queries";
 import { Badge } from "../../components/Badge";
 import { DetailPanel, Section, Field } from "../../components/DetailPanel";
 import { CopyButton } from "../../components/CopyButton";
@@ -79,23 +79,11 @@ interface NodeDetailPanelProps {
 
 export function NodeDetailPanel({ nodeId, onClose, onViewObserver, onViewNode, onAnalyzePacket }: NodeDetailPanelProps) {
   const { t } = useTranslation();
-  const { data: node, isLoading } = useQuery({
-    queryKey: ["node", nodeId],
-    queryFn: () => getNode(nodeId),
-    staleTime: 30_000,
-  });
+  const { data: node, isLoading } = useQuery(nodeQueries.detail(nodeId));
 
-  const { data: observations } = useQuery({
-    queryKey: ["node-observations", nodeId],
-    queryFn: () => getNodeObservations(nodeId, { limit: 50 }),
-    staleTime: 30_000,
-  });
+  const { data: observations } = useQuery(nodeQueries.observations(nodeId));
 
-  const { data: neighbors } = useQuery({
-    queryKey: ["node-neighbors", nodeId],
-    queryFn: () => getNodeNeighbors(nodeId),
-    staleTime: 30_000,
-  });
+  const { data: neighbors } = useQuery(nodeQueries.neighbors(nodeId));
 
   const hasLocation = node != null && node.lat != null && node.lng != null;
 

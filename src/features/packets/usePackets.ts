@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo, useSyncExternalStore } from "react";
 import { useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
-import { getPackets } from "../../api/client";
+import { packetQueries } from "../../api/queries";
 import { useRegion } from "../../hooks/useRegion";
 import type { WsPacketObservation, WsLagged } from "../../types/ws";
 import type { PacketSummary } from "../../types/api";
@@ -185,7 +185,7 @@ export function usePackets(frozen: boolean = false, serverFilter: PacketServerFi
   const handleLagged = useCallback(
     (data: WsLagged) => {
       setLaggedCount((prev) => prev + data.droppedCount);
-      queryClient.resetQueries({ queryKey: ["packets", regionKey] });
+      queryClient.resetQueries({ queryKey: packetQueries.all() });
     },
     [queryClient, regionKey],
   );
@@ -194,7 +194,7 @@ export function usePackets(frozen: boolean = false, serverFilter: PacketServerFi
   // where the live buffer begins. Refresh the first page on mount to close it (prefix match:
   // filtered variants included).
   useEffect(() => {
-    queryClient.resetQueries({ queryKey: ["packets", regionKey] });
+    queryClient.resetQueries({ queryKey: packetQueries.all() });
     // eslint-disable-next-line react-hooks/exhaustive-deps -- mount only; region changes refetch via the key
   }, []);
 
@@ -210,12 +210,7 @@ export function usePackets(frozen: boolean = false, serverFilter: PacketServerFi
   } = useInfiniteQuery({
     // The unfiltered key must stay 2-element so its cached entry survives filter toggling; the
     // lagged/mount resets above match both shapes by prefix.
-    queryKey: serverFilter ? ["packets", regionKey, serverFilter] : ["packets", regionKey],
-    // first load and every scroll page are the default 50; getPackets fills in the limit
-    queryFn: ({ pageParam }) => getPackets(iatas, { cursor: pageParam, ...serverFilter }),
-    getNextPageParam: (last) => last.nextCursor ?? undefined,
-    initialPageParam: undefined as number | undefined,
-    staleTime: Infinity,
+    ...packetQueries.list({ regionKey, iatas, filter: serverFilter }),
     maxPages: MAX_INFINITE_PAGES,
   });
 

@@ -1,7 +1,7 @@
 /* eslint-disable react-refresh/only-export-components */
 import { createContext, useContext, useState, useMemo, useCallback, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { getRegions, getRegion } from "../api/client";
+import { regionQueries } from "../api/queries";
 import {
   resolveIatas,
   regionKey as toRegionKey,
@@ -56,14 +56,7 @@ export interface RegionsData {
 // cached long and shared via React Query across every caller. The N detail fetches are fine — there
 // are only a handful of regions.
 export function useRegions(): RegionsData {
-  const { data } = useQuery({
-    queryKey: ["regions"],
-    queryFn: async () => {
-      const summaries = await getRegions();
-      return Promise.all(summaries.map((s) => getRegion(s.id)));
-    },
-    staleTime: 5 * 60_000,
-  });
+  const { data } = useQuery(regionQueries.list());
 
   return useMemo(() => {
     const regions = data ?? [];

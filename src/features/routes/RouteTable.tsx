@@ -2,7 +2,7 @@ import { useState, useMemo, useCallback, useEffect, useRef, memo } from "react";
 import { type TFunction } from "i18next";
 import { useTranslation } from "react-i18next";
 import { useQuery } from "@tanstack/react-query";
-import { getKnownRoutesPage, searchKnownRoutes, searchCrossIATARoutes, getIatas } from "../../api/client";
+import { iataQueries, routeQueries } from "../../api/queries";
 import { useRegion } from "../../hooks/useRegion";
 import { useInfinitePages } from "../../hooks/useInfinitePages";
 import { Badge } from "../../components/Badge";
@@ -141,14 +141,6 @@ interface SearchParams {
   iatas: string[];
 }
 
-// every directed (a,b), a≠b pair of the selected IATAs — we don't know which IATA holds the source
-// vs dest hash, so we try all directions and flatten.
-function directedPairs(iatas: string[]): [string, string][] {
-  const pairs: [string, string][] = [];
-  for (const a of iatas) for (const b of iatas) if (a !== b) pairs.push([a, b]);
-  return pairs;
-}
-
 export function RouteTable() {
   const { t } = useTranslation();
   const { iatas, regionKey } = useRegion();
@@ -182,38 +174,25 @@ export function RouteTable() {
   // pulls the next page via loadMore() as you scroll, instead of eagerly loading the whole set.
   const { items: listRoutes, loadedCount, isPaging, isError, isLoading: listLoading, loadMore, hasMore } =
     useInfinitePages<KnownRoute>({
-      queryKey: ["routes", serverIata ?? ""],
-      queryFn: (cursor) => getKnownRoutesPage({ iata: serverIata, cursor }),
+      options: routeQueries.list({ iata: serverIata ?? "" }),
       getId: routeId,
       keepPrevious: true,
       auto: false,
     });
 
   const { data: searchRoutes, isLoading: searchLoading } = useQuery({
-    queryKey: ["routes-search", search?.iatas[0], search?.from, search?.to],
-    queryFn: () => searchKnownRoutes(search!.iatas[0]!, search!.from, search!.to),
+    ...routeQueries.search(search ? { iata: search.iatas[0]!, from: search.from, to: search.to } : null),
     enabled: search !== null && !isCross,
-    staleTime: 60_000,
   });
 
-  const { data: crossRoutes, isLoading: crossLoading } = useQuery({
-    queryKey: ["routes-cross", [...(search?.iatas ?? [])].sort().join(","), search?.from, search?.to],
-    queryFn: async () => {
-      const results = await Promise.all(
-        directedPairs(search!.iatas).map(([a, b]) => searchCrossIATARoutes(search!.from, a, search!.to, b)),
-      );
-      return results.flat();
-    },
-    enabled: search !== null && isCross,
-    staleTime: 60_000,
-  });
+  const { data: crossRoutes, isLoading: crossLoading } = useQuery(
+    routeQueries.cross(search ? { iatas: search.iatas, fromHash: search.from, toHash: search.to } : null),
+  );
 
   // IATA options for the path-search multi-select, from /iatas (shares the region picker's cached
   // query). The label carries the display name so the dropdown's search filter matches on it.
   const { data: iataCodes } = useQuery({
-    queryKey: ["iatas"],
-    queryFn: getIatas,
-    staleTime: 5 * 60_000,
+    ...iataQueries.list(),
   });
   const iataOptions = useMemo(
     () => (iataCodes ?? []).map((i) => ({ value: i.iata, label: i.displayName ? `${i.iata} — ${i.displayName}` : i.iata })),

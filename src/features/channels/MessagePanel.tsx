@@ -1,7 +1,7 @@
 import { useMemo, useRef, useLayoutEffect, useState, useCallback } from "react";
 import { useTranslation } from "react-i18next";
 import { useInfiniteQuery } from "@tanstack/react-query";
-import { getChannelMessagesPage } from "../../api/client";
+import { channelQueries } from "../../api/queries";
 import { Badge } from "../../components/Badge";
 import { Timestamp } from "../../components/Timestamp";
 import { LoadingPill } from "../../components/LoadingPill";
@@ -57,10 +57,7 @@ interface MessagePanelProps {
 export function MessagePanel({ channel, heardCounts, iatas, regionKey, onAnalyze, onBack }: MessagePanelProps) {
   const { t } = useTranslation();
   const { data, isLoading, fetchNextPage, hasNextPage, isFetchingNextPage } = useInfiniteQuery({
-    queryKey: ["channel-messages", channel?.id, regionKey],
-    queryFn: ({ pageParam }) => getChannelMessagesPage(channel!.id, { iatas, cursor: pageParam, limit: 50 }),
-    getNextPageParam: (last) => last.nextCursor ?? undefined,
-    initialPageParam: undefined as number | undefined,
+    ...channelQueries.messages({ channelId: channel?.id, regionKey, iatas }),
     enabled: channel !== null,
     staleTime: 30_000,
   });

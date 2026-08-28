@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
-import { getTraceDetail } from "../../api/client";
+import { traceQueries } from "../../api/queries";
 import { DetailPanel, Section, Field } from "../../components/DetailPanel";
 import { Badge } from "../../components/Badge";
 import { Timestamp } from "../../components/Timestamp";
@@ -96,9 +96,7 @@ interface TraceDetailPanelProps {
 export function TraceDetailPanel({ tag, onClose, onAnalyze, onViewNode }: TraceDetailPanelProps) {
   const { t } = useTranslation();
   const { data: detail, isLoading } = useQuery({
-    queryKey: ["trace", tag],
-    queryFn: () => getTraceDetail(tag),
-    staleTime: 30_000,
+    ...traceQueries.detail(tag),
   });
 
   // most-recently-heard packet first (the backend order isn't guaranteed)

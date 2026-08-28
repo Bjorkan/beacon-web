@@ -2,7 +2,7 @@ import { useState, useCallback, useMemo } from "react";
 import { type TFunction } from "i18next";
 import { useTranslation } from "react-i18next";
 import { useQueryClient, type InfiniteData } from "@tanstack/react-query";
-import { getNodesPage } from "../../api/client";
+import { nodeQueries } from "../../api/queries";
 import { useRegion } from "../../hooks/useRegion";
 import { useScopes } from "../../hooks/useScopes";
 import { useTick } from "../../hooks/useTick";
@@ -160,24 +160,18 @@ export function NodeTable({ wsManager, selectedNodeId, onSelectNode }: NodeTable
   // so toggling the field with an empty box is a no-op and a name never gets sent as a hex prefix
   const { name: nameParam, pubkeyPrefix: pubkeyPrefixParam } = nodeSearchParams(searchField, search);
 
-  const queryKey = useMemo(
-    () => ["nodes", regionKey, typeFilter, pathsFilter, tracesFilter, nameParam, pubkeyPrefixParam],
-    [regionKey, typeFilter, pathsFilter, tracesFilter, nameParam, pubkeyPrefixParam],
-  );
-
   // page the region's nodes 50 at a time (filters stay server-side, in the query key); rows stream
   // in as each batch lands. Loads once per filter set — WS updates keep them live, no 30s refetch.
   const { items: nodes, loadedCount, isPaging, isError, isLoading } = useInfinitePages<NodeSummary>({
-    queryKey,
-    queryFn: (cursor) =>
-      getNodesPage(iatas, {
-        cursor,
-        type: typeFilter || undefined,
-        name: nameParam,
-        pubkeyPrefix: pubkeyPrefixParam,
-        supportsMultibytePaths: pathsFilter || undefined,
-        supportsMultibyteTraces: tracesFilter || undefined,
-      }),
+    options: nodeQueries.list({
+      regionKey,
+      iatas,
+      type: typeFilter,
+      name: nameParam,
+      pubkeyPrefix: pubkeyPrefixParam,
+      supportsMultibytePaths: pathsFilter || undefined,
+      supportsMultibyteTraces: tracesFilter || undefined,
+    }),
     getId: nodeId,
     keepPrevious: true,
   });
@@ -193,14 +187,23 @@ export function NodeTable({ wsManager, selectedNodeId, onSelectNode }: NodeTable
 
   const handleNodeUpdate = useCallback(
     (data: WsNodeUpdate["data"]) => {
-      queryClient.setQueryData<InfiniteData<CursorPage<NodeSummary>>>(queryKey, (old) =>
-        patchInfinitePages(old, (items) => patchNodeSummary(items, data) ?? items),
-      );
-      if (selectedNodeId === data.nodeId) {
-        queryClient.invalidateQueries({ queryKey: ["node", data.nodeId] });
-      }
-    },
-    [queryClient, queryKey, selectedNodeId],
+      queryClient.setQueryData<InfiniteData<CursorPage<NodeSummary>>>(
+      nodeQueries.list({
+        regionKey,
+        iatas,
+        type: typeFilter,
+        name: nameParam,
+        pubkeyPrefix: pubkeyPrefixParam,
+        supportsMultibytePaths: pathsFilter || undefined,
+        supportsMultibyteTraces: tracesFilter || undefined,
+      }).queryKey,
+      (old) => patchInfinitePages(old, (items) => patchNodeSummary(items, data) ?? items),
+    );
+    if (selectedNodeId === data.nodeId) {
+      queryClient.invalidateQueries({ queryKey: nodeQueries.detail(data.nodeId).queryKey });
+    }
+  },
+  [queryClient, regionKey, iatas, typeFilter, nameParam, pubkeyPrefixParam, pathsFilter, tracesFilter, selectedNodeId],
   );
 
   useWsNodeUpdateHandler(wsManager, handleNodeUpdate);

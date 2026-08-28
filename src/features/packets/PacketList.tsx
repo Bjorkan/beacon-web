@@ -2,6 +2,7 @@ import { useState, useCallback, useEffect, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { useSearchParams } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
+import { packetQueries } from "../../api/queries";
 import { usePackets } from "./usePackets";
 import { usePacketDetail } from "./usePacketDetail";
 import { usePacketFilters, matchesFilters, toServerFilter } from "./usePacketFilters";
@@ -106,7 +107,7 @@ export function PacketList({ wsManager, onAnalyze, onViewPath, selectedObservati
   const handleObservation = useCallback((data: WsPacketObservation["data"]) => {
     handlePacketObservation(data);
     if (data.packetHash === expandedHash) {
-      queryClient.invalidateQueries({ queryKey: ["packet-detail", expandedHash] });
+      queryClient.invalidateQueries({ queryKey: packetQueries.detail(expandedHash).queryKey });
     }
   }, [handlePacketObservation, expandedHash, queryClient]);
 

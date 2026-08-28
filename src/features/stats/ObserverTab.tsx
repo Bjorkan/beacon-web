@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { useQuery, keepPreviousData } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { Badge } from "../../components/Badge";
 import { EmptyState } from "../../components/EmptyState";
 import { formatBattery, formatCount, formatUptime } from "../../lib/formatters";
-import { getObserversPage } from "../../api/client";
+import { statsQueries } from "../../api/queries";
 import { useRegion } from "../../hooks/useRegion";
 import { useChartColors } from "./chartTheme";
 import { useTopObservers } from "./useStats";
@@ -45,11 +45,8 @@ function ObserverList({
   const max = useMemo(() => Math.max(1, ...(top.data ?? []).map((o) => o.observationCount)), [top.data]);
 
   const search = useQuery({
-    queryKey: ["observer-search", regionKey, q],
-    queryFn: () => getObserversPage(iatas, { name: q, limit: 50 }),
+    ...statsQueries.observerSearch({ regionKey, iatas, q }),
     enabled: searching,
-    staleTime: 30_000,
-    placeholderData: keepPreviousData,
   });
 
   type Row = { id: string; name: string; count?: number; iata?: string; online?: boolean };

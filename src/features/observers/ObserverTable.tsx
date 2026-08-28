@@ -2,7 +2,7 @@ import { useState, useCallback, useMemo } from "react";
 import { type TFunction } from "i18next";
 import { useTranslation } from "react-i18next";
 import { useQuery, useQueryClient, type InfiniteData } from "@tanstack/react-query";
-import { getObserversPage, getBrokers } from "../../api/client";
+import { brokerQueries, observerQueries } from "../../api/queries";
 import { useRegion } from "../../hooks/useRegion";
 import { useScopes } from "../../hooks/useScopes";
 import { useInfinitePages } from "../../hooks/useInfinitePages";
@@ -116,34 +116,30 @@ export function ObserverTable({ wsManager, selectedObserverId, onSelectObserver,
 
   useTick(); // keep recency-derived status badges fresh
 
-  const { data: brokers } = useQuery({
-    queryKey: ["brokers"],
-    queryFn: getBrokers,
-    staleTime: 60_000,
-  });
+  const { data: brokers } = useQuery(brokerQueries.list());
 
   const brokerNames = useMemo(
     () => brokers?.map((b) => b.name) ?? [],
     [brokers],
   );
 
-  const queryKey = useMemo(
-    () => ["observers", regionKey, statusFilter, typeFilter, brokerFilter, search, searchField],
-    [regionKey, statusFilter, typeFilter, brokerFilter, search, searchField],
-  );
-
   // page the region's observers 50 at a time (filters stay server-side, in the query key); rows
   // stream in as each batch lands. Loads once per filter set — WS status events keep them live.
-  const { items: observers, loadedCount, isPaging, isError, isLoading } = useInfinitePages<ObserverSummary>({
-    queryKey,
-    queryFn: (cursor) =>
-      getObserversPage(iatas, {
-        cursor,
-        status: statusFilter || undefined,
-        type: typeFilter || undefined,
-        broker: brokerFilter || undefined,
-        name: searchField === "name" ? search || undefined : undefined,
+  const listOptions = useMemo(
+    () =>
+      observerQueries.list({
+        regionKey,
+        iatas,
+        status: statusFilter,
+        type: typeFilter,
+        broker: brokerFilter,
+        name: search,
+        searchField,
       }),
+    [regionKey, iatas, statusFilter, typeFilter, brokerFilter, search, searchField],
+  );
+  const { items: observers, loadedCount, isPaging, isError, isLoading } = useInfinitePages<ObserverSummary>({
+    options: listOptions,
     getId: observerId,
     keepPrevious: true,
   });
@@ -170,15 +166,16 @@ export function ObserverTable({ wsManager, selectedObserverId, onSelectObserver,
   // beacon-docs ticket about carrying the full summary in WS events for true live insertion).
   const handleObserverStatus = useCallback(
     (data: WsObserverStatus["data"]) => {
-      queryClient.setQueryData<InfiniteData<CursorPage<ObserverSummary>>>(queryKey, (old) =>
-        patchInfinitePages(old, (items) => patchObserverSummary(items, data) ?? items),
+      queryClient.setQueryData<InfiniteData<CursorPage<ObserverSummary>>>(
+        listOptions.queryKey,
+        (old) => patchInfinitePages(old, (items) => patchObserverSummary(items, data) ?? items),
       );
       // refresh detail panel if it's showing this observer
       if (selectedObserverId === data.observerId) {
-        queryClient.invalidateQueries({ queryKey: ["observer", data.observerId] });
+        queryClient.invalidateQueries({ queryKey: observerQueries.detail(data.observerId).queryKey });
       }
     },
-    [queryClient, queryKey, selectedObserverId],
+    [queryClient, listOptions, selectedObserverId],
   );
 
   useWsObserverStatusHandler(wsManager, handleObserverStatus);
