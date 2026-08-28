@@ -54,3 +54,29 @@ export function trailCoords(coords: [number, number][], headT: number): [number,
   out.push(posAtHop(coords, headT));
   return out;
 }
+
+// Direct LoRa sanity cap, matching the backend's neighbor rule: a leg longer
+// than this is an MQTT interconnect stitching regions together, not a radio hop.
+export const MAX_HOP_KM = 150;
+
+// Great-circle distance between two [lng, lat] coordinates, in km.
+export function haversineKm(a: [number, number], b: [number, number]): number {
+  const rad = Math.PI / 180;
+  const phi1 = a[1] * rad;
+  const phi2 = b[1] * rad;
+  const dPhi = (b[1] - a[1]) * rad;
+  const dLambda = (b[0] - a[0]) * rad;
+  const h =
+    Math.sin(dPhi / 2) ** 2 + Math.cos(phi1) * Math.cos(phi2) * Math.sin(dLambda / 2) ** 2;
+  return 6371 * 2 * Math.atan2(Math.sqrt(h), Math.sqrt(1 - h));
+}
+
+// A path is only worth drawing when every consecutive hop pair is within direct
+// LoRa range — one impossible leg means the packet teleported across a region
+// boundary via an MQTT interconnect, and the "path" isn't a radio path at all.
+export function pathWithinLoRaRange(coords: [number, number][]): boolean {
+  for (let i = 1; i < coords.length; i++) {
+    if (haversineKm(coords[i - 1]!, coords[i]!) > MAX_HOP_KM) return false;
+  }
+  return true;
+}

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { packetChain, resolvedPathNodes, posAtHop, trailCoords } from "../../../src/features/map/packet-flow";
+import { packetChain, resolvedPathNodes, posAtHop, trailCoords, pathWithinLoRaRange } from "../../../src/features/map/packet-flow";
 import type { ResolvedHop } from "../../../src/types/api";
 
 function hop(id: string, lng: number, lat: number): ResolvedHop {
@@ -59,5 +59,31 @@ describe("trailCoords", () => {
 
   it("traces every crossed hop plus the current head position", () => {
     expect(trailCoords(coords, 1.5)).toEqual([[0, 0], [10, 0], [10, 5]]);
+  });
+});
+
+describe("pathWithinLoRaRange", () => {
+  // Västmanland -> Copenhagen is ~430 km: an MQTT hop, not a radio hop.
+  const nearby: [number, number][] = [
+    [16.54, 59.61],
+    [16.56, 59.63],
+    [16.6, 59.65],
+  ];
+  const copenhagen: [number, number][] = [
+    [16.54, 59.61],
+    [12.57, 55.68],
+  ];
+
+  it("accepts a path whose legs are all within direct LoRa range", () => {
+    expect(pathWithinLoRaRange(nearby)).toBe(true);
+  });
+
+  it("rejects a path with any leg beyond the cap", () => {
+    expect(pathWithinLoRaRange(copenhagen)).toBe(false);
+  });
+
+  it("accepts trivial paths", () => {
+    expect(pathWithinLoRaRange([])).toBe(true);
+    expect(pathWithinLoRaRange([[16.54, 59.61]])).toBe(true);
   });
 });
