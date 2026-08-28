@@ -175,6 +175,14 @@ describe("PacketList loading feedback", () => {
   });
 });
 
+describe("PacketList compact layout", () => {
+  it("does not render the redundant live packets banner", () => {
+    renderList();
+
+    expect(screen.queryByText("Live Packets")).toBeNull();
+  });
+});
+
 describe("PacketList expanded row", () => {
   afterEach(() => {
     usePackets.mockImplementation(basePackets);

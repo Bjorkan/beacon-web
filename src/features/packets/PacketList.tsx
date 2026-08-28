@@ -174,7 +174,7 @@ export function PacketList({ wsManager, onAnalyze, onViewPath, selectedObservati
           </div>
         )}
 
-        {bannerCount > 0 ? (
+        {bannerCount > 0 && (
           <button
             type="button"
             className="mx-4 flex items-center justify-center gap-2 px-3 py-1.5 bg-primary/10 hover:bg-primary/15 border border-primary/20 border-t-0 text-primary text-[11px] font-medium tracking-wide cursor-pointer font-mono rounded-b transition-colors"
@@ -184,11 +184,6 @@ export function PacketList({ wsManager, onAnalyze, onViewPath, selectedObservati
             {bannerCount} new packet{bannerCount === 1 ? "" : "s"}
             <span className="text-primary/60 font-normal">· scroll to top</span>
           </button>
-        ) : (
-          <div className="mx-4 flex items-center justify-center gap-1.5 px-3 py-1.5 bg-primary/8 border border-primary/15 border-t-0 text-primary text-[11px] font-medium tracking-wide font-mono rounded-b">
-            <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
-            Live Packets
-          </div>
         )}
 
         {isLoading && packets.length === 0 ? (
