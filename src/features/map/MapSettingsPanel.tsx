@@ -1,5 +1,4 @@
 import { useState } from "react";
-import { MapStyleSwitcher } from "./MapStyleSwitcher";
 import { SegmentedControl } from "./SegmentedControl";
 import { NODE_TYPE_FILTER_OPTIONS, type NeighborLinesMode } from "./types";
 import { Section } from "../../components/DetailPanel";
@@ -58,8 +57,6 @@ function NeighborLegend() {
 }
 
 interface MapSettingsPanelProps {
-  styleId: string;
-  onStyleChange: (id: string) => void;
   typeFilter: string;
   onTypeChange: (t: string) => void;
   clustered: boolean;
@@ -73,8 +70,6 @@ interface MapSettingsPanelProps {
 }
 
 export function MapSettingsPanel({
-  styleId,
-  onStyleChange,
   typeFilter,
   onTypeChange,
   clustered,
@@ -124,10 +119,7 @@ export function MapSettingsPanel({
 
       {open && (
         <div className="border-t border-border-subtle">
-          <Section title="Map Tiles" first>
-            <MapStyleSwitcher styleId={styleId} onChange={onStyleChange} className="w-full" />
-          </Section>
-          <Section title="Node Type">
+          <Section title="Node Type" first>
             <SegmentedControl
               wrap
               ariaLabel="Node type"

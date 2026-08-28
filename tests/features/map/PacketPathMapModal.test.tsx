@@ -12,8 +12,8 @@ vi.mock("../../../src/features/map/PacketPathMap", () => ({
 
 import { PacketPathMapModal } from "../../../src/features/map/PacketPathMapModal";
 
-// this Node/jsdom combo leaves window.localStorage unavailable; stub it so the modal's
-// style-preference read doesn't throw.
+// this Node/jsdom combo leaves window.localStorage unavailable; stub it so nothing during the
+// modal's render can throw on access.
 beforeEach(() => {
   const store = new Map<string, string>();
   vi.stubGlobal("localStorage", {

@@ -8,27 +8,27 @@ export interface Theme {
   hidden?: boolean;
 }
 
-export const DEFAULT_THEME_ID = "neutral-blue";
+export const DEFAULT_THEME_ID = "meshat-dark";
 
 const FALLBACK: Theme = {
-  id: "neutral-blue",
-  name: "Neutral Blue",
+  id: "meshat-dark",
+  name: "Meshat Dark",
   vars: {
-    "--palette-bg-base": "#09090B",
-    "--palette-bg-surface": "#111114",
-    "--palette-bg-raised": "#1A1A1F",
-    "--palette-border": "#27272A",
-    "--palette-border-subtle": "#1E1E22",
-    "--palette-primary": "#3B82F6",
-    "--palette-primary-dim": "#1D4ED8",
-    "--palette-secondary": "#A78BFA",
-    "--palette-green": "#22C55E",
-    "--palette-danger": "#EF4444",
-    "--palette-warn": "#EAB308",
-    "--palette-text-bright": "#FAFAFA",
-    "--palette-text-normal": "#A1A1AA",
-    "--palette-text-muted": "#73737B",
-    "--palette-text-dim": "#5F5F65",
+    "--palette-bg-base": "#111827",
+    "--palette-bg-surface": "#1F2937",
+    "--palette-bg-raised": "#263243",
+    "--palette-border": "#374151",
+    "--palette-border-subtle": "#2C3844",
+    "--palette-primary": "#5CCE7A",
+    "--palette-primary-dim": "#349251",
+    "--palette-secondary": "#67EA94",
+    "--palette-green": "#5CCE7A",
+    "--palette-danger": "#FF8A80",
+    "--palette-warn": "#FCD34D",
+    "--palette-text-bright": "#FFFFFF",
+    "--palette-text-normal": "#E5E7EB",
+    "--palette-text-muted": "#9CA3AF",
+    "--palette-text-dim": "#6B7280",
   },
 };
 

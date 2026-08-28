@@ -13,7 +13,7 @@ import { useMapNodesData } from "./useMapNodesData";
 import { nodesToFeatureCollection, filterByNodeType, buildNeighborEdges, buildFocusedNeighborEdges, neighborFocusIds, type NeighborEdgeProps } from "./node-geojson";
 import { MapSettingsPanel } from "./MapSettingsPanel";
 import { parseMapView, buildMapParams, type MapViewSnapshot } from "./map-url";
-import { MAP_STYLE_STORAGE_KEY, DEFAULT_STYLE_ID, resolveMapStyle, MAP_NEIGHBOR_LINES_STORAGE_KEY, MAP_CLUSTER_STORAGE_KEY, MAP_NODE_TYPE_STORAGE_KEY, MAP_BORDERS_STORAGE_KEY, DEFAULT_CENTER, DEFAULT_ZOOM, type NeighborLinesMode } from "./types";
+import { MAP_BORDERS_STORAGE_KEY, mapStyleForTheme, resolveMapStyle, MAP_NEIGHBOR_LINES_STORAGE_KEY, MAP_CLUSTER_STORAGE_KEY, MAP_NODE_TYPE_STORAGE_KEY, DEFAULT_CENTER, DEFAULT_ZOOM, type NeighborLinesMode } from "./types";
 import type { FeatureCollection, LineString } from "geojson";
 import { EmptyState } from "../../components/EmptyState";
 import { LoadingPill } from "../../components/LoadingPill";
@@ -42,23 +42,6 @@ export function MapView({ wsManager, selectedNodeId, onSelectNode }: MapViewProp
   // localStorage, so a shared link can't clobber the visitor's saved prefs.
   const [searchParams] = useSearchParams();
   const [urlView] = useState(() => parseMapView(searchParams));
-
-  // restore the saved style; resolveMapStyle falls back to the default if the stored id is stale
-  const [styleId, setStyleId] = useState(
-    () => urlView.styleId ?? resolveMapStyle(localStorage.getItem(MAP_STYLE_STORAGE_KEY) ?? DEFAULT_STYLE_ID).id,
-  );
-
-  const handleStyleChange = useCallback((id: string) => {
-    setStyleId(id);
-    localStorage.setItem(MAP_STYLE_STORAGE_KEY, id);
-  }, []);
-
-  // A basemap that fails to load (offline / 5xx) reverts the selection to the last style that loaded,
-  // so the switcher matches the still-rendered map and the failed choice isn't persisted.
-  const handleStyleError = useCallback((lastGoodStyleId: string) => {
-    setStyleId(lastGoodStyleId);
-    localStorage.setItem(MAP_STYLE_STORAGE_KEY, lastGoodStyleId);
-  }, []);
 
   const [typeFilter, setTypeFilter] = useState(
     () => urlView.nodeType ?? localStorage.getItem(MAP_NODE_TYPE_STORAGE_KEY) ?? "",
@@ -89,8 +72,11 @@ export function MapView({ wsManager, selectedNodeId, onSelectNode }: MapViewProp
   // live packet-flow animation: opt-in per session (off by default, not persisted; a deep link can seed it)
   const [packetFlow, setPacketFlow] = useState(() => urlView.flow ?? false);
 
-  // IATA region borders overlay, off by default; seeded URL -> localStorage like the other toggles
-  const [borders, setBorders] = useState(() => urlView.borders ?? localStorage.getItem(MAP_BORDERS_STORAGE_KEY) === "on");
+  // IATA region borders overlay, on by default (outline only); seeded URL -> localStorage so an
+  // explicit "off" sticks, like the other toggles
+  const [borders, setBorders] = useState(
+    () => urlView.borders ?? localStorage.getItem(MAP_BORDERS_STORAGE_KEY) !== "off",
+  );
   const handleBordersChange = useCallback((on: boolean) => {
     setBorders(on);
     localStorage.setItem(MAP_BORDERS_STORAGE_KEY, on ? "on" : "off");
@@ -109,6 +95,9 @@ export function MapView({ wsManager, selectedNodeId, onSelectNode }: MapViewProp
   // themes populate (from [] -> filled).
   const { themeId, themes } = useTheme();
   const themeKey = themes.length ? themeId : "";
+  // The basemap follows the app theme (Meshat Dark → dark tiles, Meshat Light → light tiles); a
+  // ?style= deep link still wins for the session. Nothing is persisted — switching theme swaps tiles.
+  const styleId = urlView.styleId ?? mapStyleForTheme(themeId);
   const { data: iatas } = useQuery({ queryKey: ["iatas"], queryFn: getIatas, staleTime: 60_000 });
 
   // nodes for the selected region (its own key, independent of the Nodes-table filters/page cap).
@@ -184,7 +173,9 @@ export function MapView({ wsManager, selectedNodeId, onSelectNode }: MapViewProp
   }, [iatas, selectedIatas]);
   const borderData = useMapBordersData(borderIatas, borders);
 
-  const { containerRef, mapRef, isReady, error } = useMapLibre(styleId, fitPoints, handleStyleError, initialCamera);
+  // No onStyleError handler: with the style derived from the theme there's no alternate selection to
+  // revert to — useMapLibre still pins its internal last-good style so a failed swap keeps rendering.
+  const { containerRef, mapRef, isReady, error } = useMapLibre(styleId, fitPoints, undefined, initialCamera);
   const isDark = resolveMapStyle(styleId).dark; // drives marker theming + maplibre control chrome
 
   // Snapshot the current view (live camera + settings) into deep-link params for the copy button.
@@ -217,8 +208,6 @@ export function MapView({ wsManager, selectedNodeId, onSelectNode }: MapViewProp
           height. data-dark drives the maplibre control theming in index.css. */}
       <div ref={containerRef} data-dark={isDark} className="flex-1" />
       <MapSettingsPanel
-        styleId={styleId}
-        onStyleChange={handleStyleChange}
         typeFilter={typeFilter}
         onTypeChange={handleTypeChange}
         clustered={clustered}

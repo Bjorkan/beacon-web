@@ -4,9 +4,10 @@ import { ModalOverlay } from "../../components/ModalOverlay";
 import { CloseButton } from "../../components/CloseButton";
 import { CopyLinkButton } from "../../components/CopyLinkButton";
 import { formatPropagation } from "../../lib/formatters";
+import { useTheme } from "../../hooks/useTheme";
 import { buildPacketPaths } from "./packet-path";
 import { PacketPathMap } from "./PacketPathMap";
-import { DEFAULT_STYLE_ID, MAP_STYLE_STORAGE_KEY } from "./types";
+import { mapStyleForTheme } from "./types";
 
 // Closable mini-map of a packet's resolved path(s). "All paths" overlays every observation's route;
 // clicking an observer isolates its path. Lives over the analyzer (no tab switch), so closing it
@@ -39,7 +40,8 @@ export function PacketPathMapModal({ detail, onClose, initialSelectedKey }: {
     // deep-link value that matches a known path isolates it; anything else (incl. "all") shows All
     () => (initialSelectedKey && paths.some((p) => p.key === initialSelectedKey) ? initialSelectedKey : null),
   );
-  const styleId = useMemo(() => localStorage.getItem(MAP_STYLE_STORAGE_KEY) ?? DEFAULT_STYLE_ID, []);
+  const { themeId } = useTheme();
+  const styleId = useMemo(() => mapStyleForTheme(themeId), [themeId]);
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {

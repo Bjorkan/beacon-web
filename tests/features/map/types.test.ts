@@ -3,6 +3,7 @@ import {
   MAP_STYLES,
   DEFAULT_STYLE_ID,
   resolveMapStyle,
+  mapStyleForTheme,
   parseMapCenter,
   parseMapZoom,
 } from "../../../src/features/map/types";
@@ -21,13 +22,28 @@ describe("MAP_STYLES", () => {
 
   it("marks only the dark style with dark:true", () => {
     expect(MAP_STYLES.find((s) => s.id === "dark")?.dark).toBe(true);
-    expect(MAP_STYLES.filter((s) => s.id !== "dark").every((s) => !s.dark)).toBe(true);
+    expect(
+      MAP_STYLES.filter((s) => s.id !== "dark").every((s) => !s.dark),
+    ).toBe(true);
   });
 });
 
 describe("DEFAULT_STYLE_ID", () => {
   it("refers to a real MAP_STYLES entry", () => {
     expect(MAP_STYLES.some((s) => s.id === DEFAULT_STYLE_ID)).toBe(true);
+  });
+});
+
+describe("mapStyleForTheme", () => {
+  it("maps the light themes to the light basemap", () => {
+    expect(mapStyleForTheme("meshat-light")).toBe("positron");
+    expect(mapStyleForTheme("some-light")).toBe("positron");
+  });
+
+  it("maps dark and unknown/legacy theme ids to the dark basemap", () => {
+    expect(mapStyleForTheme("meshat-dark")).toBe("dark");
+    expect(mapStyleForTheme("neutral-blue")).toBe("dark");
+    expect(mapStyleForTheme("")).toBe("dark");
   });
 });
 

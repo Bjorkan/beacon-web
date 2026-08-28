@@ -9,17 +9,37 @@ export interface MapStyleOption {
 }
 
 export const MAP_STYLES: MapStyleOption[] = [
-  { id: "dark", name: "Dark", url: "https://tiles.openfreemap.org/styles/dark", dark: true },
-  { id: "liberty", name: "Liberty", url: "https://tiles.openfreemap.org/styles/liberty", dark: false },
-  { id: "positron", name: "Light", url: "https://tiles.openfreemap.org/styles/positron", dark: false },
+  {
+    id: "dark",
+    name: "Dark",
+    url: "https://tiles.openfreemap.org/styles/dark",
+    dark: true,
+  },
+  {
+    id: "liberty",
+    name: "Liberty",
+    url: "https://tiles.openfreemap.org/styles/liberty",
+    dark: false,
+  },
+  {
+    id: "positron",
+    name: "Light",
+    url: "https://tiles.openfreemap.org/styles/positron",
+    dark: false,
+  },
 ];
 
 export const DEFAULT_STYLE_ID = "dark";
 
-// beacon-* matches the codebase convention (beacon-theme, beacon-region, beacon-analyzer-open)
-export const MAP_STYLE_STORAGE_KEY = "beacon-map-style";
 export const MAP_CLUSTER_STORAGE_KEY = "beacon-map-clustering";
 export const MAP_NODE_TYPE_STORAGE_KEY = "beacon-map-node-type";
+
+// Map tiles follow the active app theme (Meshat Dark → dark basemap, Meshat Light → light
+// basemap). Anything not explicitly a light theme — including legacy/unknown ids — stays dark,
+// which also matches the historical default.
+export function mapStyleForTheme(themeId: string): string {
+  return /(^|[_-])light([_-]|$)/i.test(themeId) ? "positron" : DEFAULT_STYLE_ID;
+}
 
 // Always returns an option: falls back to the first entry, which also covers a stale/invalid id
 // restored from localStorage.
@@ -29,7 +49,9 @@ export function resolveMapStyle(id: string): MapStyleOption {
 
 // DEM terrain tiles: public AWS Open Data terrarium set (keyless), 256px tiles (not the raster-dem
 // spec default of 512).
-export const DEM_TILES = ["https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png"];
+export const DEM_TILES = [
+  "https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png",
+];
 
 // maplibre auto-attributes the basemap from its style JSON, but not a hand-added raster-dem source.
 // The terrarium data requires attribution, so it's set on the source and surfaces in the control.
@@ -74,7 +96,9 @@ export function parseMapZoom(raw: string | undefined): number {
 export const DEFAULT_CENTER: [number, number] = parseMapCenter(
   import.meta.env.VITE_MAP_CENTER as string | undefined,
 );
-export const DEFAULT_ZOOM = parseMapZoom(import.meta.env.VITE_MAP_ZOOM as string | undefined);
+export const DEFAULT_ZOOM = parseMapZoom(
+  import.meta.env.VITE_MAP_ZOOM as string | undefined,
+);
 export const DEFAULT_PITCH = 0; // flat overview, no tilt
 export const DEFAULT_BEARING = 0;
 export const MAX_PITCH = 85;
@@ -100,8 +124,7 @@ export type NeighborLinesMode = "on" | "selected" | "off";
 
 // --- IATA border layer ---
 export const IATA_BORDERS_SOURCE_ID = "iata-borders";
-export const IATA_BORDERS_FILL_LAYER_ID = "iata-borders-fill"; // low-alpha fill beneath the markers
-export const IATA_BORDERS_LINE_LAYER_ID = "iata-borders-line"; // outline stroke over the fill
+export const IATA_BORDERS_LINE_LAYER_ID = "iata-borders-line"; // outline stroke beneath the markers
 export const MAP_BORDERS_STORAGE_KEY = "beacon-map-borders";
 
 // --- Live packet-flow (modelled on MeshMapper's "LiveViz"): dim every node, then per packet shoot an
@@ -140,7 +163,10 @@ export const SPIDERFY_MIN_ZOOM = 14;
 export const NODE_LABEL_MIN_ZOOM = 12;
 
 // Device types live in lib/node-types; re-exported here for the map feature's consumers.
-export { NODE_TYPE_NAMES, NODE_TYPE_OPTIONS as NODE_TYPE_FILTER_OPTIONS } from "../../lib/node-types";
+export {
+  NODE_TYPE_NAMES,
+  NODE_TYPE_OPTIONS as NODE_TYPE_FILTER_OPTIONS,
+} from "../../lib/node-types";
 export type { NodeTypeName } from "../../lib/node-types";
 export const NODE_ICON_UNKNOWN = "node-unknown";
 export const nodeIconId = (typeName: string): string => `node-${typeName}`;
@@ -174,5 +200,10 @@ export const CLUSTER_ICON_IDS = CLUSTER_BUCKETS.map((b) => b.id);
 // maplibre-free; the caller casts.
 export function clusterIconImageExpression(): unknown[] {
   const [first, ...rest] = CLUSTER_BUCKETS;
-  return ["step", ["get", "point_count"], first!.id, ...rest.flatMap((b) => [b.minCount, b.id])];
+  return [
+    "step",
+    ["get", "point_count"],
+    first!.id,
+    ...rest.flatMap((b) => [b.minCount, b.id]),
+  ];
 }
