@@ -16,7 +16,6 @@ export function PacketTableHeader() {
       <span>Obs</span>
       <span>{t("packets.hops")}</span>
       <span>{t("packets.hashSize")}</span>
-      <span>Src → Dst</span>
       <span>IATA</span>
       <span className="text-right">{t("packets.age")}</span>
     </div>

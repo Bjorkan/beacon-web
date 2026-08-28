@@ -42,10 +42,10 @@ describe("PacketTableRow", () => {
     expect(screen.queryByText("latest")).not.toBeInTheDocument();
   });
 
-  it("falls back to n/a in the hops, hash size, endpoint and IATA cells when there is no observer", () => {
+  it("falls back to n/a in the hops, hash size and IATA cells when there is no observer", () => {
     render(<PacketTableRow packet={pkt()} expanded={false} onToggle={() => {}} />);
     const row = within(screen.getByRole("button"));
-    expect(row.getAllByText("n/a")).toHaveLength(4);
+    expect(row.getAllByText("n/a")).toHaveLength(3);
   });
 
   it("shows the hash size alongside the hop count", () => {
@@ -64,31 +64,6 @@ describe("PacketTableRow", () => {
   it("shows the hop count, which the REST list carries on every row", () => {
     render(<PacketTableRow packet={pkt({ observationCount: 7, latestObserver: observer({ hopCount: 3 }) })} expanded={false} onToggle={() => {}} />);
     expect(screen.getByText("3")).toBeInTheDocument();
-  });
-
-  it("renders resolved endpoints when the WS feed supplied them", () => {
-    render(
-      <PacketTableRow
-        packet={pkt({ latestObserver: observer({ resolvedSource: node("Laprairie"), resolvedDestination: node("YUL1") }) })}
-        expanded={false}
-        onToggle={() => {}}
-      />,
-    );
-    expect(screen.getByText("Laprairie")).toBeInTheDocument();
-    expect(screen.getByText("YUL1")).toBeInTheDocument();
-  });
-
-  // The REST list leaves resolvedSource/Destination nil on purpose, so scrollback rows show one n/a
-  // for the pair rather than "n/a → n/a".
-  it("collapses the endpoint cell to a single n/a when neither endpoint resolved", () => {
-    render(<PacketTableRow packet={pkt({ latestObserver: observer({ hopCount: 2 }) })} expanded={false} onToggle={() => {}} />);
-    expect(screen.getAllByText("n/a")).toHaveLength(1);
-  });
-
-  it("still marks the missing half when only one endpoint resolved", () => {
-    render(<PacketTableRow packet={pkt({ latestObserver: observer({ resolvedSource: node("Laprairie") }) })} expanded={false} onToggle={() => {}} />);
-    expect(screen.getByText("Laprairie")).toBeInTheDocument();
-    expect(screen.getAllByText("n/a")).toHaveLength(1);
   });
 
   it("reflects the expanded state on the button and chevron", () => {

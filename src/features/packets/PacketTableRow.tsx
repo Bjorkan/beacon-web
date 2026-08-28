@@ -7,7 +7,6 @@ import { payloadTypeVariant } from "../../components/badge-utils";
 import { PAYLOAD_TYPE_NAMES, type PayloadTypeValue } from "../../types/enums";
 import type { PacketSummary } from "../../types/api";
 import { GRID_TEMPLATE } from "./packet-grid";
-import { PacketEndpoints } from "./PacketEndpoints";
 
 interface PacketTableRowProps {
   packet: PacketSummary;
@@ -16,8 +15,9 @@ interface PacketTableRowProps {
   onToggle: () => void;
 }
 
-// Single-line table row sharing GRID_TEMPLATE with the sticky header. The observer lives in the
-// expansion instead, which frees the wide column for the packet's endpoints.
+// Single-line table row sharing GRID_TEMPLATE with the sticky header. The observer and the packet's
+// endpoints live in the expansion / analyzer instead — endpoint resolution is n/a for most
+// packets, so it gets no column of its own.
 export function PacketTableRow({ packet, expanded, isFresh, onToggle }: PacketTableRowProps) {
   const { t } = useTranslation();
   // ?? not ||, so a legitimate 0-hop direct packet still shows its count
@@ -59,9 +59,6 @@ export function PacketTableRow({ packet, expanded, isFresh, onToggle }: PacketTa
         <span className="font-mono text-text-muted">×{packet.observationCount}</span>
         <span className="font-mono text-text-muted">{pathLength?.hopCount ?? na}</span>
         <span className="font-mono text-text-muted">{pathLength?.hashSize ?? na}</span>
-        <span className="min-w-0 overflow-hidden">
-          <PacketEndpoints packet={packet} />
-        </span>
         <span className="font-mono font-bold text-primary tracking-wider">
           {packet.latestObserver?.iata ?? <span className="font-normal">{na}</span>}
         </span>
