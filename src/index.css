@@ -87,9 +87,33 @@
 .beacon-ring-2 { --ring-base: 0.6;  animation-delay: 0.30s; }
 .beacon-ring-3 { --ring-base: 0.3;  animation-delay: 0.52s; }
 
+/* The splash uses the supplied Meshat tower geometry. Its paired arcs expand
+   from the mast in sequence so the signal reads as travelling outwards. */
+@keyframes meshat-radio-wave {
+  0%, 12% { opacity: 0; transform: scale(0.82); }
+  32%     { opacity: 1; }
+  68%     { opacity: 0.75; }
+  86%, 100% { opacity: 0; transform: scale(1.12); }
+}
+
+.meshat-radio-wave-inner,
+.meshat-radio-wave-outer {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: meshat-radio-wave 1.8s ease-out infinite both;
+}
+
+.meshat-radio-wave-outer { animation-delay: 0.3s; }
+
 @media (prefers-reduced-motion: reduce) {
   .beacon-core-pulse,
-  .beacon-ring { animation: none; }
+  .beacon-ring,
+  .meshat-radio-wave-inner,
+  .meshat-radio-wave-outer {
+    animation: none;
+    opacity: 1;
+    transform: none;
+  }
 }
 
 .writing-vertical {

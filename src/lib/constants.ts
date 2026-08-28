@@ -61,7 +61,7 @@ export const ENABLED_THEME_IDS = new Set(
 );
 
 // "||" (not "??") so an empty sed substitution falls back to the default too.
-export const APP_NAME = import.meta.env.VITE_APP_NAME || "BEACON";
+export const APP_NAME = import.meta.env.VITE_APP_NAME || "Meshat.se";
 export const GITHUB_URL = "https://github.com/MeshCore-Beacon";
 
 // Skip the once-per-session load splash entirely (e.g. an embedded/branded deployment).

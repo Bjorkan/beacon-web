@@ -49,7 +49,7 @@ describe("AppShell", () => {
   it("footer shows the package.json version", () => {
     vi.mocked(getIatas).mockResolvedValue([]);
     renderShell();
-    expect(screen.getByText(`BEACON v${pkg.version}`)).toBeInTheDocument();
+    expect(screen.getByText(`Meshat.se v${pkg.version}`)).toBeInTheDocument();
   });
 
   it("region picker shows an error state when the IATA list fails to load", async () => {
@@ -65,8 +65,12 @@ describe("AppShell", () => {
     vi.mocked(getIatas).mockResolvedValue([]);
     renderShell();
 
-    expect(screen.getByText("BEACON")).toHaveClass("truncate", "whitespace-nowrap");
-    expect(screen.getByText("BEACON").parentElement).toHaveClass("min-w-0", "flex-1", "overflow-hidden");
+    expect(screen.getByRole("img", { name: "Meshat.se" })).toHaveAttribute("src", "/meshat-logo.svg");
+    expect(screen.getByRole("img", { name: "Meshat.se" }).parentElement).toHaveClass(
+      "min-w-0",
+      "flex-1",
+      "overflow-hidden",
+    );
     expect(screen.getByText("REGION")).not.toHaveClass("hidden");
     expect(screen.getByRole("button", { name: /REGION/ })).toHaveClass("max-w-full", "min-w-0", "overflow-hidden");
     expect(screen.getByRole("button", { name: /REGION/ }).parentElement).toHaveClass(

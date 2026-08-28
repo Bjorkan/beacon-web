@@ -11,7 +11,7 @@ DISABLED_TABS="${VITE_DISABLED_TABS:-}"
 ENABLED_THEMES="${VITE_ENABLED_THEMES:-}"
 SKIP_SPLASH="${VITE_SKIP_SPLASH:-}"
 # APP_NAME is substituted verbatim; avoid '&' and '|' (sed replacement metachar and delimiter).
-APP_NAME="${VITE_APP_NAME:-BEACON}"
+APP_NAME="${VITE_APP_NAME:-Meshat.se}"
 
 find /srv -name '*.js' -exec sed -i \
   -e "s|__VITE_API_BASE__|${API_BASE}|g" \

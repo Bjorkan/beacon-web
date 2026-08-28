@@ -7,7 +7,7 @@ import { useWsStatus } from "../hooks/useWsStatus";
 import { useTheme } from "../hooks/useTheme";
 import { Dropdown } from "./Dropdown";
 import { BottomNav } from "./BottomNav";
-import { BeaconWordmark } from "./BeaconWordmark";
+import { MeshatWordmark } from "./MeshatWordmark";
 import { getIatas } from "../api/client";
 import { ENABLED_TABS, ENABLED_THEME_IDS, selectableThemes, APP_NAME, GITHUB_URL } from "../lib/constants";
 import type { WsManager } from "../api/ws-manager";
@@ -351,11 +351,7 @@ export function AppShell({ activeTab, onTabChange, wsManager, children }: AppShe
   return (
     <div className="flex flex-col h-dvh">
       <header className="flex items-center gap-2 px-2 sm:px-3 md:px-4 h-[42px] bg-bg-surface border-b border-border shrink-0">
-        <BeaconWordmark
-          iconSize={22}
-          textClassName="truncate whitespace-nowrap text-sm"
-          className="min-w-0 flex-1 overflow-hidden"
-        />
+        <MeshatWordmark className="min-w-0 flex-1 overflow-hidden" />
         <div className="flex shrink-0 items-center justify-end gap-1.5 md:gap-3">
           <RegionSelector />
           <ThemePicker />

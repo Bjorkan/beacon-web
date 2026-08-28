@@ -1,4 +1,4 @@
-// Page-load splash: pulsing BEACON wordmark over a themed backdrop, shown once
+// Page-load splash: animated Meshat radio mark over a themed backdrop, shown once
 // per browser session, then faded out and removed from the DOM. Set VITE_SKIP_SPLASH
 // to skip it entirely for a deployment.
 //
@@ -6,10 +6,10 @@
 // <SplashScreen /> line from src/App.tsx. Nothing else references it.
 
 import { useState, useEffect } from "react";
-import { BeaconLogo } from "./BeaconLogo";
-import { SKIP_SPLASH } from "../lib/constants";
+import { MeshatSplashIcon } from "./MeshatSplashIcon";
+import { APP_NAME, SKIP_SPLASH } from "../lib/constants";
 
-const SPLASH_KEY = "beacon-splash-shown";
+const SPLASH_KEY = "meshat-splash-shown";
 const VISIBLE_MS = 2000;
 const FADE_MS = 400;
 
@@ -51,14 +51,14 @@ export function SplashScreen() {
         fading ? "opacity-0 pointer-events-none" : "opacity-100"
       }`}
     >
-      <span className="inline-flex flex-col items-center gap-7 text-primary">
-        <BeaconLogo size={160} pulse />
+      <span className="inline-flex flex-col items-center gap-7">
+        <MeshatSplashIcon size={160} />
         <span className="inline-flex flex-col items-center gap-2.5">
           <span
-            className="font-medium tracking-[0.3em] uppercase text-5xl leading-none pl-[0.3em]"
-            style={{ fontFamily: "'Chakra Petch', sans-serif" }}
+            className="text-text-bright text-5xl font-bold leading-none"
+            style={{ fontFamily: "Inter, system-ui, sans-serif" }}
           >
-            BEACON
+            {APP_NAME}
           </span>
           <span
             className="text-text-muted text-xs tracking-[0.12em]"
