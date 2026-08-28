@@ -1,8 +1,8 @@
 # BEACON Web
 
-[![CodeQL](https://github.com/MeshCore-Beacon/beacon-web/actions/workflows/codeql.yml/badge.svg)](https://github.com/MeshCore-Beacon/beacon-web/actions/workflows/codeql.yml)
-[![CI](https://github.com/MeshCore-Beacon/beacon-web/actions/workflows/ci.yml/badge.svg)](https://github.com/MeshCore-Beacon/beacon-web/actions/workflows/ci.yml)
-[![Docker](https://github.com/MeshCore-Beacon/beacon-web/actions/workflows/docker-publish.yml/badge.svg)](https://github.com/MeshCore-Beacon/beacon-web/actions/workflows/docker-publish.yml)
+[![CodeQL](https://github.com/Bjorkan/beacon-web/actions/workflows/codeql.yml/badge.svg)](https://github.com/Bjorkan/beacon-web/actions/workflows/codeql.yml)
+[![CI](https://github.com/Bjorkan/beacon-web/actions/workflows/ci.yml/badge.svg)](https://github.com/Bjorkan/beacon-web/actions/workflows/ci.yml)
+[![Docker](https://github.com/Bjorkan/beacon-web/actions/workflows/docker-publish.yml/badge.svg)](https://github.com/Bjorkan/beacon-web/actions/workflows/docker-publish.yml)
 
 Real-time LoRa mesh packet analyzer. Desktop-first, dark-mode-primary, dense information display for radio hobbyists.
 
@@ -39,7 +39,9 @@ EOF
 docker compose up -d
 ```
 
-The images are public on GitHub Container Registry — no `docker login` required.
+This fork publishes `ghcr.io/bjorkan/beacon-web:latest` to GitHub Container
+Registry. The Compose file uses that image by default; set `BEACON_WEB_IMAGE`
+to override it. No `docker login` is required while the package is public.
 If a pull fails with `403 Forbidden`, the package visibility has regressed to
 Private; a maintainer needs to set it back to Public (see the troubleshooting note
 in [beacon-docs](https://github.com/MeshCore-Beacon/beacon-docs)).
