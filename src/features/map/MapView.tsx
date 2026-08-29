@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useQuery, useQueryClient, type InfiniteData } from "@tanstack/react-query";
 import "maplibre-gl/dist/maplibre-gl.css";
@@ -34,7 +34,7 @@ interface MapViewProps {
   wsManager: WsManager;
   // shared with the Nodes tab (lifted to the nodes route) so the open NodeDetailPanel stays live
   selectedNodeId: string | null;
-  onSelectNode: (id: string) => void;
+  onSelectNode: (id: string | null) => void;
   // validated /map search params, parsed by the router (parseMapViewSearch)
   urlView: ParsedMapView;
 }
@@ -141,7 +141,7 @@ export function MapView({ wsManager, selectedNodeId, onSelectNode, urlView }: Ma
   // its coordinates remain available after selection instead of letting the next edge set collapse.
   const { data: selectedNodeDetail } = useQuery({
     ...nodeQueries.detail(selectedNodeId ?? ""),
-    enabled: focusEnabled,
+    enabled: !!selectedNodeId,
   });
   const selectedNodeForFocus = useMemo(
     () => nodes.find((node) => node.id === selectedNodeId) ?? selectedNodeDetail,
@@ -190,8 +190,45 @@ export function MapView({ wsManager, selectedNodeId, onSelectNode, urlView }: Ma
 
   // No onStyleError handler: with the style derived from the theme there's no alternate selection to
   // revert to — useMapLibre still pins its internal last-good style so a failed swap keeps rendering.
-  const { containerRef, mapRef, isReady, error } = useMapLibre(styleId, fitPoints, undefined, initialCamera);
+  const { containerRef, mapRef, isReady, styleRevision, error } = useMapLibre(styleId, fitPoints, undefined, initialCamera);
   const isDark = resolveMapStyle(styleId).dark; // drives marker theming + maplibre control chrome
+  const mapThemeKey = `${themeKey}:${styleRevision}`;
+
+  // A selected-node deep link should open at inspection scale even when the node sits outside the
+  // currently loaded region. The same restrained move also helps when following a focused neighbor.
+  const lastFocusedNodeRef = useRef<string | null>(null);
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !isReady || !selectedNodeId || !selectedNodeForFocus) return;
+    if (selectedNodeForFocus.lng == null || selectedNodeForFocus.lat == null) return;
+    if (lastFocusedNodeRef.current === selectedNodeId) return;
+    lastFocusedNodeRef.current = selectedNodeId;
+    map.flyTo({
+      center: [selectedNodeForFocus.lng, selectedNodeForFocus.lat],
+      zoom: Math.max(map.getZoom(), 12),
+      duration: 650,
+      essential: true,
+    });
+  }, [mapRef, isReady, selectedNodeId, selectedNodeForFocus]);
+  useEffect(() => {
+    if (!selectedNodeId) lastFocusedNodeRef.current = null;
+  }, [selectedNodeId]);
+
+  // Mask the unavoidable source re-index between clustered/unclustered presentations with a short,
+  // subtle canvas fade. Re-triggering the class handles rapid On/Off/Live changes without remounting.
+  const presentationKey = `${clustered && !packetFlow}:${packetFlow}`;
+  const previousPresentationRef = useRef(presentationKey);
+  useEffect(() => {
+    if (previousPresentationRef.current === presentationKey) return;
+    previousPresentationRef.current = presentationKey;
+    const container = mapRef.current?.getContainer();
+    if (!container) return;
+    container.classList.remove("map-presentation-transition");
+    void container.offsetWidth;
+    container.classList.add("map-presentation-transition");
+    const timer = window.setTimeout(() => container.classList.remove("map-presentation-transition"), 280);
+    return () => window.clearTimeout(timer);
+  }, [mapRef, presentationKey]);
 
   // Snapshot the current view (live camera + settings) into deep-link params for the copy button.
   // Evaluated at click, so it reads the real camera. The current route is already /map.
@@ -216,17 +253,17 @@ export function MapView({ wsManager, selectedNodeId, onSelectNode, urlView }: Ma
     isReady,
     geojson,
     isDark,
-    themeKey,
+    mapThemeKey,
     clustered,
     packetFlow,
     onSelectNode,
     selectedNodeId,
     `${regionKey}:${typeFilter}`,
   );
-  useMapNeighbors(mapRef, isReady, neighborEdges, themeKey);
-  useMapFocusedNeighbors(mapRef, isReady, focusedNeighborPoints, packetFlow, themeKey, onSelectNode);
-  useMapBorders(mapRef, isReady, borderData, themeKey);
-  useMapPacketFlow(mapRef, isReady, packetFlow, wsManager, themeKey, regionKey);
+  useMapNeighbors(mapRef, isReady, neighborEdges, mapThemeKey);
+  useMapFocusedNeighbors(mapRef, isReady, focusedNeighborPoints, packetFlow, mapThemeKey, onSelectNode);
+  useMapBorders(mapRef, isReady, borderData, mapThemeKey);
+  useMapPacketFlow(mapRef, isReady, packetFlow, wsManager, mapThemeKey, regionKey);
 
   return (
     <div className="relative flex flex-1 min-h-0">

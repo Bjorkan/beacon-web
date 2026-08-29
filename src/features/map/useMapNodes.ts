@@ -27,6 +27,7 @@ import {
   NODES_SOURCE_MAXZOOM,
   NODE_LABEL_MIN_ZOOM,
   NODES_GLOW_LAYER_ID,
+  FOCUSED_NEIGHBORS_LAYER_ID,
   PACKET_FLOW_COLOR,
   NODE_TYPE_NAMES,
   NODE_ICON_UNKNOWN,
@@ -127,7 +128,7 @@ export function useMapNodes(
   themeKey: string,
   clustered: boolean,
   liveMode: boolean,
-  onSelectNode: (id: string) => void,
+  onSelectNode: (id: string | null) => void,
   selectedNodeId: string | null,
   // identity of the dataset (region + type filter); an open spiderfy fan closes when it changes,
   // since its leaves were drawn from the previous dataset
@@ -585,6 +586,12 @@ export function useMapNodes(
 
     const onMapClick = (e: MapMouseEvent) => {
       const rendered = map.queryRenderedFeatures(e.point);
+      const focusedNeighbor = rendered.find((feature) => feature.layer.id === FOCUSED_NEIGHBORS_LAYER_ID);
+      const focusedId = focusedNeighbor?.properties?.["id"];
+      if (typeof focusedId === "string") {
+        onSelectNodeRef.current(focusedId);
+        return;
+      }
       const leaf = rendered.find((feature) => feature.layer.id.includes(`${NODES_CLUSTER_LAYER_ID}-spiderfy-leaf`));
       if (leaf) {
         const id = leaf.properties?.["id"];
@@ -647,7 +654,10 @@ export function useMapNodes(
       );
       const id = features.find((feature) => typeof feature.properties?.["id"] === "string")?.properties?.["id"];
       if (typeof id === "string") onSelectNodeRef.current(id);
-      else clearSpider();
+      else {
+        clearSpider();
+        if (selectedNodeIdRef.current) onSelectNodeRef.current(null);
+      }
     };
 
     const setPointer = () => { map.getCanvas().style.cursor = "pointer"; };

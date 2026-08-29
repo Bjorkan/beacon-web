@@ -130,6 +130,20 @@
   animation: fade-in 150ms ease-out;
 }
 
+@keyframes map-presentation-transition {
+  0% { opacity: 1; filter: saturate(1); }
+  38% { opacity: 0.78; filter: saturate(0.82); }
+  100% { opacity: 1; filter: saturate(1); }
+}
+
+.map-presentation-transition .maplibregl-canvas {
+  animation: map-presentation-transition 260ms ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .map-presentation-transition .maplibregl-canvas { animation: none; }
+}
+
 /* MapLibre controls ship light chrome; re-skin to the app's dark tokens when the active basemap
    is dark (data-dark set on each map container — MapView and the packet-path mini-map). Glyphs are baked-in dark SVGs, so they
    are inverted rather than recolored. Light basemaps (Liberty/Light) keep the default chrome. */

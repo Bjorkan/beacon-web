@@ -125,6 +125,7 @@ export const NEIGHBORS_SOURCE_ID = "neighbors";
 export const NEIGHBORS_LINE_LAYER_ID = "neighbor-lines"; // line layer drawn beneath the node markers
 export const FOCUSED_NEIGHBORS_SOURCE_ID = "focused-neighbors";
 export const FOCUSED_SELECTED_BACKDROP_LAYER_ID = "focused-neighbors-selected-backdrop";
+export const FOCUSED_NEIGHBORS_BASE_LAYER_ID = "focused-neighbors-base";
 export const FOCUSED_NEIGHBORS_LAYER_ID = "focused-neighbors-markers";
 export const MAP_NEIGHBOR_LINES_STORAGE_KEY = "beacon-map-neighbor-lines";
 export type NeighborLinesMode = "on" | "selected" | "off";

@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   CLUSTER_RADIUS_STOPS,
   CLUSTER_TEXT_SIZE_STOPS,
+  GLOW_BASE_RADIUS_STOPS,
+  GLOW_EXTRA_RADIUS_STOPS,
   NODE_DOT_OPACITY_STOPS,
   NODE_ICON_OPACITY_STOPS,
   NODE_ICON_SCALE_STOPS,
@@ -12,6 +14,7 @@ import {
   SELECTION_RADIUS_STOPS,
   clusterRadiusExpression,
   clusterTextSizeExpression,
+  glowRadiusExpression,
   nodeDotOpacityExpression,
   nodeDotRadiusExpression,
   nodeIconOpacityExpression,
@@ -86,7 +89,7 @@ describe("zoom-aware map marker sizing", () => {
   it("keeps the selection treatment aligned with the marker scale", () => {
     const radius = values(SELECTION_RADIUS_STOPS);
     expect(radius[0]).toBeLessThan(radius.at(-1)!);
-    expect(radius.at(-1)).toBe(13);
+    expect(radius.at(-1)).toBe(14.5);
   });
 
   it("builds MapLibre expressions from the tested stops", () => {
@@ -109,6 +112,13 @@ describe("zoom-aware map marker sizing", () => {
     expect(clusterTextSizeExpression()).toEqual([
       "interpolate", ["linear"], ["get", "point_count"],
       ...CLUSTER_TEXT_SIZE_STOPS.flatMap(([count, value]) => [count, value]),
+    ]);
+    expect(glowRadiusExpression()).toEqual([
+      "interpolate", ["linear"], ["zoom"],
+      ...GLOW_BASE_RADIUS_STOPS.flatMap(([zoom, base], index) => [
+        zoom,
+        ["+", base, ["*", GLOW_EXTRA_RADIUS_STOPS[index]![1], ["coalesce", ["feature-state", "glow"], 0]]],
+      ]),
     ]);
   });
 });

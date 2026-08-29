@@ -83,6 +83,8 @@ export function useMapLibre(
   const skipInitialFitRef = useRef(!!initialCamera); // let a deep-link camera win over the first fit
   const initialCameraRef = useRef(initialCamera); // read once at map creation (deep link is load-time only)
   const [isReady, setIsReady] = useState(false);
+  const [styleRevision, setStyleRevision] = useState(0);
+  const [loadedStyleId, setLoadedStyleId] = useState<string | null>(null);
   const [error, setError] = useState<Error | null>(null);
 
   // keep styleId / callback readable inside the async map handlers without writing a ref during render
@@ -131,7 +133,12 @@ export function useMapLibre(
       hasLoadedRef.current = true;
       swapPendingRef.current = false;
       lastGoodStyleIdRef.current = styleIdRef.current;
+      setLoadedStyleId(styleIdRef.current);
       setIsReady(true);
+      // A boolean false -> true cycle can be batched by React when setStyle resolves quickly. A
+      // monotonic revision guarantees every imperative overlay hook reruns after the new style has
+      // actually loaded, preventing a dark/light switch from leaving the map without node layers.
+      setStyleRevision((revision) => revision + 1);
       setError(null); // a successful (re)load clears any earlier transient/initial error
     };
     map.on("load", onStyleReady); // first paint (style.load does not reliably fire on initial load)
@@ -222,5 +229,13 @@ export function useMapLibre(
     });
   }, [fitPoints, isReady]);
 
-  return { containerRef, mapRef, isReady, error };
+  // The style prop changes one render before the async style.load event. Comparing the confirmed
+  // loaded id keeps overlay hooks out of that gap even if React batches isReady false -> true.
+  return {
+    containerRef,
+    mapRef,
+    isReady: isReady && loadedStyleId === styleId,
+    styleRevision,
+    error,
+  };
 }

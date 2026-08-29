@@ -37,19 +37,19 @@ export const NODE_DOT_OPACITY_STOPS: readonly NumericStop[] = [
 ];
 
 export const SELECTION_RADIUS_STOPS: readonly NumericStop[] = [
-  [0, 5],
-  [6, 5.5],
-  [8, 7],
-  [9.5, 9],
-  [11.5, 11.5],
-  [13, 13],
+  [0, 5.5],
+  [6, 6],
+  [8, 7.5],
+  [9.5, 10],
+  [11.5, 12.5],
+  [13, 14.5],
 ];
 
 export const SELECTION_STROKE_STOPS: readonly NumericStop[] = [
-  [0, 1.5],
-  [8, 1.7],
-  [10, 2],
-  [13, 2.5],
+  [0, 1],
+  [8, 1.2],
+  [10, 1.4],
+  [13, 1.6],
 ];
 
 export const NODE_INTERACTION_RADIUS_PX = 10;
@@ -137,12 +137,16 @@ export function clusterTextSizeExpression(): unknown[] {
 
 export function glowRadiusExpression(): unknown[] {
   return [
-    "+",
-    zoomInterpolate(GLOW_BASE_RADIUS_STOPS),
-    [
-      "*",
-      zoomInterpolate(GLOW_EXTRA_RADIUS_STOPS),
-      ["coalesce", ["feature-state", "glow"], 0],
-    ],
+    "interpolate",
+    ["linear"],
+    ["zoom"],
+    ...GLOW_BASE_RADIUS_STOPS.flatMap(([zoom, base], index) => [
+      zoom,
+      [
+        "+",
+        base,
+        ["*", GLOW_EXTRA_RADIUS_STOPS[index]![1], ["coalesce", ["feature-state", "glow"], 0]],
+      ],
+    ]),
   ];
 }
