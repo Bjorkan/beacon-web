@@ -95,6 +95,19 @@ describe("getNodesPage", () => {
     expect(url).toContain("pubkeyPrefix=a1b2");
   });
 
+  it("forwards opaque page token and server sort without a legacy cursor", async () => {
+    const getUrl = mockFetchOnce({ items: [], nextPageToken: "next-token", hasMore: true });
+
+    const page = await getNodesPage(["YYZ"], { pageToken: "opaque-token", sort: "neighbors", direction: "desc" });
+
+    const url = new URL(getUrl());
+    expect(url.searchParams.get("pageToken")).toBe("opaque-token");
+    expect(url.searchParams.get("sort")).toBe("neighbors");
+    expect(url.searchParams.get("direction")).toBe("desc");
+    expect(url.searchParams.has("cursor")).toBe(false);
+    expect(page.nextPageToken).toBe("next-token");
+  });
+
   it("forwards the Nodes-table filters (type maps to typeName, multibyte flags)", async () => {
     const getUrl = mockFetchOnce({ items: [], nextCursor: null, hasMore: false });
 
@@ -103,6 +116,7 @@ describe("getNodesPage", () => {
       name: "alpha",
       supportsMultibytePaths: "true",
       supportsMultibyteTraces: "false",
+      scope: "#west",
     });
 
     const url = getUrl();
@@ -110,6 +124,7 @@ describe("getNodesPage", () => {
     expect(url).toContain("name=alpha");
     expect(url).toContain("supportsMultibytePaths=true");
     expect(url).toContain("supportsMultibyteTraces=false");
+    expect(new URL(url).searchParams.get("scope")).toBe("#west");
     expect(url).not.toContain("type="); // server param is typeName, not type
   });
 });
@@ -359,7 +374,7 @@ describe("getObserversPage", () => {
   it("forwards the Observers-table filters and omits cursor on the first page", async () => {
     const getUrl = mockFetchOnce({ items: [], nextCursor: null, hasMore: false });
 
-    await getObserversPage(undefined, { status: "online", type: "rak", broker: "b1", name: "north" });
+    await getObserversPage(undefined, { status: "online", type: "rak", broker: "b1", name: "north", scope: "#west" });
 
     const url = getUrl();
     expect(url).not.toContain("cursor=");
@@ -367,6 +382,20 @@ describe("getObserversPage", () => {
     expect(url).toContain("type=rak");
     expect(url).toContain("broker=b1");
     expect(url).toContain("name=north");
+    expect(new URL(url).searchParams.get("scope")).toBe("#west");
+  });
+
+  it("forwards opaque page token and server sort", async () => {
+    const getUrl = mockFetchOnce({ items: [], nextPageToken: "observer-next", hasMore: true });
+
+    const page = await getObserversPage(undefined, { pageToken: "observer-token", sort: "status", direction: "asc" });
+
+    const url = new URL(getUrl());
+    expect(url.searchParams.get("pageToken")).toBe("observer-token");
+    expect(url.searchParams.get("sort")).toBe("status");
+    expect(url.searchParams.get("direction")).toBe("asc");
+    expect(url.searchParams.has("cursor")).toBe(false);
+    expect(page.nextPageToken).toBe("observer-next");
   });
 });
 

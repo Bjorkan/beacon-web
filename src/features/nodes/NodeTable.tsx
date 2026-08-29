@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useMemo } from "react";
+import { useState, useCallback, useMemo } from "react";
 import { type TFunction } from "i18next";
 import { useTranslation } from "react-i18next";
 import { useQueryClient, type InfiniteData } from "@tanstack/react-query";
@@ -13,17 +13,24 @@ import { formatHex, timeAgoMs, formatRadio } from "../../lib/formatters";
 import { Badge } from "../../components/Badge";
 import { Tooltip } from "../../components/Tooltip";
 import { ObserverIcon } from "../../components/ObserverIcon";
-import { DataTable, type Column } from "../../components/DataTable";
+import { DataTable, type Column, type SortState } from "../../components/DataTable";
 import { LoadingPill } from "../../components/LoadingPill";
 import { NodeFilterBar, type MultibyteFilter } from "./NodeFilterBar";
 import { nodeSearchParams } from "./node-search";
-import { patchNodeSummary } from "./node-updates";
+import { nodeListUpdateRequiresRefetch, patchNodeTableSummary } from "./node-updates";
 import type { NodeSummary } from "./types";
 import type { CursorPage } from "../../types/api";
 import type { WsManager } from "../../api/ws-manager";
 import type { WsNodeUpdate } from "../../types/ws";
 
 const nodeId = (n: NodeSummary) => n.id; // stable id accessor for the paged hook's dedup
+
+const NODE_SORT_BY_HEADER = {
+  Name: "name",
+  Type: "type",
+  Radio: "radio",
+  Neighbors: "neighbors",
+} as const;
 
 interface NodeTableProps {
   wsManager: WsManager;
@@ -144,7 +151,8 @@ export function NodeTable({ wsManager, selectedNodeId, onSelectNode }: NodeTable
   const [typeFilter, setTypeFilter] = useState("");
   const [pathsFilter, setPathsFilter] = useState<MultibyteFilter>("");
   const [tracesFilter, setTracesFilter] = useState<MultibyteFilter>("");
-  const [scopeFilter, setScopeFilter] = useState(""); // "" = Any; applied client-side over the loaded set
+  const [scopeFilter, setScopeFilter] = useState("");
+  const [sort, setSort] = useState<SortState>({ header: "Name", direction: "asc" });
   const [search, setSearch] = useState("");
   const [searchField, setSearchField] = useState("name");
 
@@ -160,41 +168,10 @@ export function NodeTable({ wsManager, selectedNodeId, onSelectNode }: NodeTable
   // so toggling the field with an empty box is a no-op and a name never gets sent as a hex prefix
   const { name: nameParam, pubkeyPrefix: pubkeyPrefixParam } = nodeSearchParams(searchField, search);
 
-  // page the region's nodes 50 at a time (filters stay server-side, in the query key); rows stream
-  // in as each batch lands. Loads once per filter set — WS updates keep them live, no 30s refetch.
-  const { items: nodes, loadedCount, isPaging, isError, isLoading, hasMore, loadMore } = useInfinitePages<NodeSummary>({
-    options: nodeQueries.list({
-      regionKey,
-      iatas,
-      type: typeFilter,
-      name: nameParam,
-      pubkeyPrefix: pubkeyPrefixParam,
-      supportsMultibytePaths: pathsFilter || undefined,
-      supportsMultibyteTraces: tracesFilter || undefined,
-    }),
-    getId: nodeId,
-    keepPrevious: true,
-    auto: false,
-  });
+  const serverSort = NODE_SORT_BY_HEADER[sort.header as keyof typeof NODE_SORT_BY_HEADER] ?? "name";
 
-  // scope options are the configured scopes; the filter itself is applied client-side on defaultScope
-  const scopeOptions = useScopes();
-
-  const displayNodes = useMemo(
-    () => (scopeFilter ? nodes.filter((n) => n.defaultScope === scopeFilter) : nodes),
-    [nodes, scopeFilter],
-  );
-
-  // Scope has no server-side node filter. If the loaded page is sparse after applying it, continue
-  // paging until there is a useful viewport of matches or the result set is exhausted.
-  useEffect(() => {
-    if (scopeFilter && displayNodes.length < 50 && hasMore && !isPaging) loadMore();
-  }, [scopeFilter, displayNodes.length, hasMore, isPaging, loadMore]);
-  const columns = useMemo(() => nodeColumns(t), [t]);
-
-  const handleNodeUpdate = useCallback(
-    (data: WsNodeUpdate["data"]) => {
-      queryClient.setQueryData<InfiniteData<CursorPage<NodeSummary>>>(
+  const listOptions = useMemo(
+    () =>
       nodeQueries.list({
         regionKey,
         iatas,
@@ -203,14 +180,50 @@ export function NodeTable({ wsManager, selectedNodeId, onSelectNode }: NodeTable
         pubkeyPrefix: pubkeyPrefixParam,
         supportsMultibytePaths: pathsFilter || undefined,
         supportsMultibyteTraces: tracesFilter || undefined,
-      }).queryKey,
-      (old) => patchInfinitePages(old, (items) => patchNodeSummary(items, data) ?? items),
-    );
-    if (selectedNodeId === data.nodeId) {
-      queryClient.invalidateQueries({ queryKey: nodeQueries.detail(data.nodeId).queryKey });
-    }
-  },
-  [queryClient, regionKey, iatas, typeFilter, nameParam, pubkeyPrefixParam, pathsFilter, tracesFilter, selectedNodeId],
+        scope: scopeFilter || undefined,
+        sort: serverSort,
+        direction: sort.direction,
+      }),
+    [regionKey, iatas, typeFilter, nameParam, pubkeyPrefixParam, pathsFilter, tracesFilter, scopeFilter, serverSort, sort.direction],
+  );
+
+  // Page the region's nodes 50 at a time. Filtering and ordering are server-side, so every page is
+  // globally sorted without eagerly downloading the rest of the result set.
+  const { items: nodes, loadedCount, isPaging, isError, isLoading, loadMore } = useInfinitePages<NodeSummary, string | number | undefined>({
+    options: listOptions,
+    getId: nodeId,
+    auto: false,
+  });
+
+  const scopeOptions = useScopes();
+  const columns = useMemo(() => nodeColumns(t), [t]);
+
+  const handleNodeUpdate = useCallback(
+    (data: WsNodeUpdate["data"]) => {
+      const cached = queryClient.getQueryData<InfiniteData<CursorPage<NodeSummary>>>(listOptions.queryKey);
+      const previous = cached?.pages.flatMap((page) => page.items).find((node) => node.id === data.nodeId);
+      if (previous && nodeListUpdateRequiresRefetch(previous, data, {
+        sort: serverSort,
+        type: typeFilter || undefined,
+        name: nameParam || undefined,
+        pubkeyPrefix: pubkeyPrefixParam || undefined,
+        scope: scopeFilter || undefined,
+        iatas,
+      })) {
+        // Server owns ordering/filter membership. Rare changes to either invalidate this exact
+        // active list rather than leaving a keyset-paginated cache in an impossible order.
+        void queryClient.invalidateQueries({ queryKey: listOptions.queryKey, exact: true });
+      } else {
+        queryClient.setQueryData<InfiniteData<CursorPage<NodeSummary>>>(
+          listOptions.queryKey,
+          (old) => patchInfinitePages(old, (items) => patchNodeTableSummary(items, data) ?? items),
+        );
+      }
+      if (selectedNodeId === data.nodeId) {
+        void queryClient.invalidateQueries({ queryKey: nodeQueries.detail(data.nodeId).queryKey });
+      }
+    },
+    [queryClient, listOptions, selectedNodeId, serverSort, typeFilter, nameParam, pubkeyPrefixParam, scopeFilter, iatas],
   );
 
   useWsNodeUpdateHandler(wsManager, handleNodeUpdate);
@@ -236,13 +249,15 @@ export function NodeTable({ wsManager, selectedNodeId, onSelectNode }: NodeTable
 
         <DataTable
           columns={columns}
-          rows={displayNodes}
+          rows={nodes}
           rowKey={(n) => n.id}
           selectedKey={selectedNodeId}
           onSelect={onSelectNode}
           isLoading={isLoading}
           emptyLabel={t("entities.noNodes")}
-          defaultSort={{ header: "Name" }}
+          sort={sort}
+          onSortChange={setSort}
+          sortMode="server"
           virtualize
           onEndReached={loadMore}
           renderCard={(node) => renderNodeCard(node, t)}

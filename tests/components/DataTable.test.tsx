@@ -141,3 +141,76 @@ describe("DataTable card mode", () => {
     expect(onEndReached).toHaveBeenCalledTimes(1);
   });
 });
+
+
+describe("DataTable controlled sorting", () => {
+  const sortableColumns: Column<Row>[] = [
+    { header: "ID", cell: (r) => r.id, sortValue: (r) => r.id },
+  ];
+
+  it("keeps server page order while a global sort is incomplete, then sorts the complete set", () => {
+    setMobile(false);
+    const unsorted: Row[] = [{ id: "b" }, { id: "a" }];
+    const props = {
+      columns: sortableColumns,
+      rows: unsorted,
+      rowKey: (r: Row) => r.id,
+      selectedKey: null,
+      onSelect: () => {},
+      emptyLabel: "none",
+      sort: { header: "ID", direction: "asc" as const },
+      onSortChange: () => {},
+    };
+    const { container, rerender } = render(<DataTable {...props} sortReady={false} />);
+
+    const cellText = () => [...container.querySelectorAll("tbody td")].map((td) => td.textContent);
+    expect(cellText()).toEqual(["b", "a"]);
+    expect(screen.getByRole("button", { name: /ID/ })).toHaveAttribute("aria-busy", "true");
+
+    rerender(<DataTable {...props} sortReady />);
+    expect(cellText()).toEqual(["a", "b"]);
+    expect(screen.getByRole("button", { name: /ID/ })).not.toHaveAttribute("aria-busy");
+  });
+
+  it("keeps API order in server mode while preserving sortable header controls", () => {
+    setMobile(false);
+    const onSortChange = vi.fn();
+    const unsorted: Row[] = [{ id: "b" }, { id: "a" }];
+    const { container } = render(
+      <DataTable
+        columns={sortableColumns}
+        rows={unsorted}
+        rowKey={(r) => r.id}
+        selectedKey={null}
+        onSelect={() => {}}
+        emptyLabel="none"
+        sort={{ header: "ID", direction: "asc" }}
+        onSortChange={onSortChange}
+        sortMode="server"
+      />,
+    );
+
+    expect([...container.querySelectorAll("tbody td")].map((td) => td.textContent)).toEqual(["b", "a"]);
+    fireEvent.click(screen.getByRole("button", { name: /ID/ }));
+    expect(onSortChange).toHaveBeenCalledWith({ header: "ID", direction: "desc" });
+  });
+
+  it("reports sort changes to a controlled caller instead of mutating local state", () => {
+    setMobile(false);
+    const onSortChange = vi.fn();
+    render(
+      <DataTable
+        columns={sortableColumns}
+        rows={rows}
+        rowKey={(r) => r.id}
+        selectedKey={null}
+        onSelect={() => {}}
+        emptyLabel="none"
+        sort={{ header: "", direction: "asc" }}
+        onSortChange={onSortChange}
+      />,
+    );
+    fireEvent.click(screen.getByRole("button", { name: /ID/ }));
+    expect(onSortChange).toHaveBeenCalledWith({ header: "ID", direction: "asc" });
+  });
+});

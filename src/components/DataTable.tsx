@@ -12,7 +12,11 @@ export interface Column<T> {
   sortValue?: (row: T) => string | number | null | undefined; // column is sortable when present
 }
 
-type SortDirection = "asc" | "desc";
+export type SortDirection = "asc" | "desc";
+export interface SortState {
+  header: string;
+  direction: SortDirection;
+}
 
 interface DataTableProps<T> {
   columns: Column<T>[];
@@ -23,12 +27,23 @@ interface DataTableProps<T> {
   isLoading?: boolean;
   emptyLabel: string;
   defaultSort?: { header: string; direction?: SortDirection };
+  // Optional controlled sort. Server-paged entity tables bind this to their query key; smaller
+  // client-side tables can keep the simpler internal sort state.
+  sort?: SortState;
+  onSortChange?: (sort: SortState) => void;
+  // Server mode keeps row order exactly as returned by the API while retaining the same sortable
+  // header UI. Client mode (default) applies sortValue locally.
+  sortMode?: "client" | "server";
+  // false means a requested client-side global sort is waiting for the complete result set. Keep the
+  // current page order until every page is present, then apply the sort once instead of reshuffling
+  // the viewport as each page arrives. Ignored in server mode.
+  sortReady?: boolean;
   // called when the scroll position nears the bottom, for on-demand paging (omit = no infinite scroll)
   onEndReached?: () => void;
   // Large entity datasets opt in; small analytics/routes tables keep the simpler full rendering.
   virtualize?: boolean;
   // when set, rows render as stacked cards below the md breakpoint instead of a table; sort UI lives
-  // in <thead>, so cards keep the defaultSort
+  // in <thead>, so cards keep whichever sort state the caller supplied
   renderCard?: (row: T) => ReactNode;
 }
 
@@ -37,24 +52,42 @@ const END_REACHED_THRESHOLD_PX = 200;
 
 // selectable, sticky-header list table shared by the entity tabs (observers, nodes, …)
 
-export function DataTable<T>({ columns, rows, rowKey, selectedKey, onSelect, isLoading, emptyLabel, defaultSort, onEndReached, virtualize = false, renderCard }: DataTableProps<T>) {
+export function DataTable<T>({
+  columns,
+  rows,
+  rowKey,
+  selectedKey,
+  onSelect,
+  isLoading,
+  emptyLabel,
+  defaultSort,
+  sort: controlledSort,
+  onSortChange,
+  sortMode = "client",
+  sortReady = true,
+  onEndReached,
+  virtualize = false,
+  renderCard,
+}: DataTableProps<T>) {
   const asCards = useIsMobile() && !!renderCard;
   const scrollRef = useRef<HTMLDivElement>(null);
-  const [sort, setSort] = useState<{ header: string; direction: SortDirection }>(() => ({
+  const [internalSort, setInternalSort] = useState<SortState>(() => ({
     header: defaultSort?.header ?? "",
     direction: defaultSort?.direction ?? "asc",
   }));
+  const sort = controlledSort ?? internalSort;
 
   function toggleSort(header: string) {
-    setSort((prev) =>
-      prev.header === header
-        ? { header, direction: prev.direction === "asc" ? "desc" : "asc" }
-        : { header, direction: "asc" },
-    );
+    const next: SortState =
+      sort.header === header
+        ? { header, direction: sort.direction === "asc" ? "desc" : "asc" }
+        : { header, direction: "asc" };
+    if (onSortChange) onSortChange(next);
+    else setInternalSort(next);
   }
 
   const sortedRows = useMemo(() => {
-    if (!rows) return rows;
+    if (!rows || sortMode === "server" || !sortReady) return rows;
     const col = columns.find((c) => c.header === sort.header && c.sortValue);
     if (!col?.sortValue) return rows;
     const getValue = col.sortValue;
@@ -68,7 +101,7 @@ export function DataTable<T>({ columns, rows, rowKey, selectedKey, onSelect, isL
       if (typeof av === "number" && typeof bv === "number") return (av - bv) * dir;
       return String(av).localeCompare(String(bv), undefined, { numeric: true }) * dir;
     });
-  }, [rows, columns, sort]);
+  }, [rows, columns, sort, sortMode, sortReady]);
 
   // React Compiler deliberately skips components using TanStack Virtual's imperative API.
   // eslint-disable-next-line react-hooks/incompatible-library
@@ -161,6 +194,7 @@ export function DataTable<T>({ columns, rows, rowKey, selectedKey, onSelect, isL
                       type="button"
                       onClick={() => toggleSort(col.header)}
                       className="flex items-center gap-1 cursor-pointer hover:text-text-normal transition-colors"
+                      aria-busy={sortMode === "client" && active && !sortReady ? true : undefined}
                     >
                       {col.label ?? col.header}
                       <span className={active ? "text-text-normal" : "text-text-dim/40"}>

@@ -15,7 +15,7 @@ export function useMapNodesData(
   opts?: { enabled?: boolean },
 ) {
   const { items, loadedCount, isPaging, isError } =
-    useInfinitePages<NodeSummary>({
+    useInfinitePages<NodeSummary, string | number | undefined>({
       options: nodeQueries.mapList({ regionKey, iatas: selectedIatas }),
       getId: nodeId,
       enabled: opts?.enabled,

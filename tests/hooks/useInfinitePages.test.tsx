@@ -80,6 +80,7 @@ describe("useInfinitePages", () => {
     expect(queryFn).toHaveBeenCalledTimes(2); // page 1 + one failed page 2, no retry loop
     expect(result.current.isPaging).toBe(false);
     expect(result.current.items.map(rowId)).toEqual(["a"]); // page 1 still shows
+    expect(result.current.isComplete).toBe(false); // an error is not the same as exhausting the cursor
   });
 
   it("with auto:false, loads only the first page until loadMore is called", async () => {
@@ -97,6 +98,7 @@ describe("useInfinitePages", () => {
     await waitFor(() => expect(result.current.items.map(rowId)).toEqual(["a", "b"]));
     expect(queryFn).toHaveBeenCalledTimes(1);
     expect(result.current.hasMore).toBe(true);
+    expect(result.current.isComplete).toBe(false);
     expect(result.current.isPaging).toBe(false); // idle, not "loading forever" despite hasMore
 
     act(() => result.current.loadMore());
@@ -105,6 +107,7 @@ describe("useInfinitePages", () => {
     expect(queryFn).toHaveBeenCalledTimes(2);
     expect(queryFn.mock.calls[1]![0]).toBe(2); // loadMore used page 1's nextCursor
     expect(result.current.hasMore).toBe(false);
+    expect(result.current.isComplete).toBe(true);
   });
 
   it("keeps previous items (no skeleton) while a new key loads when keepPrevious is set", async () => {

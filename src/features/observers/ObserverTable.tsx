@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useMemo } from "react";
+import { useState, useCallback, useMemo } from "react";
 import { type TFunction } from "i18next";
 import { useTranslation } from "react-i18next";
 import { useQuery, useQueryClient, type InfiniteData } from "@tanstack/react-query";
@@ -10,10 +10,10 @@ import { patchInfinitePages } from "../../lib/infinite-pages";
 import { useWsObserverStatusHandler } from "../../hooks/useWsHandlers";
 import { formatHex, formatRadio } from "../../lib/formatters";
 import { Badge } from "../../components/Badge";
-import { DataTable, type Column } from "../../components/DataTable";
+import { DataTable, type Column, type SortState } from "../../components/DataTable";
 import { LoadingPill } from "../../components/LoadingPill";
 import { ObserverFilterBar } from "./ObserverFilterBar";
-import { patchObserverSummary } from "./observer-updates";
+import { observerListUpdateRequiresRefetch, patchObserverSummary } from "./observer-updates";
 import { deriveObserverStatus } from "./observer-status";
 import { useTick } from "../../hooks/useTick";
 import type { ObserverSummary } from "./types";
@@ -22,6 +22,14 @@ import type { WsManager } from "../../api/ws-manager";
 import type { WsObserverStatus } from "../../types/ws";
 
 const observerId = (o: ObserverSummary) => o.id; // stable id accessor for the paged hook's dedup
+
+const OBSERVER_SORT_BY_HEADER = {
+  Name: "name",
+  Type: "type",
+  Radio: "radio",
+  IATA: "iata",
+  Status: "status",
+} as const;
 
 interface ObserverTableProps {
   wsManager: WsManager;
@@ -109,7 +117,8 @@ export function ObserverTable({ wsManager, selectedObserverId, onSelectObserver 
   const [statusFilter, setStatusFilter] = useState("");
   const [typeFilter, setTypeFilter] = useState("");
   const [brokerFilter, setBrokerFilter] = useState("");
-  const [scopeFilter, setScopeFilter] = useState(""); // "" = Any; applied client-side over the loaded set
+  const [scopeFilter, setScopeFilter] = useState("");
+  const [sort, setSort] = useState<SortState>({ header: "Name", direction: "asc" });
 
   useTick(); // keep recency-derived status badges fresh
 
@@ -120,8 +129,10 @@ export function ObserverTable({ wsManager, selectedObserverId, onSelectObserver 
     [brokers],
   );
 
-  // page the region's observers 50 at a time (filters stay server-side, in the query key); rows
-  // stream in as each batch lands. Loads once per filter set — WS status events keep them live.
+  const serverSort = OBSERVER_SORT_BY_HEADER[sort.header as keyof typeof OBSERVER_SORT_BY_HEADER] ?? "name";
+
+  // Page the region's observers 50 at a time. Filtering and ordering are server-side, so every page
+  // is globally sorted without eagerly downloading the full observer set.
   const listOptions = useMemo(
     () =>
       observerQueries.list({
@@ -132,13 +143,15 @@ export function ObserverTable({ wsManager, selectedObserverId, onSelectObserver 
         broker: brokerFilter,
         name: search,
         searchField,
+        scope: scopeFilter || undefined,
+        sort: serverSort,
+        direction: sort.direction,
       }),
-    [regionKey, iatas, statusFilter, typeFilter, brokerFilter, search, searchField],
+    [regionKey, iatas, statusFilter, typeFilter, brokerFilter, search, searchField, scopeFilter, serverSort, sort.direction],
   );
-  const { items: observers, loadedCount, isPaging, isError, isLoading, hasMore, loadMore } = useInfinitePages<ObserverSummary>({
+  const { items: observers, loadedCount, isPaging, isError, isLoading, loadMore } = useInfinitePages<ObserverSummary, string | number | undefined>({
     options: listOptions,
     getId: observerId,
-    keepPrevious: true,
     auto: false,
   });
 
@@ -150,19 +163,7 @@ export function ObserverTable({ wsManager, selectedObserverId, onSelectObserver 
     return [...types].sort();
   }, [observers]);
 
-  // scope options are the configured scopes; the filter itself is applied client-side on obs.scopes
   const scopeOptions = useScopes();
-
-  const displayObservers = useMemo(
-    () => (scopeFilter ? observers.filter((o) => o.scopes?.includes(scopeFilter)) : observers),
-    [observers, scopeFilter],
-  );
-
-  // Scope is client-side because the observers endpoint has no corresponding filter. Keep pulling
-  // pages only while an active scope filter has too few visible matches.
-  useEffect(() => {
-    if (scopeFilter && displayObservers.length < 50 && hasMore && !isPaging) loadMore();
-  }, [scopeFilter, displayObservers.length, hasMore, isPaging, loadMore]);
   const columns = useMemo(() => observerColumns(t), [t]);
 
   // patch the live status into the paged cache (mirrors NodeTable). A brand-new observer not on any
@@ -170,16 +171,29 @@ export function ObserverTable({ wsManager, selectedObserverId, onSelectObserver 
   // beacon-docs ticket about carrying the full summary in WS events for true live insertion).
   const handleObserverStatus = useCallback(
     (data: WsObserverStatus["data"]) => {
-      queryClient.setQueryData<InfiniteData<CursorPage<ObserverSummary>>>(
-        listOptions.queryKey,
-        (old) => patchInfinitePages(old, (items) => patchObserverSummary(items, data) ?? items),
-      );
+      const cached = queryClient.getQueryData<InfiniteData<CursorPage<ObserverSummary>>>(listOptions.queryKey);
+      const previous = cached?.pages.flatMap((page) => page.items).find((observer) => observer.id === data.observerId);
+      if (previous && observerListUpdateRequiresRefetch(previous, data, {
+        sort: serverSort,
+        status: statusFilter || undefined,
+        type: typeFilter || undefined,
+        name: searchField === "name" ? search || undefined : undefined,
+        scope: scopeFilter || undefined,
+        iatas,
+      })) {
+        void queryClient.invalidateQueries({ queryKey: listOptions.queryKey, exact: true });
+      } else {
+        queryClient.setQueryData<InfiniteData<CursorPage<ObserverSummary>>>(
+          listOptions.queryKey,
+          (old) => patchInfinitePages(old, (items) => patchObserverSummary(items, data) ?? items),
+        );
+      }
       // refresh detail panel if it's showing this observer
       if (selectedObserverId === data.observerId) {
-        queryClient.invalidateQueries({ queryKey: observerQueries.detail(data.observerId).queryKey });
+        void queryClient.invalidateQueries({ queryKey: observerQueries.detail(data.observerId).queryKey });
       }
     },
-    [queryClient, listOptions, selectedObserverId],
+    [queryClient, listOptions, selectedObserverId, serverSort, statusFilter, typeFilter, searchField, search, scopeFilter, iatas],
   );
 
   useWsObserverStatusHandler(wsManager, handleObserverStatus);
@@ -207,13 +221,15 @@ export function ObserverTable({ wsManager, selectedObserverId, onSelectObserver 
 
         <DataTable
           columns={columns}
-          rows={displayObservers}
+          rows={observers}
           rowKey={(o) => o.id}
           selectedKey={selectedObserverId}
           onSelect={onSelectObserver}
           isLoading={isLoading}
           emptyLabel={t("entities.noObservers")}
-          defaultSort={{ header: "Name" }}
+          sort={sort}
+          onSortChange={setSort}
+          sortMode="server"
           virtualize
           onEndReached={loadMore}
           renderCard={(observer) => renderObserverCard(observer, t)}

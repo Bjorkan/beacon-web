@@ -53,6 +53,19 @@ describe("application routes", () => {
     });
   });
 
+  it("validates Map and Analytics state at their own route boundaries", async () => {
+    // Unknown raw query keys remain in TanStack Router's merged search object, but only the owning
+    // route validator coerces them. This guards against moving Map/Analytics parsing back to root.
+    const nodeRouter = await routerAt("/nodes?lat=59.33&lng=18.07");
+    expect(routeSearch(nodeRouter).lat).toBe("59.33");
+
+    const mapRouter = await routerAt("/map?lat=59.33&lng=18.07&zoom=9");
+    expect(routeSearch(mapRouter)).toMatchObject({ lat: 59.33, lng: 18.07, zoom: 9 });
+
+    const analyticsRouter = await routerAt("/analytics?statsTab=observer&observerId=o1&range=7d");
+    expect(routeSearch(analyticsRouter)).toMatchObject({ statsTab: "observer", observerId: "o1", range: "7d" });
+  });
+
   it("serializes multi-value filters with the established CSV contract", async () => {
     const router = await routerAt("/packets");
     await router.navigate({

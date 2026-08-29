@@ -223,24 +223,32 @@ export function getNodesPage(
   iatas: string[] | undefined,
   params?: {
     cursor?: number;
+    pageToken?: string;
     limit?: number;
+    sort?: string;
+    direction?: "asc" | "desc";
     type?: string;
     name?: string;
     pubkeyPrefix?: string; // case-insensitive hex prefix; server matches and validates
     supportsMultibytePaths?: "true" | "false";
     supportsMultibyteTraces?: "true" | "false";
+    scope?: string;
     neighbors?: boolean; // include each node's neighborIds (?neighbors=true)
   },
 ): Promise<CursorPage<NodeSummary>> {
   return request("/nodes", {
     iatas: iatasParam(iatas),
     cursor: params?.cursor,
+    pageToken: params?.pageToken,
     limit: params?.limit ?? DEFAULT_PAGE_SIZE,
+    sort: params?.sort,
+    direction: params?.direction,
     typeName: params?.type,
     name: params?.name,
     pubkeyPrefix: params?.pubkeyPrefix,
     supportsMultibytePaths: params?.supportsMultibytePaths,
     supportsMultibyteTraces: params?.supportsMultibyteTraces,
+    scope: params?.scope,
     neighbors: params?.neighbors ? "true" : undefined,
   });
 }
@@ -248,16 +256,31 @@ export function getNodesPage(
 // Paginated /observers, mirroring getNodesPage; used by the Observers table.
 export function getObserversPage(
   iatas: string[] | undefined,
-  params?: { cursor?: number; limit?: number; type?: string; broker?: string; status?: string; name?: string },
+  params?: {
+    cursor?: number;
+    pageToken?: string;
+    limit?: number;
+    sort?: string;
+    direction?: "asc" | "desc";
+    type?: string;
+    broker?: string;
+    status?: string;
+    name?: string;
+    scope?: string;
+  },
 ): Promise<CursorPage<ObserverSummary>> {
   return request("/observers", {
     iatas: iatasParam(iatas),
     cursor: params?.cursor,
+    pageToken: params?.pageToken,
     limit: params?.limit ?? DEFAULT_PAGE_SIZE,
+    sort: params?.sort,
+    direction: params?.direction,
     type: params?.type,
     broker: params?.broker,
     status: params?.status,
     name: params?.name,
+    scope: params?.scope,
   });
 }
 

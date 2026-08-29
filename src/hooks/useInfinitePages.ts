@@ -2,14 +2,14 @@ import { useCallback, useEffect, useMemo } from "react";
 import { useInfiniteQuery, keepPreviousData, type UseInfiniteQueryOptions, type InfiniteData, type QueryKey } from "@tanstack/react-query";
 import type { CursorPage } from "../types/api";
 
-interface UseInfinitePagesOptions<T> {
+interface UseInfinitePagesOptions<T, TPageParam = number | undefined> {
   // centralized factory output (src/api/queries.ts) — key + fn + pagination mechanics in one object
   options: UseInfiniteQueryOptions<
     CursorPage<T>,
     Error,
     InfiniteData<CursorPage<T>>,
     QueryKey,
-    number | undefined
+    TPageParam
   >;
   // stable id accessor for dedup — pass a module-level fn so the memo isn't rebuilt every render
   getId: (item: T) => string;
@@ -28,7 +28,7 @@ interface UseInfinitePagesOptions<T> {
 // load only the first page and pull the rest on demand via loadMore(). Loads once per key (staleTime
 // Infinity, no maxPages); dedupes by id because a non-unique cursor can repeat a row across a page
 // boundary. Shared by the map and the entity tables.
-export function useInfinitePages<T>({ options, getId, keepPrevious, auto = true, enabled = true }: UseInfinitePagesOptions<T>) {
+export function useInfinitePages<T, TPageParam = number | undefined>({ options, getId, keepPrevious, auto = true, enabled = true }: UseInfinitePagesOptions<T, TPageParam>) {
   const { data, fetchNextPage, hasNextPage, isFetching, isFetchingNextPage, isError, isFetchNextPageError, isLoading } =
     useInfiniteQuery({
       ...options,
@@ -70,6 +70,9 @@ export function useInfinitePages<T>({ options, getId, keepPrevious, auto = true,
     isError: errored,
     isLoading,
     hasMore: hasNextPage && !errored,
+    // True only when the server has positively exhausted the cursor chain. Unlike hasMore, this
+    // stays false after a next-page error so callers never treat a partial result set as complete.
+    isComplete: hasNextPage === false,
     loadMore,
   };
 }

@@ -65,13 +65,15 @@ import type { PacketServerFilter } from "../features/packets/types";
 
 // Cursor-paginated options contract shared by useInfinitePages consumers. TData is pinned to
 // InfiniteData (no select transforms inside factories — callers add select at the hook site).
-type PagedOptions<T> = UseInfiniteQueryOptions<
+type PagedOptions<T, TPageParam = number | undefined> = UseInfiniteQueryOptions<
   CursorPage<T>,
   Error,
   InfiniteData<CursorPage<T>>,
   QueryKey,
-  number | undefined
+  TPageParam
 >;
+
+type SortablePageParam = string | number | undefined;
 
 // ── regions ──────────────────────────────────────────────────────────────────────────────────
 // The loader expands each summary into its full detail (member IATAs + map-focus hints) in one
@@ -139,6 +141,9 @@ export interface NodeListFilters {
   pubkeyPrefix?: string;
   supportsMultibytePaths?: "true" | "false";
   supportsMultibyteTraces?: "true" | "false";
+  scope?: string;
+  sort?: "name" | "type" | "radio" | "neighbors" | "last_seen";
+  direction?: "asc" | "desc";
 }
 
 // Key shape matters: the unfiltered 2-element prefix is what cache resets match by prefix, and
@@ -152,6 +157,9 @@ function nodeListKey(f: NodeListFilters) {
     f.supportsMultibyteTraces ?? "",
     f.name ?? "",
     f.pubkeyPrefix ?? "",
+    f.scope ?? "",
+    f.sort ?? "name",
+    f.direction ?? "asc",
   ] as const;
 }
 
@@ -162,40 +170,50 @@ export const nodeQueries = {
   mapList: (args: {
     regionKey: string;
     iatas?: string[];
-  }): PagedOptions<NodeSummary> =>
+  }): PagedOptions<NodeSummary, SortablePageParam> =>
     infiniteQueryOptions<
       CursorPage<NodeSummary>,
       Error,
       InfiniteData<CursorPage<NodeSummary>>,
       QueryKey,
-      number | undefined
+      SortablePageParam
     >({
       queryKey: ["map-nodes", args.regionKey] as const,
       queryFn: ({ pageParam }) =>
-        getNodesPage(args.iatas, { cursor: pageParam, neighbors: true }),
-      getNextPageParam: (last) => last.nextCursor ?? undefined,
+        getNodesPage(args.iatas, {
+          cursor: typeof pageParam === "number" ? pageParam : undefined,
+          pageToken: typeof pageParam === "string" ? pageParam : undefined,
+          sort: "last_seen",
+          direction: "desc",
+          neighbors: true,
+        }),
+      getNextPageParam: (last) => last.nextPageToken ?? last.nextCursor ?? undefined,
       initialPageParam: undefined,
       staleTime: Infinity,
     }),
-  list: (f: NodeListFilters): PagedOptions<NodeSummary> =>
+  list: (f: NodeListFilters): PagedOptions<NodeSummary, SortablePageParam> =>
     infiniteQueryOptions<
       CursorPage<NodeSummary>,
       Error,
       InfiniteData<CursorPage<NodeSummary>>,
       QueryKey,
-      number | undefined
+      SortablePageParam
     >({
       queryKey: nodeListKey(f),
       queryFn: ({ pageParam }) =>
         getNodesPage(f.iatas, {
-          cursor: pageParam,
+          cursor: typeof pageParam === "number" ? pageParam : undefined,
+          pageToken: typeof pageParam === "string" ? pageParam : undefined,
+          sort: f.sort ?? "name",
+          direction: f.direction ?? "asc",
           type: f.type || undefined,
           name: f.name || undefined,
           pubkeyPrefix: f.pubkeyPrefix || undefined,
           supportsMultibytePaths: f.supportsMultibytePaths || undefined,
           supportsMultibyteTraces: f.supportsMultibyteTraces || undefined,
+          scope: f.scope || undefined,
         }),
-      getNextPageParam: (last) => last.nextCursor ?? undefined,
+      getNextPageParam: (last) => last.nextPageToken ?? last.nextCursor ?? undefined,
       initialPageParam: undefined,
       staleTime: Infinity,
     }),
@@ -232,6 +250,9 @@ export interface ObserverListFilters {
   broker?: string;
   name?: string;
   searchField?: string;
+  scope?: string;
+  sort?: "name" | "type" | "radio" | "iata" | "status" | "last_seen";
+  direction?: "asc" | "desc";
 }
 
 function observerListKey(f: ObserverListFilters) {
@@ -243,29 +264,36 @@ function observerListKey(f: ObserverListFilters) {
     f.broker ?? "",
     f.name ?? "",
     f.searchField ?? "",
+    f.scope ?? "",
+    f.sort ?? "name",
+    f.direction ?? "asc",
   ] as const;
 }
 
 export const observerQueries = {
   all: () => ["observers"] as const,
-  list: (f: ObserverListFilters): PagedOptions<ObserverSummary> =>
+  list: (f: ObserverListFilters): PagedOptions<ObserverSummary, SortablePageParam> =>
     infiniteQueryOptions<
       CursorPage<ObserverSummary>,
       Error,
       InfiniteData<CursorPage<ObserverSummary>>,
       QueryKey,
-      number | undefined
+      SortablePageParam
     >({
       queryKey: observerListKey(f),
       queryFn: ({ pageParam }) =>
         getObserversPage(f.iatas, {
-          cursor: pageParam,
+          cursor: typeof pageParam === "number" ? pageParam : undefined,
+          pageToken: typeof pageParam === "string" ? pageParam : undefined,
+          sort: f.sort ?? "name",
+          direction: f.direction ?? "asc",
           status: f.status || undefined,
           type: f.type || undefined,
           broker: f.broker || undefined,
           name: f.searchField === "name" ? f.name || undefined : undefined,
+          scope: f.scope || undefined,
         }),
-      getNextPageParam: (last) => last.nextCursor ?? undefined,
+      getNextPageParam: (last) => last.nextPageToken ?? last.nextCursor ?? undefined,
       initialPageParam: undefined,
       staleTime: Infinity,
     }),

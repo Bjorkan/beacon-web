@@ -28,7 +28,7 @@ beforeEach(() => {
 describe("useMapNodesData", () => {
   it("auto-chains pages and concatenates every page's nodes", async () => {
     mockGetNodesPage
-      .mockResolvedValueOnce({ items: [node("a"), node("b")], nextCursor: 2, hasMore: true })
+      .mockResolvedValueOnce({ items: [node("a"), node("b")], nextCursor: null, nextPageToken: "page-2", hasMore: true })
       .mockResolvedValueOnce({ items: [node("c")], nextCursor: null, hasMore: false });
 
     const { result } = renderHook(() => useMapNodesData(["YYZ"], "YYZ"), { wrapper: wrapper() });
@@ -38,8 +38,14 @@ describe("useMapNodesData", () => {
     expect(result.current.nodes.map((n) => n.id)).toEqual(["a", "b", "c"]);
     expect(result.current.loadedCount).toBe(3);
     expect(mockGetNodesPage).toHaveBeenCalledTimes(2);
-    // second call paginates with the previous page's nextCursor; the map always requests neighbor ids
-    expect(mockGetNodesPage).toHaveBeenLastCalledWith(["YYZ"], { cursor: 2, neighbors: true });
+    // sortable list endpoints prefer the opaque token; the map keeps the legacy last_seen order and asks for neighbor ids
+    expect(mockGetNodesPage).toHaveBeenLastCalledWith(["YYZ"], {
+      cursor: undefined,
+      pageToken: "page-2",
+      sort: "last_seen",
+      direction: "desc",
+      neighbors: true,
+    });
   });
 
   it("stops after a single page when hasMore is false", async () => {

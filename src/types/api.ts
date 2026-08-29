@@ -5,6 +5,8 @@ import type { PathConfidence } from "./enums";
 export interface CursorPage<T> {
   items: T[];
   nextCursor: number | null;
+  // Sortable keyset endpoints return an opaque token. Older endpoints keep using nextCursor.
+  nextPageToken?: string | null;
   hasMore: boolean;
 }
 

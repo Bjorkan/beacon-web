@@ -28,7 +28,6 @@ import { EmptyState } from "./components/EmptyState";
 import { PacketList } from "./features/packets/PacketList";
 import { PacketAnalyzerDrawer } from "./features/packets/PacketAnalyzerDrawer";
 import { PacketAnalyzerOverlay } from "./features/packets/PacketAnalyzerOverlay";
-import { PacketPathMapModal } from "./features/map/PacketPathMapModal";
 import { PathLinkRestore } from "./features/packets/PathLinkRestore";
 import { SelectionResetOnRegion } from "./state/SelectionResetOnRegion";
 import { NodeTable } from "./features/nodes/NodeTable";
@@ -49,6 +48,9 @@ import type { StatsRange, StatsTab } from "./features/stats/types";
 // Map is the only heavy tab (maplibre-gl is ~1MB), so lazy-load it — its chunk is fetched the
 // first time someone opens the Map route instead of bloating the initial bundle.
 const MapView = lazy(() => import("./features/map/MapView").then((m) => ({ default: m.MapView })));
+// The packet path modal also imports MapLibre through PacketPathMap. Keep it out of the startup
+// bundle even when the user never visits /map; it is only needed after an explicit "view path" action.
+const PacketPathMapModal = lazy(() => import("./features/map/PacketPathMapModal").then((m) => ({ default: m.PacketPathMapModal })));
 
 // Stats pulls in ECharts (~150-200KB gz), so lazy-load it too.
 const StatsOverview = lazy(() => import("./features/stats/StatsOverview").then((m) => ({ default: m.StatsOverview })));
@@ -66,30 +68,26 @@ function str(value: unknown): string | undefined {
   return typeof value === "string" && value !== "" ? value : undefined;
 }
 
-// Region filter: declared on the root, inherited by every route, so the geographic selection is
-// shareable on any tab.
-interface AppSearch {
+// Root search is limited to state that is genuinely shared across routes. Packet filters remain here
+// intentionally so they survive tab switches; Map and Analytics own their route-specific search.
+interface RootSearch {
   regions: string[];
   iata: string[];
   region?: string; // legacy single-IATA param, folded in on load
-  // Packet filter state lives at the root so it survives tab switches (the filters are URL state,
-  // and the Packets route re-reads them on return).
   types: number[];
   routes: number[];
   obs: string[];
   scope: string[];
   q?: string;
   sf?: string;
-  // Cross-route deep links: these params appear on whichever route hosts their view, so they are
-  // declared on the root and every search reducer carries them forward.
+  // Packet/Channel analyzer deep links are shared by those sibling routes.
   hash?: string;
   analyze?: string; // "1" flag
   path?: string;
-  node?: string; // selected node on the Map route
-  statsTab?: StatsTab;
-  observerId?: string;
-  range?: StatsRange;
-  // Map-specific, validated search state.
+}
+
+interface MapSearch {
+  node?: string;
   lat?: number;
   lng?: number;
   zoom?: number;
@@ -99,21 +97,19 @@ interface AppSearch {
   style?: string;
   flow?: boolean;
   borders?: boolean;
-  // Accepted only at `/` so historical links can be normalized once.
-  tab?: string;
-  observer?: string;
 }
 
-function validateAppSearch(search: Record<string, unknown>): AppSearch {
-  const mapView = parseMapViewSearch(search);
-  const statsTab = str(search.statsTab);
-  const range = str(search.range);
+interface AnalyticsSearch {
+  statsTab?: StatsTab;
+  observerId?: string;
+  range?: StatsRange;
+}
+
+function validateRootSearch(search: Record<string, unknown>): RootSearch {
   return {
     regions: csv(search.regions),
     iata: csv(search.iata).map((c) => c.toUpperCase()),
     ...(str(search.region) !== undefined ? { region: str(search.region)!.toUpperCase() } : {}),
-    // Packet filter state lives at the root so it survives tab switches (the filters are URL state,
-    // and the Packets route re-reads them on return).
     types: csv(search.types).map(Number).filter(Number.isFinite),
     routes: csv(search.routes).map(Number).filter(Number.isFinite),
     obs: csv(search.obs),
@@ -123,12 +119,13 @@ function validateAppSearch(search: Record<string, unknown>): AppSearch {
     hash: str(search.hash),
     analyze: search.analyze === "1" ? "1" : undefined,
     path: str(search.path),
+  };
+}
+
+function validateMapSearch(search: Record<string, unknown>): MapSearch {
+  const mapView = parseMapViewSearch(search);
+  return {
     node: str(search.node),
-    statsTab: ["mesh", "talkers", "clockdrift", "observer", "graph"].includes(statsTab ?? "")
-      ? statsTab as StatsTab
-      : undefined,
-    observerId: str(search.observerId),
-    range: ["24h", "7d", "30d"].includes(range ?? "") ? range as StatsRange : undefined,
     lat: mapView.center?.[1],
     lng: mapView.center?.[0],
     zoom: mapView.zoom,
@@ -138,16 +135,25 @@ function validateAppSearch(search: Record<string, unknown>): AppSearch {
     style: mapView.styleId,
     flow: mapView.flow,
     borders: mapView.borders,
-    tab: str(search.tab),
-    observer: str(search.observer),
   };
 }
 
-// Packet analyzer deep links (Packets + Channels routes).
-// Navigate search reducers receive the current (all-optional) merged search and must return the
-// COMPLETE search — every root field needs a concrete value, since validateAppSearch always
-// emits them. This fills the defaults from whatever the router handed over.
-function rootSearch(prev: Partial<AppSearch> | undefined): AppSearch {
+function validateAnalyticsSearch(search: Record<string, unknown>): AnalyticsSearch {
+  const statsTab = str(search.statsTab);
+  const range = str(search.range);
+  return {
+    statsTab: ["mesh", "talkers", "clockdrift", "observer", "graph"].includes(statsTab ?? "")
+      ? statsTab as StatsTab
+      : undefined,
+    observerId: str(search.observerId),
+    range: ["24h", "7d", "30d"].includes(range ?? "") ? range as StatsRange : undefined,
+  };
+}
+
+// Navigation reducers must always re-materialize the required root arrays because TanStack Router
+// invokes them against a merged, mostly-optional search object. Route-specific keys are added only
+// by the destination route and therefore cannot leak between Map/Analytics/other tabs.
+function rootSearch(prev: Partial<RootSearch> | undefined): RootSearch {
   return {
     regions: prev?.regions ?? [],
     iata: prev?.iata ?? [],
@@ -160,32 +166,15 @@ function rootSearch(prev: Partial<AppSearch> | undefined): AppSearch {
   };
 }
 
-function completeSearch(prev: Partial<AppSearch>): AppSearch {
+function completeSearch(prev: Partial<RootSearch>): RootSearch {
   return { ...prev, ...rootSearch(prev) };
 }
 
-function searchForTab(prev: Partial<AppSearch>, tab: string, keepAnalyzer: boolean): AppSearch {
+function searchForTab(prev: Partial<RootSearch>, tab: string, keepAnalyzer: boolean): RootSearch {
   const next = rootSearch(prev);
   if (tab === "Packets" || tab === "Channels") {
     next.hash = prev.hash;
     next.analyze = keepAnalyzer ? prev.analyze : undefined;
-  }
-  if (tab === "Analytics") {
-    next.statsTab = prev.statsTab;
-    next.observerId = prev.observerId;
-    next.range = prev.range;
-  }
-  if (tab === "Map") {
-    next.node = prev.node;
-    next.lat = prev.lat;
-    next.lng = prev.lng;
-    next.zoom = prev.zoom;
-    next.clustering = prev.clustering;
-    next.node_type = prev.node_type;
-    next.neighbor_lines = prev.neighbor_lines;
-    next.style = prev.style;
-    next.flow = prev.flow;
-    next.borders = prev.borders;
   }
   return next;
 }
@@ -545,18 +534,20 @@ function RootLayout() {
               />
             )}
             {pathMapDetail && (
-              <PacketPathMapModal
-                detail={pathMapDetail}
-                initialSelectedKey={pathMapInitialKey}
-                onClose={() => {
-                  setPathMapDetail(null);
-                  navigate({
-                    to: ".",
-                    search: (prev) => ({ ...prev, path: undefined }),
-                    replace: true,
-                  });
-                }}
-              />
+              <Suspense fallback={null}>
+                <PacketPathMapModal
+                  detail={pathMapDetail}
+                  initialSelectedKey={pathMapInitialKey}
+                  onClose={() => {
+                    setPathMapDetail(null);
+                    navigate({
+                      to: ".",
+                      search: (prev) => ({ ...prev, path: undefined }),
+                      replace: true,
+                    });
+                  }}
+                />
+              </Suspense>
             )}
           </div>
         </AppShell>
@@ -803,7 +794,7 @@ function legacyRedirect(search: Record<string, unknown>) {
 
 const rootRoute = createRootRoute({
   component: RootLayout,
-  validateSearch: validateAppSearch,
+  validateSearch: validateRootSearch,
   notFoundComponent: () => <EmptyState title="404" />,
 });
 
@@ -831,6 +822,7 @@ const channelsRoute = createRoute({
 const mapRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "map",
+  validateSearch: validateMapSearch,
   component: MapRoute,
 });
 
@@ -873,6 +865,7 @@ const tracesRoute = createRoute({
 const analyticsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "analytics",
+  validateSearch: validateAnalyticsSearch,
   component: AnalyticsRoute,
 });
 

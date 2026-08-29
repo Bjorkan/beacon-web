@@ -7,7 +7,7 @@ import { useRegion } from "../../hooks/useRegion";
 import { useInfinitePages } from "../../hooks/useInfinitePages";
 import { Badge } from "../../components/Badge";
 import { Timestamp } from "../../components/Timestamp";
-import { DataTable, type Column } from "../../components/DataTable";
+import { DataTable, type Column, type SortState } from "../../components/DataTable";
 import { LoadingPill } from "../../components/LoadingPill";
 import { MultiSelectDropdown } from "../../components/MultiSelectDropdown";
 import { RouteDetailPanel } from "./RouteDetailPanel";
@@ -147,6 +147,7 @@ export function RouteTable() {
   const columns = useMemo(() => routeColumns(t), [t]);
 
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
+  const [sort, setSort] = useState<SortState>({ header: "Last seen", direction: "desc" });
 
   // drop the selection when the region changes — the selected route may not be in the new region
   const prevRegion = useRef(regionKey);
@@ -172,12 +173,15 @@ export function RouteTable() {
 
   // Page the route set on demand (50 at a time, cursor = last route's lastSeen ms) — the DataTable
   // pulls the next page via loadMore() as you scroll, instead of eagerly loading the whole set.
-  const { items: listRoutes, loadedCount, isPaging, isError, isLoading: listLoading, loadMore, hasMore } =
+  const serverOrdered = sort.header === "Last seen" && sort.direction === "desc";
+  const { items: listRoutes, loadedCount, isPaging, isError, isLoading: listLoading, loadMore, hasMore, isComplete } =
     useInfinitePages<KnownRoute>({
       options: routeQueries.list({ iata: serverIata ?? "" }),
       getId: routeId,
       keepPrevious: true,
-      auto: false,
+      // The API already pages newest-first, so that default sort is globally correct without loading
+      // everything. Any other requested sort completes the cursor chain before DataTable applies it.
+      auto: !search && !serverOrdered,
     });
 
   const { data: searchRoutes, isLoading: searchLoading } = useQuery({
@@ -310,7 +314,9 @@ export function RouteTable() {
               onSelect={setSelectedKey}
               isLoading={search ? searchLoading : listLoading}
               emptyLabel={t(search ? "routes.noMatching" : "routes.none")}
-              defaultSort={{ header: "Last seen", direction: "desc" }}
+              sort={sort}
+              onSortChange={setSort}
+              sortReady={!!search || serverOrdered || isComplete}
               onEndReached={search ? undefined : loadMore}
               renderCard={(route) => renderRouteCard(route, t)}
             />
