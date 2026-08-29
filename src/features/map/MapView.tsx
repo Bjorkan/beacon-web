@@ -10,6 +10,7 @@ import { useMapBorders } from "./useMapBorders";
 import { useMapBordersData } from "./useMapBordersData";
 import { useMapPacketFlow } from "./useMapPacketFlow";
 import { PacketFlowButton } from "./PacketFlowButton";
+import { LivePacketFeed } from "./LivePacketFeed";
 import { useMapNodesData } from "./useMapNodesData";
 import { nodesToFeatureCollection, filterByNodeType, buildNeighborEdges, buildFocusedNeighborEdges, buildFocusedNeighborPoints, buildFocusedSelectedPoint, neighborRenderMode, type NeighborEdgeProps } from "./node-geojson";
 import { MapSettingsPanel } from "./MapSettingsPanel";
@@ -35,11 +36,12 @@ interface MapViewProps {
   // shared with the Nodes tab (lifted to the nodes route) so the open NodeDetailPanel stays live
   selectedNodeId: string | null;
   onSelectNode: (id: string | null) => void;
+  onOpenPacket: (packetHash: string) => void;
   // validated /map search params, parsed by the router (parseMapViewSearch)
   urlView: ParsedMapView;
 }
 
-export function MapView({ wsManager, selectedNodeId, onSelectNode, urlView }: MapViewProps) {
+export function MapView({ wsManager, selectedNodeId, onSelectNode, onOpenPacket, urlView }: MapViewProps) {
   const { t } = useTranslation();
   // Deep-link params, read once at mount (like the region's ?iata seed). Each setting below is seeded
   // URL -> localStorage -> default; the URL wins for this session but is never written back to
@@ -73,6 +75,7 @@ export function MapView({ wsManager, selectedNodeId, onSelectNode, urlView }: Ma
 
   // live packet-flow animation: opt-in per session (off by default, not persisted; a deep link can seed it)
   const [packetFlow, setPacketFlow] = useState(() => urlView.flow ?? false);
+  const [packetFlowSession, setPacketFlowSession] = useState(0);
 
   // IATA region borders overlay, on by default (outline only); seeded URL -> localStorage so an
   // explicit "off" sticks, like the other toggles
@@ -283,7 +286,20 @@ export function MapView({ wsManager, selectedNodeId, onSelectNode, urlView }: Ma
         onBordersChange={handleBordersChange}
         buildShareParams={buildShareParams}
       />
-      <PacketFlowButton active={packetFlow} onToggle={() => setPacketFlow((v) => !v)} />
+      <PacketFlowButton
+        active={packetFlow}
+        onToggle={() => {
+          if (!packetFlow) setPacketFlowSession((session) => session + 1);
+          setPacketFlow((value) => !value);
+        }}
+      />
+      <LivePacketFeed
+        active={packetFlow}
+        resetKey={`${regionKey}:${packetFlowSession}`}
+        selectedIatas={selectedIatas}
+        wsManager={wsManager}
+        onOpenPacket={onOpenPacket}
+      />
       {/* streams in 50 at a time; the count climbs as pages land, then the pill disappears */}
       <LoadingPill loading={isPaging} error={nodesError} count={loadedCount} noun={t("entities.nodes")} />
       {error && (

@@ -597,6 +597,7 @@ function MapRoute() {
         urlView={urlView}
         selectedNodeId={search.node ?? null}
         onSelectNode={selectMapNode}
+        onOpenPacket={overlays.setOverlayPacketHash}
       />
       {search.node && (
         <NodeDetailPanel
