@@ -40,7 +40,7 @@ const NODE_TYPE_COLOR: Record<string, { colorVar: string; fallback: string }> = 
 
 // Observer is a ROLE pip layered on any type; keep a fixed accent so it reads consistently and
 // contrasts the (theme-tinted) node color.
-const OBSERVER_COLOR = "#c79bff";
+export const OBSERVER_COLOR = "#c79bff";
 
 // On the light basemaps the hollow Wireframe glyph loses contrast, so a near-white disc is filled
 // behind it (a dark disc clashed with the saturated glyph). Sized to the outer ring (r=29 in the

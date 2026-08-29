@@ -36,9 +36,9 @@ interface Flow {
   lastNode: number;
 }
 
-// Live mode (MeshMapper LiveViz style): per observed packet, shoot an orange dot along its real hop
-// path with a fading dashed trail, blooming a soft halo behind each node the dot crosses (via the
-// glow feature-state; the nodes themselves always stay fully visible). Enabling it opts the WS
+// Live mode: per observed packet, shoot an orange dot along its real hop path with a fading dashed
+// trail, blooming a soft halo behind each crossed node. useMapNodes simultaneously switches the
+// network to uniform uncluttered dots, leaving path activity visually dominant. Enabling it opts the WS
 // connection into resolvedPath data. Geometry is pure (packet-flow.ts); here we own the maplibre
 // layers, the rAF loop, and the subscription.
 export function useMapPacketFlow(

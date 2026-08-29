@@ -213,6 +213,7 @@
     "settings": "Map Settings",
     "nodeType": "Node Type",
     "clustering": "Clustering",
+    "liveUnclusteredHint": "Live shows every node as an individual dot; your clustering preference returns when Live stops.",
     "neighborLines": "Neighbor Lines",
     "iataBorders": "IATA Borders",
     "on": "On",

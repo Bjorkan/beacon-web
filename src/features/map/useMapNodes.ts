@@ -5,22 +5,22 @@ import type {
   ExpressionSpecification,
   SymbolLayerSpecification,
   CircleLayerSpecification,
-  MapLayerMouseEvent,
+  MapMouseEvent,
 } from "maplibre-gl";
 import Spiderfy from "@nazka/map-gl-js-spiderfy";
 import type { FeatureCollection, Point } from "geojson";
-import { rasterizeNodeIcon, MAP_ICON_IDS, nodeObserverIconId, SELECTION_RING_ICON_ID } from "./node-icons";
+import { rasterizeNodeIcon, MAP_ICON_IDS, nodeObserverIconId, SELECTION_RING_ICON_ID, OBSERVER_COLOR } from "./node-icons";
 import type { NodeFeatureProps } from "./node-geojson";
 import {
   NODES_SOURCE_ID,
   NODES_CLUSTER_LAYER_ID,
+  NODES_DOT_LAYER_ID,
   NODES_POINT_LAYER_ID,
   NODES_SELECTED_LAYER_ID,
   NODES_SELECTED_LEAF_LAYER_ID,
   CLUSTER_RADIUS,
   CLUSTER_MAX_ZOOM,
   NODES_SOURCE_MAXZOOM,
-  SPIDERFY_MIN_ZOOM,
   NODE_LABEL_MIN_ZOOM,
   NODES_GLOW_LAYER_ID,
   PACKET_FLOW_COLOR,
@@ -29,6 +29,22 @@ import {
   nodeIconId,
   clusterIconImageExpression,
 } from "./types";
+import { CLUSTER_ZOOM_DURATION_MS, clusterClickDecision, fallbackClusterZoom } from "./cluster-navigation";
+import { prepareSpiderfyForDirectUse } from "./spiderfy-adapter";
+import {
+  clusterIconSizeExpression,
+  clusterTextSizeExpression,
+  glowRadiusExpression,
+  nodeDotOpacityExpression,
+  nodeDotRadiusExpression,
+  nodeIconOpacityExpression,
+  nodeIconSizeExpression,
+  selectionRadiusExpression,
+  selectionStrokeExpression,
+  LIVE_NODE_STROKE_WIDTH_PX,
+  NODE_INTERACTION_RADIUS_PX,
+  shouldClusterNodes,
+} from "./marker-scale";
 
 type NodeFC = FeatureCollection<Point, NodeFeatureProps>;
 
@@ -89,7 +105,9 @@ const LABEL_OPACITY: ExpressionSpecification = ["step", ["zoom"], 0, NODE_LABEL_
 
 const SPIDER_LEAVES_LAYOUT: SymbolLayerSpecification["layout"] = {
   "icon-image": ICON_IMAGE,
-  "icon-size": 1,
+  // Spiderfy only activates at close zoom, but sharing the same expression guarantees leaf markers
+  // never jump to a different visual scale if that threshold changes later.
+  "icon-size": nodeIconSizeExpression() as ExpressionSpecification,
   "icon-allow-overlap": true,
 };
 
@@ -102,6 +120,7 @@ export function useMapNodes(
   isDark: boolean,
   themeKey: string,
   clustered: boolean,
+  liveMode: boolean,
   onSelectNode: (id: string) => void,
   selectedNodeId: string | null,
   // identity of the dataset (region + type filter); an open spiderfy fan closes when it changes,
@@ -112,7 +131,9 @@ export function useMapNodes(
   const spiderRef = useRef<Spiderfy | null>(null);
   const onSelectNodeRef = useRef(onSelectNode);
   const selectedNodeIdRef = useRef(selectedNodeId);
-  const appliedClusteredRef = useRef(clustered);
+  const clusterActionRef = useRef(0);
+  const effectiveClustered = shouldClusterNodes(clustered, liveMode);
+  const appliedClusteredRef = useRef(effectiveClustered);
 
   // handlers below capture map at attach time; read live state through these refs
   useEffect(() => {
@@ -149,23 +170,29 @@ export function useMapNodes(
     const halo = isDark ? "rgba(0,0,0,0.85)" : "rgba(255,255,255,0.92)";
 
     // maplibre fixes `cluster` at source creation, so toggling clustering means recreating the
-    // source. The spiderfy effect below also keys on `clustered` and re-applies itself around this.
-    if (appliedClusteredRef.current !== clustered && map.getSource(NODES_SOURCE_ID)) {
-      for (const id of [NODES_GLOW_LAYER_ID, NODES_SELECTED_LAYER_ID, NODES_CLUSTER_LAYER_ID, NODES_POINT_LAYER_ID]) {
+    // source. The interaction effect below also keys on the effective clustering state.
+    if (appliedClusteredRef.current !== effectiveClustered && map.getSource(NODES_SOURCE_ID)) {
+      for (const id of [
+        NODES_GLOW_LAYER_ID,
+        NODES_SELECTED_LAYER_ID,
+        NODES_POINT_LAYER_ID,
+        NODES_DOT_LAYER_ID,
+        NODES_CLUSTER_LAYER_ID,
+      ]) {
         if (map.getLayer(id)) map.removeLayer(id);
       }
       map.removeSource(NODES_SOURCE_ID);
     }
-    appliedClusteredRef.current = clustered;
+    appliedClusteredRef.current = effectiveClustered;
 
     if (!map.getSource(NODES_SOURCE_ID)) {
       map.addSource(NODES_SOURCE_ID, {
         type: "geojson",
         data: geojsonRef.current,
-        // maxzoom > clusterMaxZoom keeps co-located nodes spiderfy-able at every zoom (past
-        // clusterMaxZoom they'd otherwise render as stacked, un-spiderfy-able points).
+        // Keep the source zoom above the clustering ceiling; terminal spiderfy happens at
+        // CLUSTER_MAX_ZOOM before clusters disappear into stacked individual points.
         maxzoom: NODES_SOURCE_MAXZOOM,
-        cluster: clustered,
+        cluster: effectiveClustered,
         clusterRadius: CLUSTER_RADIUS,
         clusterMaxZoom: CLUSTER_MAX_ZOOM,
         // promote the node id so live packet-flow can flash individual nodes via feature-state
@@ -184,15 +211,58 @@ export function useMapNodes(
         filter: ["has", "point_count"],
         layout: {
           "icon-image": clusterIconImageExpression() as unknown as ExpressionSpecification,
-          "icon-size": ["interpolate", ["linear"], ["get", "point_count"], 2, 0.9, 25, 1.1, 100, 1.4],
+          "icon-size": clusterIconSizeExpression() as ExpressionSpecification,
           "icon-allow-overlap": true,
           "text-field": ["get", "point_count_abbreviated"],
           "text-font": ["Noto Sans Bold"],
-          "text-size": ["interpolate", ["linear"], ["get", "point_count"], 2, 13, 25, 16, 100, 20],
+          "text-size": clusterTextSizeExpression() as ExpressionSpecification,
           "text-allow-overlap": true,
         },
         paint: { "text-color": "#FFFFFF", "text-halo-color": "rgba(0,0,0,0.55)", "text-halo-width": 1.2 },
       } as SymbolLayerSpecification);
+    }
+
+    // At overview zooms the detailed SVG glyphs collapse into compact role-coloured dots. This is
+    // deliberately a separate layer instead of scaling the intricate glyphs down to unreadable pixels:
+    // the map reads like a network distribution view from afar, then crossfades into Beacon's full icons.
+    const dotColor: ExpressionSpecification = [
+      "match",
+      ["get", "nodeTypeName"],
+      "companion", cssVar("--palette-primary", "#3B82F6"),
+      "repeater", cssVar("--palette-secondary", "#A78BFA"),
+      "room_server", cssVar("--palette-green", "#22C55E"),
+      "sensor", cssVar("--palette-warn", "#EAB308"),
+      cssVar("--palette-text-dim", "#71717A"),
+    ] as unknown as ExpressionSpecification;
+    const dotOutline = isDark ? "rgba(9,9,11,0.92)" : "rgba(255,255,255,0.96)";
+    if (!map.getLayer(NODES_DOT_LAYER_ID)) {
+      map.addLayer({
+        id: NODES_DOT_LAYER_ID,
+        type: "circle",
+        source: NODES_SOURCE_ID,
+        filter: ["!", ["has", "point_count"]],
+        paint: {
+          "circle-radius": nodeDotRadiusExpression(liveMode) as ExpressionSpecification,
+          "circle-color": dotColor,
+          "circle-opacity": nodeDotOpacityExpression(liveMode) as ExpressionSpecification,
+          "circle-stroke-color": (liveMode
+            ? dotOutline
+            : [
+                "case",
+                ["to-boolean", ["get", "isObserver"]],
+                OBSERVER_COLOR,
+                dotOutline,
+              ]) as ExpressionSpecification,
+          "circle-stroke-width": (liveMode
+            ? LIVE_NODE_STROKE_WIDTH_PX
+            : [
+                "case",
+                ["to-boolean", ["get", "isObserver"]],
+                1.4,
+                0.9,
+              ]) as ExpressionSpecification,
+        },
+      } as CircleLayerSpecification);
     }
 
     if (!map.getLayer(NODES_POINT_LAYER_ID)) {
@@ -203,7 +273,7 @@ export function useMapNodes(
         filter: ["!", ["has", "point_count"]],
         layout: {
           "icon-image": ICON_IMAGE,
-          "icon-size": 1,
+          "icon-size": nodeIconSizeExpression() as ExpressionSpecification,
           "icon-allow-overlap": true,
           "text-field": ["get", "name"],
           "text-font": ["Noto Sans Regular"],
@@ -213,10 +283,11 @@ export function useMapNodes(
           "text-optional": true,
         },
         paint: {
+          "icon-opacity": nodeIconOpacityExpression(liveMode) as ExpressionSpecification,
           "text-color": textColor,
           "text-halo-color": halo,
           "text-halo-width": 1.3,
-          "text-opacity": LABEL_OPACITY, // labels fade in only at high zoom
+          "text-opacity": liveMode ? 0 : LABEL_OPACITY, // Live keeps the path field visually quiet
         },
       } as SymbolLayerSpecification);
     }
@@ -233,7 +304,7 @@ export function useMapNodes(
           source: NODES_SOURCE_ID,
           filter: ["!", ["has", "point_count"]],
           paint: {
-            "circle-radius": ["+", 9, ["*", 15, ["coalesce", ["feature-state", "glow"], 0]]],
+            "circle-radius": glowRadiusExpression() as ExpressionSpecification,
             "circle-color": flowColor,
             "circle-opacity": ["*", ["coalesce", ["feature-state", "glow"], 0], 0.4],
             "circle-blur": 1,
@@ -255,9 +326,9 @@ export function useMapNodes(
           source: NODES_SOURCE_ID,
           filter: ["==", ["get", "id"], selectedNodeIdRef.current ?? ""],
           paint: {
-            "circle-radius": 13,
+            "circle-radius": selectionRadiusExpression(liveMode) as ExpressionSpecification,
             "circle-color": "rgba(0,0,0,0)",
-            "circle-stroke-width": 2.5,
+            "circle-stroke-width": selectionStrokeExpression() as ExpressionSpecification,
             "circle-stroke-color": primary,
             "circle-stroke-opacity": 0.95,
           },
@@ -280,7 +351,7 @@ export function useMapNodes(
           source: NODES_SELECTED_LEAF_LAYER_ID,
           layout: {
             "icon-image": SELECTION_RING_ICON_ID,
-            "icon-size": 1,
+            "icon-size": nodeIconSizeExpression() as ExpressionSpecification,
             "icon-offset": [0, 0],
             "icon-allow-overlap": true,
           },
@@ -293,10 +364,30 @@ export function useMapNodes(
     // node-label colors track the basemap dark/light flag (cluster count is white on the hexagon)
     map.setPaintProperty(NODES_POINT_LAYER_ID, "text-color", textColor);
     map.setPaintProperty(NODES_POINT_LAYER_ID, "text-halo-color", halo);
+    map.setPaintProperty(NODES_DOT_LAYER_ID, "circle-color", dotColor);
+    map.setPaintProperty(NODES_DOT_LAYER_ID, "circle-radius", nodeDotRadiusExpression(liveMode));
+    map.setPaintProperty(NODES_DOT_LAYER_ID, "circle-opacity", nodeDotOpacityExpression(liveMode));
+    map.setPaintProperty(
+      NODES_DOT_LAYER_ID,
+      "circle-stroke-color",
+      liveMode
+        ? dotOutline
+        : (["case", ["to-boolean", ["get", "isObserver"]], OBSERVER_COLOR, dotOutline] as unknown as ExpressionSpecification),
+    );
+    map.setPaintProperty(
+      NODES_DOT_LAYER_ID,
+      "circle-stroke-width",
+      liveMode
+        ? LIVE_NODE_STROKE_WIDTH_PX
+        : (["case", ["to-boolean", ["get", "isObserver"]], 1.4, 0.9] as unknown as ExpressionSpecification),
+    );
+    map.setPaintProperty(NODES_POINT_LAYER_ID, "icon-opacity", nodeIconOpacityExpression(liveMode));
+    map.setPaintProperty(NODES_POINT_LAYER_ID, "text-opacity", liveMode ? 0 : LABEL_OPACITY);
+    map.setPaintProperty(NODES_SELECTED_LAYER_ID, "circle-radius", selectionRadiusExpression(liveMode));
 
     // seed the (possibly just-recreated) source; live updates flow through the geojson effect below
     (map.getSource(NODES_SOURCE_ID) as GeoJSONSource).setData(geojsonRef.current);
-  }, [mapRef, isReady, isDark, clustered, themeKey]);
+  }, [mapRef, isReady, isDark, effectiveClustered, liveMode, themeKey]);
 
   // Supply and re-color the marker images. SVG glyphs rasterize async, so they're provided both
   // proactively here and lazily on styleimagemissing. Re-runs on a theme/basemap/DPR change to
@@ -341,98 +432,163 @@ export function useMapNodes(
     syncLeafSelectionRing(map, selectedNodeId);
   }, [mapRef, isReady, selectedNodeId]);
 
-  // Nodes are always fully visible — a selection spotlights via its ring only, and live mode
-  // animates through the glow halo instead of dimming anything. This effect just restores the
-  // constant styling after a style/theme/clustering rebuild (the glow halo rides feature-state,
-  // so it needs no re-run between rebuilds).
+  // Restore the active presentation after a style/theme/source rebuild. Normal mode crossfades
+  // overview dots into Beacon glyphs; Live intentionally keeps every node as the same compact dot
+  // and suppresses labels so packet trails remain the strongest visual signal.
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !isReady) return;
     if (map.getLayer(NODES_POINT_LAYER_ID)) {
-      map.setPaintProperty(NODES_POINT_LAYER_ID, "icon-opacity", 1);
-      map.setPaintProperty(NODES_POINT_LAYER_ID, "text-opacity", LABEL_OPACITY);
+      map.setPaintProperty(NODES_POINT_LAYER_ID, "icon-opacity", nodeIconOpacityExpression(liveMode));
+      map.setPaintProperty(NODES_POINT_LAYER_ID, "text-opacity", liveMode ? 0 : LABEL_OPACITY);
+    }
+    if (map.getLayer(NODES_DOT_LAYER_ID)) {
+      map.setPaintProperty(NODES_DOT_LAYER_ID, "circle-radius", nodeDotRadiusExpression(liveMode));
+      map.setPaintProperty(NODES_DOT_LAYER_ID, "circle-opacity", nodeDotOpacityExpression(liveMode));
+    }
+    if (map.getLayer(NODES_SELECTED_LAYER_ID)) {
+      map.setPaintProperty(NODES_SELECTED_LAYER_ID, "circle-radius", selectionRadiusExpression(liveMode));
     }
     if (map.getLayer(NODES_CLUSTER_LAYER_ID)) {
       map.setPaintProperty(NODES_CLUSTER_LAYER_ID, "icon-opacity", 1);
       map.setPaintProperty(NODES_CLUSTER_LAYER_ID, "text-opacity", 1);
     }
-  }, [mapRef, isReady, clustered, themeKey]);
+  }, [mapRef, isReady, effectiveClustered, liveMode, themeKey]);
 
-  // Push new node data into the source as it arrives; the source re-clusters automatically.
+  // Push new node data into the source as it arrives; the source re-clusters automatically. A data
+  // replacement can also change cluster ids, so cancel an expansion request captured from the old set.
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !isReady) return;
     const src = map.getSource(NODES_SOURCE_ID) as GeoJSONSource | undefined;
-    if (src) src.setData(geojson);
+    if (src) {
+      clusterActionRef.current += 1;
+      src.setData(geojson);
+    }
   }, [mapRef, isReady, geojson]);
 
-  // Build spiderfy + node/cluster interactions, and tear them down on cleanup. Re-runs on every
-  // style switch and clustering toggle, so body and cleanup must stay symmetric: setStyle does NOT
-  // drop delegated layer listeners (stable ids in maplibre's Evented registry), so every map.on
-  // must be matched by a map.off here or handlers pile up across switches.
+  // Build node/cluster interactions and a terminal spiderfy fallback. Cluster clicks are owned by
+  // Beacon rather than the library: zoom to MapLibre's expansion level first, and only fan out when
+  // there is no deeper useful zoom. This keeps the interaction predictable on dense network maps.
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !isReady) return;
 
     const spider = new Spiderfy(map, {
-      forceSpiderifyMinZoom: SPIDERFY_MIN_ZOOM,
       closeOnLeafClick: false,
       onLeafClick: (f) => {
         const id = f.properties?.["id"];
         if (typeof id === "string") onSelectNodeRef.current(id);
       },
-      // Connector legs from the cluster to each fanned-out node. Width MUST be an integer: the lib
-      // rasterizes each leg as a width×length image, and a fractional width (1.5) renders as a
-      // broken dotted sprite — 2 gives a clean line.
       spiderLegsColor: cssVar("--palette-text-dim", "#5F5F65"),
       spiderLegsWidth: 2,
       spiderLeavesLayout: SPIDER_LEAVES_LAYOUT,
     });
-    spider.applyTo(NODES_CLUSTER_LAYER_ID);
+    prepareSpiderfyForDirectUse(
+      spider as unknown as {
+        clickedParentClusterStyle: { type: "symbol"; layout: object; paint: object } | null;
+      },
+    );
     spiderRef.current = spider;
-    // @nazka/map-gl-js-spiderfy registers its cluster-click handler inside a one-shot map.once("idle").
-    // With 3D terrain that idle often doesn't fire before this effect re-runs, so the handler never
-    // attaches (clusters look unclickable) or attaches late as an orphan after cleanup. Run that
-    // deferred setup now and drop the pending idle, so it attaches synchronously and teardown removes it.
-    const attachClusterClick = (spider as unknown as { mapevents?: { idle?: () => void } }).mapevents
-      ?.idle;
-    if (attachClusterClick) {
-      map.off("idle", attachClusterClick);
-      attachClusterClick();
-    }
 
-    const onPointClick = (e: MapLayerMouseEvent) => {
-      const id = e.features?.[0]?.properties?.["id"];
+    const cancelPendingClusterAction = () => {
+      clusterActionRef.current += 1;
+    };
+
+    const clearSpider = () => {
+      try {
+        spider.unspiderfyAll();
+      } catch {
+        /* map may already be changing style / removed */
+      }
+      syncLeafSelectionRing(map, selectedNodeIdRef.current);
+    };
+
+    const onMapClick = (e: MapMouseEvent) => {
+      const rendered = map.queryRenderedFeatures(e.point);
+      const leaf = rendered.find((feature) => feature.layer.id.includes(`${NODES_CLUSTER_LAYER_ID}-spiderfy-leaf`));
+      if (leaf) {
+        const id = leaf.properties?.["id"];
+        if (typeof id === "string") onSelectNodeRef.current(id);
+        return;
+      }
+
+      const cluster = map.queryRenderedFeatures(e.point, { layers: [NODES_CLUSTER_LAYER_ID] })[0];
+      if (cluster?.geometry.type === "Point") {
+        const clusterId = Number(cluster.properties?.["cluster_id"]);
+        const center = cluster.geometry.coordinates as [number, number];
+        const source = map.getSource(NODES_SOURCE_ID) as GeoJSONSource | undefined;
+        if (source && Number.isFinite(clusterId)) {
+          const actionId = ++clusterActionRef.current;
+          clearSpider();
+          const isCurrentAction = () =>
+            clusterActionRef.current === actionId &&
+            mapRef.current === map &&
+            map.getSource(NODES_SOURCE_ID) === source;
+
+          void source.getClusterExpansionZoom(clusterId).then((expansionZoom) => {
+            if (!isCurrentAction()) return;
+            const maxExpansionZoom = Math.min(CLUSTER_MAX_ZOOM, map.getMaxZoom());
+            const decision = clusterClickDecision(map.getZoom(), expansionZoom, maxExpansionZoom);
+            if (decision.type === "zoom") {
+              clearSpider();
+              map.easeTo({ center, zoom: decision.zoom, duration: CLUSTER_ZOOM_DURATION_MS });
+            } else {
+              spider.spiderfy(NODES_CLUSTER_LAYER_ID, clusterId);
+              requestAnimationFrame(() => {
+                if (isCurrentAction()) syncLeafSelectionRing(map, selectedNodeIdRef.current);
+              });
+            }
+          }).catch(() => {
+            // A transient source/style race should not make the cluster dead. Move closer if possible;
+            // at the ceiling, fall back to spiderfy. Ignore a rejection from an obsolete source/action.
+            if (!isCurrentAction()) return;
+            const maxExpansionZoom = Math.min(CLUSTER_MAX_ZOOM, map.getMaxZoom());
+            const fallbackZoom = fallbackClusterZoom(map.getZoom(), maxExpansionZoom);
+            if (fallbackZoom != null) {
+              clearSpider();
+              map.easeTo({ center, zoom: fallbackZoom, duration: CLUSTER_ZOOM_DURATION_MS });
+            } else {
+              spider.spiderfy(NODES_CLUSTER_LAYER_ID, clusterId);
+            }
+          });
+        }
+        return;
+      }
+
+      // Low-zoom dots are intentionally tiny, but click accuracy should not shrink with the ink.
+      cancelPendingClusterAction();
+      const r = NODE_INTERACTION_RADIUS_PX;
+      const features = map.queryRenderedFeatures(
+        [[e.point.x - r, e.point.y - r], [e.point.x + r, e.point.y + r]],
+        { layers: [NODES_POINT_LAYER_ID, NODES_DOT_LAYER_ID] },
+      );
+      const id = features.find((feature) => typeof feature.properties?.["id"] === "string")?.properties?.["id"];
       if (typeof id === "string") onSelectNodeRef.current(id);
+      else clearSpider();
     };
-    const setPointer = () => {
-      map.getCanvas().style.cursor = "pointer";
-    };
-    const clearPointer = () => {
-      map.getCanvas().style.cursor = "";
-    };
-    map.on("click", NODES_POINT_LAYER_ID, onPointClick);
-    for (const layer of [NODES_POINT_LAYER_ID, NODES_CLUSTER_LAYER_ID]) {
+
+    const setPointer = () => { map.getCanvas().style.cursor = "pointer"; };
+    const clearPointer = () => { map.getCanvas().style.cursor = ""; };
+    map.on("click", onMapClick);
+    for (const layer of [NODES_POINT_LAYER_ID, NODES_DOT_LAYER_ID, NODES_CLUSTER_LAYER_ID]) {
       map.on("mouseenter", layer, setPointer);
       map.on("mouseleave", layer, clearPointer);
     }
 
-    // Keep the leaf selection ring in step with spiderfy: re-derive after any click (defer a frame so
-    // the lib processes it first) and after a zoom re-fans the leaves.
-    const resyncLeafRing = () => {
-      if (mapRef.current !== map) return;
-      syncLeafSelectionRing(map, selectedNodeIdRef.current);
+    // A spider fan is a terminal same-location inspection aid; camera motion closes it rather than
+    // trying to preserve pixel offsets through arbitrary pan/zoom/terrain changes.
+    const onMoveStart = () => {
+      cancelPendingClusterAction();
+      clearSpider();
     };
-    const onClickResync = () => requestAnimationFrame(resyncLeafRing);
-    map.on("click", onClickResync);
-    // the ring tracks the leaf natively (same geometry + offset), so re-derive only after a zoom
-    map.on("moveend", resyncLeafRing);
+    map.on("movestart", onMoveStart);
 
     return () => {
-      map.off("click", NODES_POINT_LAYER_ID, onPointClick);
-      map.off("click", onClickResync);
-      map.off("moveend", resyncLeafRing);
-      for (const layer of [NODES_POINT_LAYER_ID, NODES_CLUSTER_LAYER_ID]) {
+      map.off("click", onMapClick);
+      cancelPendingClusterAction();
+      map.off("movestart", onMoveStart);
+      for (const layer of [NODES_POINT_LAYER_ID, NODES_DOT_LAYER_ID, NODES_CLUSTER_LAYER_ID]) {
         map.off("mouseenter", layer, setPointer);
         map.off("mouseleave", layer, clearPointer);
       }
@@ -443,11 +599,11 @@ export function useMapNodes(
         /* map may already be removed */
       }
     };
-    // themeKey is a dep so spiderfy rebuilds and its legs + leaf icons pick up the new palette
-  }, [mapRef, isReady, clustered, themeKey]);
+  }, [mapRef, isReady, effectiveClustered, themeKey]);
 
   // close any open fan when the dataset identity changes — its leaves no longer exist
   useEffect(() => {
+    clusterActionRef.current += 1;
     try {
       spiderRef.current?.unspiderfyAll();
     } catch {

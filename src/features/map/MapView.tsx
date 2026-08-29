@@ -188,7 +188,18 @@ export function MapView({ wsManager, selectedNodeId, onSelectNode, urlView }: Ma
     return buildMapParams(snapshot);
   }, [mapRef, clustered, typeFilter, neighborLines, styleId, packetFlow, borders]);
 
-  useMapNodes(mapRef, isReady, geojson, isDark, themeKey, clustered, onSelectNode, selectedNodeId, `${regionKey}:${typeFilter}`);
+  useMapNodes(
+    mapRef,
+    isReady,
+    geojson,
+    isDark,
+    themeKey,
+    clustered,
+    packetFlow,
+    onSelectNode,
+    selectedNodeId,
+    `${regionKey}:${typeFilter}`,
+  );
   useMapNeighbors(mapRef, isReady, neighborEdges, themeKey);
   useMapBorders(mapRef, isReady, borderData, themeKey);
   useMapPacketFlow(mapRef, isReady, packetFlow, wsManager, themeKey, regionKey);
@@ -204,6 +215,7 @@ export function MapView({ wsManager, selectedNodeId, onSelectNode, urlView }: Ma
         onTypeChange={handleTypeChange}
         clustered={clustered}
         onClusteredChange={handleClusteredChange}
+        liveMode={packetFlow}
         neighborLines={neighborLines}
         onNeighborLinesChange={handleNeighborLinesChange}
         borders={borders}

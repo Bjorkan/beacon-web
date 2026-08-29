@@ -110,6 +110,7 @@ export const IATA_PITCH = 45;
 // --- Nodes data layer ---
 export const NODES_SOURCE_ID = "nodes";
 export const NODES_CLUSTER_LAYER_ID = "nodes-clusters"; // symbol layer (bubble icon + count)
+export const NODES_DOT_LAYER_ID = "nodes-dots"; // compact low-zoom network overview
 export const NODES_POINT_LAYER_ID = "nodes-unclustered";
 export const NODES_SELECTED_LAYER_ID = "nodes-selected"; // circle ring under the selected node's icon
 // Same ring for a node shown as a spiderfied leaf (it's inside a cluster, so the id-filtered
@@ -127,8 +128,8 @@ export const IATA_BORDERS_SOURCE_ID = "iata-borders";
 export const IATA_BORDERS_LINE_LAYER_ID = "iata-borders-line"; // outline stroke beneath the markers
 export const MAP_BORDERS_STORAGE_KEY = "beacon-map-borders";
 
-// --- Live packet-flow (modelled on MeshMapper's "LiveViz"): dim every node, then per packet shoot an
-// orange dot along its real hop path with a fading dashed trail, flashing each node as the dot crosses ---
+// --- Live packet-flow: useMapNodes renders the network as uniform uncluttered dots, then each
+// observed packet shoots an orange dot along its real hop path with a fading dashed trail/glow. ---
 export const PACKET_FLOW_TRAIL_SOURCE_ID = "packet-flow-trail";
 export const PACKET_FLOW_TRAIL_LAYER_ID = "packet-flow-trail"; // dashed line tracing behind the dot
 export const PACKET_FLOW_DOT_SOURCE_ID = "packet-flow-dot";
@@ -139,24 +140,20 @@ export const PACKET_FLOW_HOP_MS = 480; // ms the dot takes to cross one hop segm
 export const PACKET_FLOW_FLASH_MS = 900; // a crossed node's flash decays back to dim over this
 export const PACKET_FLOW_TRAIL_FADE_MS = 1000; // the dashed trail fades once the dot reaches the end
 export const PACKET_FLOW_MAX = 120; // cap on concurrent packet animations (busy-feed guard)
-// Idle individual-node opacity while Live is on. Kept low because with clustering off, co-located
-// markers overlap and their alphas composite toward bright; a crossed node still pops to full via
-// the max(dim, feature-state glow) expression.
+// Live activity halo. The base network switches to small uniform dots; crossed nodes bloom via this
+// feature-state layer without changing the dot size itself.
 export const NODES_GLOW_LAYER_ID = "nodes-glow";
-// Clusters dim further: many overlapping semi-transparent hexagons composite toward opaque, so a
-// dense cluster field stops being see-through. A lower per-cluster alpha keeps the stack translucent.
 export const CLUSTER_RADIUS = 50; // px
 // Keep clustering alive across the whole reachable zoom range (default max is 22). maplibre drops
 // clustering above clusterMaxZoom, which would leave co-located nodes as stacked, un-spiderfy-able
 // points at high zoom. clusterRadius (50px) shrinks to a tiny ground distance when zoomed in, so
 // only genuinely overlapping points stay clustered — which is what spiderfy is for.
+// Cluster clicks keep zooming through this level; a cluster that still exists at the ceiling is
+// genuinely overlapping and becomes eligible for the terminal spiderfy fallback.
 export const CLUSTER_MAX_ZOOM = 22;
 // Tile maxzoom for the nodes source. Must stay GREATER than CLUSTER_MAX_ZOOM so the deepest tile is
 // a real clustered tile, not an overzoom of an unclustered one (else maplibre warns).
 export const NODES_SOURCE_MAXZOOM = 24;
-// At/above this zoom a cluster click fans out (spiderfy) instead of zooming — the remaining
-// clusters are co-located points that zooming can't separate.
-export const SPIDERFY_MIN_ZOOM = 14;
 // Node name labels fade in at/above this zoom (hidden when zoomed out / clustered).
 export const NODE_LABEL_MIN_ZOOM = 12;
 

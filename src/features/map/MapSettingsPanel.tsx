@@ -49,6 +49,7 @@ interface MapSettingsPanelProps {
   onTypeChange: (t: string) => void;
   clustered: boolean;
   onClusteredChange: (c: boolean) => void;
+  liveMode: boolean;
   neighborLines: NeighborLinesMode;
   onNeighborLinesChange: (mode: NeighborLinesMode) => void;
   borders: boolean;
@@ -62,6 +63,7 @@ export function MapSettingsPanel({
   onTypeChange,
   clustered,
   onClusteredChange,
+  liveMode,
   neighborLines,
   onNeighborLinesChange,
   borders,
@@ -135,6 +137,11 @@ export function MapSettingsPanel({
               onChange={(v) => onClusteredChange(v === "on")}
               className="w-full"
             />
+            {liveMode && (
+              <div className="mt-1.5 text-[9px] leading-relaxed text-text-dim">
+                {t("map.liveUnclusteredHint")}
+              </div>
+            )}
           </Section>
           <Section title={t("map.neighborLines")}>
             <SegmentedControl

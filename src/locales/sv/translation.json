@@ -213,6 +213,7 @@
     "settings": "Kartinställningar",
     "nodeType": "Nodtyp",
     "clustering": "Klustring",
+    "liveUnclusteredHint": "Live visar varje nod som en egen punkt; din klustringsinställning återkommer när Live stoppas.",
     "neighborLines": "Grannlinjer",
     "iataBorders": "IATA-gränser",
     "on": "På",
