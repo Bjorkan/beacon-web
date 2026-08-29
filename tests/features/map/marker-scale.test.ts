@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
-  CLUSTER_COUNT_SCALE_STOPS,
-  CLUSTER_ZOOM_SCALE_STOPS,
+  CLUSTER_RADIUS_STOPS,
+  CLUSTER_TEXT_SIZE_STOPS,
   NODE_DOT_OPACITY_STOPS,
   NODE_ICON_OPACITY_STOPS,
   NODE_ICON_SCALE_STOPS,
@@ -10,8 +10,8 @@ import {
   LIVE_NODE_RADIUS_PX,
   LIVE_SELECTION_RADIUS_PX,
   SELECTION_RADIUS_STOPS,
-  clusterIconSizeExpression,
-  clusterFallbackRadiusExpression,
+  clusterRadiusExpression,
+  clusterTextSizeExpression,
   nodeDotOpacityExpression,
   nodeDotRadiusExpression,
   nodeIconOpacityExpression,
@@ -25,13 +25,13 @@ function values(stops: readonly (readonly [number, number])[]): number[] {
   return stops.map(([, value]) => value);
 }
 
-function zooms(stops: readonly (readonly [number, number])[]): number[] {
-  return stops.map(([zoom]) => zoom);
+function inputs(stops: readonly (readonly [number, number])[]): number[] {
+  return stops.map(([input]) => input);
 }
 
 describe("zoom-aware map marker sizing", () => {
   it("keeps node icon scale monotonic and bounded", () => {
-    expect(zooms(NODE_ICON_SCALE_STOPS)).toEqual([...zooms(NODE_ICON_SCALE_STOPS)].sort((a, b) => a - b));
+    expect(inputs(NODE_ICON_SCALE_STOPS)).toEqual([...inputs(NODE_ICON_SCALE_STOPS)].sort((a, b) => a - b));
     const scale = values(NODE_ICON_SCALE_STOPS);
     expect(scale[0]).toBeGreaterThan(0);
     expect(scale[0]).toBeLessThan(0.3);
@@ -45,7 +45,6 @@ describe("zoom-aware map marker sizing", () => {
     expect(NODE_DOT_OPACITY_STOPS[0]?.[1]).toBeGreaterThan(0.9);
     expect(NODE_DOT_OPACITY_STOPS.at(-1)?.[1]).toBe(0);
   });
-
 
   it("uses uniform node dots and no detailed icons in Live mode", () => {
     expect(nodeDotRadiusExpression(true)).toBe(LIVE_NODE_RADIUS_PX);
@@ -61,16 +60,22 @@ describe("zoom-aware map marker sizing", () => {
     expect(shouldClusterNodes(false, true)).toBe(false);
   });
 
-  it("uses a practical cluster ceiling instead of clustering through close zoom", () => {
-    expect(CLUSTER_RADIUS).toBeGreaterThanOrEqual(35);
-    expect(CLUSTER_RADIUS).toBeLessThanOrEqual(40);
-    expect(CLUSTER_MAX_ZOOM).toBeGreaterThanOrEqual(14);
+  it("uses CoreScope-like cluster grouping at overview zoom while stopping before close inspection", () => {
+    expect(CLUSTER_RADIUS).toBeGreaterThanOrEqual(50);
+    expect(CLUSTER_RADIUS).toBeLessThanOrEqual(65);
+    expect(CLUSTER_MAX_ZOOM).toBeGreaterThanOrEqual(15);
     expect(CLUSTER_MAX_ZOOM).toBeLessThanOrEqual(16);
   });
 
-  it("shrinks clusters at low zoom while preserving point-count scaling", () => {
-    expect(CLUSTER_ZOOM_SCALE_STOPS[0]?.[1]).toBeLessThan(CLUSTER_ZOOM_SCALE_STOPS.at(-1)![1]);
-    expect(CLUSTER_COUNT_SCALE_STOPS[0]?.[1]).toBeLessThan(CLUSTER_COUNT_SCALE_STOPS.at(-1)![1]);
+  it("grows neutral cluster bubbles and text with point count, not map zoom", () => {
+    expect(inputs(CLUSTER_RADIUS_STOPS)).toEqual([...inputs(CLUSTER_RADIUS_STOPS)].sort((a, b) => a - b));
+    expect(inputs(CLUSTER_TEXT_SIZE_STOPS)).toEqual([...inputs(CLUSTER_TEXT_SIZE_STOPS)].sort((a, b) => a - b));
+    const radius = values(CLUSTER_RADIUS_STOPS);
+    const text = values(CLUSTER_TEXT_SIZE_STOPS);
+    for (let i = 1; i < radius.length; i += 1) expect(radius[i]!).toBeGreaterThanOrEqual(radius[i - 1]!);
+    for (let i = 1; i < text.length; i += 1) expect(text[i]!).toBeGreaterThanOrEqual(text[i - 1]!);
+    expect(radius[0]).toBe(20); // 40px bubble for tiny clusters
+    expect(radius.at(-1)).toBeLessThanOrEqual(32);
   });
 
   it("keeps a practical click radius even when overview dots are tiny", () => {
@@ -97,15 +102,13 @@ describe("zoom-aware map marker sizing", () => {
       "interpolate", ["linear"], ["zoom"],
       ...SELECTION_RADIUS_STOPS.flatMap(([zoom, value]) => [zoom, value]),
     ]);
-    expect(clusterIconSizeExpression()).toEqual([
-      "*",
-      ["interpolate", ["linear"], ["zoom"], ...CLUSTER_ZOOM_SCALE_STOPS.flatMap(([zoom, value]) => [zoom, value])],
-      ["interpolate", ["linear"], ["get", "point_count"], ...CLUSTER_COUNT_SCALE_STOPS.flatMap(([count, value]) => [count, value])],
+    expect(clusterRadiusExpression()).toEqual([
+      "interpolate", ["linear"], ["get", "point_count"],
+      ...CLUSTER_RADIUS_STOPS.flatMap(([count, value]) => [count, value]),
     ]);
-    expect(clusterFallbackRadiusExpression()).toEqual([
-      "*",
-      ["interpolate", ["linear"], ["zoom"], ...CLUSTER_ZOOM_SCALE_STOPS.flatMap(([zoom, value]) => [zoom, value * 19])],
-      ["interpolate", ["linear"], ["get", "point_count"], ...CLUSTER_COUNT_SCALE_STOPS.flatMap(([count, value]) => [count, value])],
+    expect(clusterTextSizeExpression()).toEqual([
+      "interpolate", ["linear"], ["get", "point_count"],
+      ...CLUSTER_TEXT_SIZE_STOPS.flatMap(([count, value]) => [count, value]),
     ]);
   });
 });

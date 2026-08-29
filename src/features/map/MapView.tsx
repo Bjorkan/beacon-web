@@ -11,7 +11,7 @@ import { useMapBordersData } from "./useMapBordersData";
 import { useMapPacketFlow } from "./useMapPacketFlow";
 import { PacketFlowButton } from "./PacketFlowButton";
 import { useMapNodesData } from "./useMapNodesData";
-import { nodesToFeatureCollection, filterByNodeType, buildNeighborEdges, buildFocusedNeighborEdges, buildFocusedNeighborPoints, buildFocusedSelectedPoint, type NeighborEdgeProps } from "./node-geojson";
+import { nodesToFeatureCollection, filterByNodeType, buildNeighborEdges, buildFocusedNeighborEdges, buildFocusedNeighborPoints, buildFocusedSelectedPoint, neighborRenderMode, type NeighborEdgeProps } from "./node-geojson";
 import { MapSettingsPanel } from "./MapSettingsPanel";
 import { buildMapParams, type MapViewSnapshot, type ParsedMapView } from "./map-url";
 import { MAP_BORDERS_STORAGE_KEY, mapStyleForTheme, resolveMapStyle, MAP_NEIGHBOR_LINES_STORAGE_KEY, MAP_CLUSTER_STORAGE_KEY, MAP_NODE_TYPE_STORAGE_KEY, DEFAULT_CENTER, DEFAULT_ZOOM, type NeighborLinesMode } from "./types";
@@ -132,32 +132,42 @@ export function MapView({ wsManager, selectedNodeId, onSelectNode, urlView }: Ma
   // Selected mode colours the one node's edges by observation count + freshness, which only the node
   // detail endpoint carries (the list's neighborIds are bare uuids). Shares the panel's query cache
   // (same key), so selecting a node — which opens the panel — usually has this already warm.
+  const focusEnabled = neighborLines !== "off" && !!selectedNodeId;
   const { data: focusNeighbors } = useQuery({
     ...nodeQueries.neighbors(selectedNodeId ?? ""),
-    enabled: neighborLines !== "off" && !!selectedNodeId,
+    enabled: focusEnabled,
   });
+  // A focused neighbor can sit outside the current region/list page. Reuse the detail-panel query so
+  // its coordinates remain available after selection instead of letting the next edge set collapse.
+  const { data: selectedNodeDetail } = useQuery({
+    ...nodeQueries.detail(selectedNodeId ?? ""),
+    enabled: focusEnabled,
+  });
+  const selectedNodeForFocus = useMemo(
+    () => nodes.find((node) => node.id === selectedNodeId) ?? selectedNodeDetail,
+    [nodes, selectedNodeId, selectedNodeDetail],
+  );
 
-  // With no selection, "on" renders the loaded mesh from neighborIds. Selecting a node turns either
-  // visible mode into a focused inspection view and fetches that node's richer neighbor details;
-  // "off" always short-circuits to none.
+  // Ambient neighbor lines are useful in normal browsing but compete directly with Live packet
+  // paths. Selection always wins: both visible modes become a focused inspection view backed by the
+  // detailed neighbor endpoint, while Live suppresses only the unrelated ambient mesh.
   const neighborEdges = useMemo(() => {
-    if (neighborLines === "off") return EMPTY_EDGES;
-    if (selectedNodeId) {
-      // A selected node is a deliberate inspection task: suppress the ambient mesh even when the
-      // user chose "On", so its own neighbors and repeater glyph remain readable.
-      return buildFocusedNeighborEdges(nodes.find((n) => n.id === selectedNodeId), focusNeighbors ?? []);
+    const renderMode = neighborRenderMode(neighborLines, selectedNodeId, packetFlow);
+    if (renderMode === "off") return EMPTY_EDGES;
+    if (renderMode === "focused") {
+      return buildFocusedNeighborEdges(selectedNodeForFocus, focusNeighbors ?? []);
     }
-    return buildNeighborEdges(nodes, "on", selectedNodeId);
-  }, [nodes, neighborLines, selectedNodeId, focusNeighbors]);
+    return buildNeighborEdges(nodes, "on", null);
+  }, [nodes, neighborLines, selectedNodeId, selectedNodeForFocus, focusNeighbors, packetFlow]);
   const focusedNeighborPoints = useMemo(
     () => selectedNodeId && neighborLines !== "off" ? {
       type: "FeatureCollection" as const,
       features: [
-        ...buildFocusedSelectedPoint(nodes.find((node) => node.id === selectedNodeId)).features,
+        ...buildFocusedSelectedPoint(selectedNodeForFocus).features,
         ...buildFocusedNeighborPoints(selectedNodeId, focusNeighbors ?? []).features,
       ],
     } : { type: "FeatureCollection" as const, features: [] },
-    [nodes, selectedNodeId, neighborLines, focusNeighbors],
+    [selectedNodeId, selectedNodeForFocus, neighborLines, focusNeighbors],
   );
 
   // IATA coords to frame: the selection's airports, or every airport for "All". Regions carry no

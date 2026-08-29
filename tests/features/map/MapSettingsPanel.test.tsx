@@ -40,4 +40,12 @@ describe("MapSettingsPanel Live presentation", () => {
     const clustering = screen.getByRole("group", { name: "Clustering" });
     expect(within(clustering).getByRole("button", { name: "On" })).toHaveAttribute("aria-pressed", "true");
   });
+  it("explains that Live suppresses only the ambient neighbor mesh", () => {
+    const { rerender } = render(<MapSettingsPanel {...baseProps} liveMode neighborLines="on" />);
+    expect(screen.getByText(/Live hides the ambient neighbor mesh/i)).toBeInTheDocument();
+
+    rerender(<MapSettingsPanel {...baseProps} liveMode neighborLines="off" />);
+    expect(screen.queryByText(/Live hides the ambient neighbor mesh/i)).not.toBeInTheDocument();
+  });
+
 });

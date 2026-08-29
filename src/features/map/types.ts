@@ -109,8 +109,10 @@ export const IATA_PITCH = 45;
 
 // --- Nodes data layer ---
 export const NODES_SOURCE_ID = "nodes";
-export const NODES_CLUSTER_LAYER_ID = "nodes-clusters"; // symbol layer (bubble icon + count)
-export const NODES_CLUSTER_FALLBACK_LAYER_ID = "nodes-clusters-fallback"; // visible/clickable while SVG images load
+export const NODES_CLUSTER_HALO_LAYER_ID = "nodes-clusters-halo"; // soft shadow behind the neutral bubble
+export const NODES_CLUSTER_FALLBACK_LAYER_ID = "nodes-clusters-fallback"; // neutral circular cluster bubble + hit target
+export const NODES_CLUSTER_LAYER_ID = "nodes-clusters"; // centered total count; also the Spiderfy parent layer
+export const NODES_CLUSTER_BREAKDOWN_LAYER_ID = "nodes-clusters-breakdown"; // compact R/C/M/S composition below total
 export const NODES_DOT_LAYER_ID = "nodes-dots"; // compact low-zoom network overview
 export const NODES_POINT_LAYER_ID = "nodes-unclustered";
 export const NODES_SELECTED_LAYER_ID = "nodes-selected"; // circle ring under the selected node's icon
@@ -122,6 +124,7 @@ export const NODES_SELECTED_LEAF_LAYER_ID = "nodes-selected-leaf";
 export const NEIGHBORS_SOURCE_ID = "neighbors";
 export const NEIGHBORS_LINE_LAYER_ID = "neighbor-lines"; // line layer drawn beneath the node markers
 export const FOCUSED_NEIGHBORS_SOURCE_ID = "focused-neighbors";
+export const FOCUSED_SELECTED_BACKDROP_LAYER_ID = "focused-neighbors-selected-backdrop";
 export const FOCUSED_NEIGHBORS_LAYER_ID = "focused-neighbors-markers";
 export const MAP_NEIGHBOR_LINES_STORAGE_KEY = "beacon-map-neighbor-lines";
 export type NeighborLinesMode = "on" | "selected" | "off";
@@ -138,7 +141,10 @@ export const PACKET_FLOW_TRAIL_LAYER_ID = "packet-flow-trail"; // dashed line tr
 export const PACKET_FLOW_DOT_SOURCE_ID = "packet-flow-dot";
 export const PACKET_FLOW_DOT_HALO_LAYER_ID = "packet-flow-dot-halo"; // dark halo behind the dot
 export const PACKET_FLOW_DOT_LAYER_ID = "packet-flow-dot"; // the moving packet dot
-export const PACKET_FLOW_COLOR = "#ff6b35"; // warm orange, distinct from the node palette so packets pop
+export const PACKET_FLOW_PULSE_SOURCE_ID = "packet-flow-pulse";
+export const PACKET_FLOW_PULSE_GLOW_LAYER_ID = "packet-flow-pulse-glow";
+export const PACKET_FLOW_PULSE_RING_LAYER_ID = "packet-flow-pulse-ring";
+export const PACKET_FLOW_COLOR = "#ff6b35"; // fallback activity accent; individual packets use stable hash colors
 export const PACKET_FLOW_HOP_MS = 480; // ms the dot takes to cross one hop segment
 export const PACKET_FLOW_FLASH_MS = 900; // a crossed node's flash decays back to dim over this
 export const PACKET_FLOW_TRAIL_FADE_MS = 1000; // the dashed trail fades once the dot reaches the end
@@ -148,9 +154,10 @@ export const PACKET_FLOW_MAX = 120; // cap on concurrent packet animations (busy
 export const NODES_GLOW_LAYER_ID = "nodes-glow";
 // Country/city overviews still cluster, but ordinary nearby nodes are released by neighbourhood
 // zoom. Terminal spiderfy handles the rare co-located remainder at this practical ceiling.
-export const CLUSTER_RADIUS = 38; // px
-export const CLUSTER_MAX_ZOOM = 15;
-export const NODES_SOURCE_MAXZOOM = 16; // must exceed CLUSTER_MAX_ZOOM
+export const CLUSTER_RADIUS = 58; // px, close to the legible city-level grouping users prefer in CoreScope
+export const CLUSTER_MIN_POINTS = 2; // any two nearby nodes are eligible to form a cluster
+export const CLUSTER_MAX_ZOOM = 16;
+export const NODES_SOURCE_MAXZOOM = 17; // must exceed CLUSTER_MAX_ZOOM
 // Node name labels fade in at/above this zoom (hidden when zoomed out / clustered).
 export const NODE_LABEL_MIN_ZOOM = 12;
 
@@ -162,40 +169,3 @@ export {
 export type { NodeTypeName } from "../../lib/node-types";
 export const NODE_ICON_UNKNOWN = "node-unknown";
 export const nodeIconId = (typeName: string): string => `node-${typeName}`;
-
-// --- Cluster marker (cyberpunk hexagon) ---
-// Cluster icon: a hexagon with a 12-segment gauge ring — bigger clusters light more segments. The
-// count sits in the middle (symbol text-field); the density level is picked by the step expression below.
-export const CLUSTER_ICON_ID = "node-cluster";
-
-export interface ClusterBucket {
-  minCount: number; // first point_count that maps to this level (buckets are ascending)
-  id: string; // maplibre image id
-  lit: number; // gauge segments lit (of 12)
-}
-
-// Six density levels (5/15/25/50/100). The first bucket (minCount 0) is the floor — maplibre only
-// forms clusters of 2+ — and the last is fully lit for clusters of 100+.
-export const CLUSTER_BUCKETS: ClusterBucket[] = [
-  { minCount: 0, id: CLUSTER_ICON_ID, lit: 1 },
-  { minCount: 5, id: "node-cluster-2", lit: 2 },
-  { minCount: 15, id: "node-cluster-3", lit: 4 },
-  { minCount: 25, id: "node-cluster-4", lit: 5 },
-  { minCount: 50, id: "node-cluster-5", lit: 8 },
-  { minCount: 100, id: "node-cluster-6", lit: 12 },
-];
-
-export const CLUSTER_ICON_IDS = CLUSTER_BUCKETS.map((b) => b.id);
-
-// step expression selecting the density level by point_count: the first output is the default (the
-// floor bucket) and each later bucket adds a (minCount, id) stop. Untyped so this module stays
-// maplibre-free; the caller casts.
-export function clusterIconImageExpression(): unknown[] {
-  const [first, ...rest] = CLUSTER_BUCKETS;
-  return [
-    "step",
-    ["get", "point_count"],
-    first!.id,
-    ...rest.flatMap((b) => [b.minCount, b.id]),
-  ];
-}

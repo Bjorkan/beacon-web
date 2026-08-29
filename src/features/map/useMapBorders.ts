@@ -10,6 +10,7 @@ import {
   NODES_CLUSTER_LAYER_ID,
 } from "./types";
 import type { BorderFeatureCollection } from "./useMapBordersData";
+import { syncMapOverlayLayerOrder } from "./map-layer-order";
 
 function paletteVar(name: string, fallback: string): string {
   return (
@@ -69,6 +70,7 @@ export function useMapBorders(
     (map.getSource(IATA_BORDERS_SOURCE_ID) as GeoJSONSource).setData(
       dataRef.current,
     );
+    syncMapOverlayLayerOrder(map);
   }, [mapRef, isReady, themeKey]);
 
   // push new border data as the toggle / region changes

@@ -3,7 +3,8 @@ import type { Map as MapLibreMap, GeoJSONSource, LineLayerSpecification, Express
 import type { FeatureCollection, LineString } from "geojson";
 import type { NeighborEdgeProps } from "./node-geojson";
 import { OBS_STOPS, AGE } from "./neighbor-thresholds";
-import { NEIGHBORS_SOURCE_ID, NEIGHBORS_LINE_LAYER_ID, NODES_GLOW_LAYER_ID } from "./types";
+import { NEIGHBORS_SOURCE_ID, NEIGHBORS_LINE_LAYER_ID } from "./types";
+import { syncMapOverlayLayerOrder } from "./map-layer-order";
 
 type EdgeFC = FeatureCollection<LineString, NeighborEdgeProps>;
 
@@ -59,8 +60,7 @@ export function useMapNeighbors(
       map.addSource(NEIGHBORS_SOURCE_ID, { type: "geojson", data: edgesRef.current });
     }
     if (!map.getLayer(NEIGHBORS_LINE_LAYER_ID)) {
-      map.addLayer(
-        {
+      map.addLayer({
           id: NEIGHBORS_LINE_LAYER_ID,
           type: "line",
           source: NEIGHBORS_SOURCE_ID,
@@ -71,13 +71,11 @@ export function useMapNeighbors(
             "line-width": ["case", ["get", "selected"], 2, 1],
             "line-opacity": NEIGHBOR_OPACITY,
           },
-        } as LineLayerSpecification,
-        // Glow is the bottom-most node decoration, keeping lines below selection, dots and icons.
-        map.getLayer(NODES_GLOW_LAYER_ID) ? NODES_GLOW_LAYER_ID : undefined,
-      );
+        } as LineLayerSpecification);
     }
     map.setPaintProperty(NEIGHBORS_LINE_LAYER_ID, "line-color", lineColor);
     (map.getSource(NEIGHBORS_SOURCE_ID) as GeoJSONSource).setData(edgesRef.current);
+    syncMapOverlayLayerOrder(map);
   }, [mapRef, isReady, themeKey]);
 
   // push new edge data as the selection / toggle / node set changes

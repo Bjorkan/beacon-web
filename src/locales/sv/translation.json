@@ -214,6 +214,7 @@
     "nodeType": "Nodtyp",
     "clustering": "Klustring",
     "liveUnclusteredHint": "Live visar varje nod som en egen punkt; din klustringsinställning återkommer när Live stoppas.",
+    "liveNeighborHint": "Live döljer det omgivande grannnätet så paketvägarna förblir läsbara; väljer du en nod visas fortfarande bara den nodens grannar.",
     "neighborLines": "Grannlinjer",
     "iataBorders": "IATA-gränser",
     "on": "På",

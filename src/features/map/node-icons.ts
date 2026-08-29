@@ -2,13 +2,10 @@ import {
   NODE_ICON_UNKNOWN,
   nodeIconId,
   NODE_TYPE_NAMES,
-  CLUSTER_ICON_ID,
-  CLUSTER_ICON_IDS,
-  CLUSTER_BUCKETS,
 } from "./types";
 
-// Marker icons: per-type SVG + cluster hexagon, recolored and rasterized to maplibre images (unknown
-// type = canvas ring). Async, so provided lazily via styleimagemissing in useMapNodes; re-colors on theme.
+// Marker icons: per-type SVGs recolored and rasterized to MapLibre images (unknown type = canvas ring).
+// Clusters are native circle/text layers, so they do not participate in the async image pipeline.
 
 // Glyph SVGs as raw text per type (+ observer variant). Marker style follows the basemap: filled
 // Glitch on dark, hollow Wireframe on light — which is exactly what isDark encodes. import.meta.glob
@@ -54,22 +51,15 @@ export const nodeObserverIconId = (type: string): string => `${nodeIconId(type)}
 // syncLeafSelectionRing in useMapNodes.
 export const SELECTION_RING_ICON_ID = "node-selection-ring";
 
-// Every image id the map layers reference, so they can be provided up front (one per cluster density).
+// Every image id the active map layers reference, so they can be provided up front.
 export const MAP_ICON_IDS: string[] = [
   ...NODE_TYPE_NAMES.flatMap((t) => [nodeIconId(t), nodeObserverIconId(t)]),
   NODE_ICON_UNKNOWN,
-  ...CLUSTER_ICON_IDS,
   SELECTION_RING_ICON_ID,
 ];
 
 const ICON_SIZE = 24; // logical px for the canvas-drawn ring
 const MARKER_SIZE = 36; // logical px for SVG glyphs incl. glow padding (64 glyph in an 88 padded box)
-const CLUSTER_SIZE = 56; // logical px for the cluster hexagon (72 hex in a 96 padded box)
-
-// Cluster color tracks --palette-primary like the per-type glyphs (count + gauge inherit it via
-// currentColor), keeping clusters on-theme rather than set apart.
-const CLUSTER_COLOR = { colorVar: "--palette-primary", fallback: "#3B82F6" };
-
 // Render at ~2x device pixel ratio (capped): resolution headroom so icons stay crisp at icon-size 1,
 // under the cluster layer's up-to-1.5x scaling, under sub-pixel placement, and across DPR changes.
 function currentScale(): number {
@@ -163,35 +153,6 @@ function drawSelectionRing(color: string, scale: number): ImageData {
   return ctx.getImageData(0, 0, size, size);
 }
 
-// The 12 gauge segments radiating from the hexagon, clockwise from the top, so lighting the first
-// `lit` of them fills the ring clockwise. Coordinates lifted from the icon set's cluster SVGs.
-const CLUSTER_GAUGE: ReadonlyArray<[number, number, number, number]> = [
-  [36.0, 3.0, 36.0, 5.5],
-  [52.5, 7.4, 51.3, 9.6],
-  [64.6, 19.5, 62.4, 20.8],
-  [69.0, 36.0, 66.5, 36.0],
-  [64.6, 52.5, 62.4, 51.3],
-  [52.5, 64.6, 51.3, 62.4],
-  [36.0, 69.0, 36.0, 66.5],
-  [19.5, 64.6, 20.8, 62.4],
-  [7.4, 52.5, 9.6, 51.3],
-  [3.0, 36.0, 5.5, 36.0],
-  [7.4, 19.5, 9.6, 20.7],
-  [19.5, 7.4, 20.7, 9.6],
-];
-const CLUSTER_LIT = 0.95; // glowing segment opacity
-const CLUSTER_DIM = 0.16; // dormant segment opacity
-
-// The hexagon with `lit` of its 12 gauge segments glowing. The count is overlaid by the symbol
-// layer's text-field; the var(--node-color)/glow matches styleSvg so it themes like the glyphs.
-function clusterSvg(lit: number): string {
-  const lines = CLUSTER_GAUGE.map(
-    ([x1, y1, x2, y2], i) =>
-      `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" opacity="${i < lit ? CLUSTER_LIT : CLUSTER_DIM}"></line>`,
-  ).join("");
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 72 72" width="72" height="72" fill="none" role="img" aria-label="cluster" style="color:var(--node-color,#bcd8ff);filter:drop-shadow(0 0 4px currentColor);overflow:visible"><polygon points="36.0,10.0 58.5,23.0 58.5,49.0 36.0,62.0 13.5,49.0 13.5,23.0" fill="#0c1018" fill-opacity="0.92" stroke="currentColor" stroke-width="2.25" stroke-linejoin="round"></polygon>${lines}</svg>`;
-}
-
 export interface RasterIcon {
   data: ImageData;
   pixelRatio: number;
@@ -203,16 +164,6 @@ export async function rasterizeNodeIcon(id: string, isDark: boolean): Promise<Ra
   const scale = currentScale();
   const styles = getComputedStyle(document.documentElement);
 
-  // Cluster hexagon: look up this id's density level and rasterize the recolored SVG. Checked before
-  // the generic node- arm so cluster ids never fall into the per-type glyph path.
-  if (id.startsWith(CLUSTER_ICON_ID)) {
-    const bucket = CLUSTER_BUCKETS.find((b) => b.id === id);
-    if (!bucket) return null;
-    const color = styles.getPropertyValue(CLUSTER_COLOR.colorVar).trim() || CLUSTER_COLOR.fallback;
-    const svg = styleSvg(clusterSvg(bucket.lit), color, isDark, { base: 72, padded: 96 });
-    const data = await rasterizeSvg(svg, scale, CLUSTER_SIZE);
-    return { data, pixelRatio: scale };
-  }
   if (id === NODE_ICON_UNKNOWN) {
     const muted = styles.getPropertyValue("--palette-text-muted").trim() || "#73737B";
     return { data: drawRing(muted, scale), pixelRatio: scale };

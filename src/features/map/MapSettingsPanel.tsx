@@ -151,6 +151,11 @@ export function MapSettingsPanel({
               onChange={(v) => onNeighborLinesChange(v as NeighborLinesMode)}
               className="w-full"
             />
+            {liveMode && neighborLines !== "off" && (
+              <div className="mt-1.5 text-[9px] leading-relaxed text-text-dim">
+                {t("map.liveNeighborHint")}
+              </div>
+            )}
             {neighborLines === "selected" && <NeighborLegend />}
           </Section>
           <Section title={t("map.iataBorders")}>

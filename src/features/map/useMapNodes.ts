@@ -14,12 +14,15 @@ import type { NodeFeatureProps } from "./node-geojson";
 import {
   NODES_SOURCE_ID,
   NODES_CLUSTER_LAYER_ID,
+  NODES_CLUSTER_BREAKDOWN_LAYER_ID,
   NODES_CLUSTER_FALLBACK_LAYER_ID,
+  NODES_CLUSTER_HALO_LAYER_ID,
   NODES_DOT_LAYER_ID,
   NODES_POINT_LAYER_ID,
   NODES_SELECTED_LAYER_ID,
   NODES_SELECTED_LEAF_LAYER_ID,
   CLUSTER_RADIUS,
+  CLUSTER_MIN_POINTS,
   CLUSTER_MAX_ZOOM,
   NODES_SOURCE_MAXZOOM,
   NODE_LABEL_MIN_ZOOM,
@@ -28,13 +31,11 @@ import {
   NODE_TYPE_NAMES,
   NODE_ICON_UNKNOWN,
   nodeIconId,
-  clusterIconImageExpression,
 } from "./types";
 import { CLUSTER_ZOOM_DURATION_MS, clusterClickDecision, fallbackClusterZoom } from "./cluster-navigation";
 import { prepareSpiderfyForDirectUse } from "./spiderfy-adapter";
 import {
-  clusterIconSizeExpression,
-  clusterFallbackRadiusExpression,
+  clusterRadiusExpression,
   clusterTextSizeExpression,
   glowRadiusExpression,
   nodeDotOpacityExpression,
@@ -47,6 +48,9 @@ import {
   NODE_INTERACTION_RADIUS_PX,
   shouldClusterNodes,
 } from "./marker-scale";
+import { clusterBreakdownTextExpression, clusterRoleProperties } from "./cluster-style";
+import { applyNodeClusterMode } from "./node-clustering";
+import { syncMapOverlayLayerOrder } from "./map-layer-order";
 
 type NodeFC = FeatureCollection<Point, NodeFeatureProps>;
 
@@ -135,7 +139,8 @@ export function useMapNodes(
   const selectedNodeIdRef = useRef(selectedNodeId);
   const clusterActionRef = useRef(0);
   const effectiveClustered = shouldClusterNodes(clustered, liveMode);
-  const appliedClusteredRef = useRef(effectiveClustered);
+  const appliedClusteredRef = useRef<boolean | null>(null);
+  const appliedClusterSourceRef = useRef<GeoJSONSource | null>(null);
 
   // handlers below capture map at attach time; read live state through these refs
   useEffect(() => {
@@ -171,42 +176,54 @@ export function useMapNodes(
     const textColor = isDark ? "#FAFAFA" : "#18181B";
     const halo = isDark ? "rgba(0,0,0,0.85)" : "rgba(255,255,255,0.92)";
 
-    // maplibre fixes `cluster` at source creation, so toggling clustering means recreating the
-    // source. The interaction effect below also keys on the effective clustering state.
-    if (appliedClusteredRef.current !== effectiveClustered && map.getSource(NODES_SOURCE_ID)) {
-      for (const id of [
-        NODES_GLOW_LAYER_ID,
-        NODES_SELECTED_LAYER_ID,
-        NODES_POINT_LAYER_ID,
-        NODES_DOT_LAYER_ID,
-        NODES_CLUSTER_FALLBACK_LAYER_ID,
-        NODES_CLUSTER_LAYER_ID,
-      ]) {
-        if (map.getLayer(id)) map.removeLayer(id);
-      }
-      map.removeSource(NODES_SOURCE_ID);
-    }
-    appliedClusteredRef.current = effectiveClustered;
-
-    if (!map.getSource(NODES_SOURCE_ID)) {
+    // MapLibre 5.x supports changing cluster options in place. Do not infer the source mode from
+    // React state: the map/source can outlive this hook across remounts, which previously allowed a
+    // stale cluster:false source from Live to survive while the UI showed "Clustering: On".
+    let nodesSource = map.getSource(NODES_SOURCE_ID) as GeoJSONSource | undefined;
+    if (!nodesSource) {
       map.addSource(NODES_SOURCE_ID, {
         type: "geojson",
         data: geojsonRef.current,
-        // Keep the source zoom above the clustering ceiling; terminal spiderfy happens at
-        // CLUSTER_MAX_ZOOM before clusters disappear into stacked individual points.
         maxzoom: NODES_SOURCE_MAXZOOM,
         cluster: effectiveClustered,
         clusterRadius: CLUSTER_RADIUS,
         clusterMaxZoom: CLUSTER_MAX_ZOOM,
+        clusterMinPoints: CLUSTER_MIN_POINTS,
+        clusterProperties: clusterRoleProperties(),
         // promote the node id so live packet-flow can flash individual nodes via feature-state
         promoteId: "id",
       });
+      nodesSource = map.getSource(NODES_SOURCE_ID) as GeoJSONSource;
+      appliedClusteredRef.current = effectiveClustered;
+      appliedClusterSourceRef.current = nodesSource;
+    } else if (
+      appliedClusterSourceRef.current !== nodesSource ||
+      appliedClusteredRef.current !== effectiveClustered
+    ) {
+      applyNodeClusterMode(nodesSource, effectiveClustered);
+      appliedClusterSourceRef.current = nodesSource;
+      appliedClusteredRef.current = effectiveClustered;
     }
 
-    // This circle is both the always-available cluster visual and its hit target. SVG marker images
-    // are rasterized asynchronously, so relying only on the symbol hexagon can leave a valid
-    // clustered source looking empty during an image/style race.
-    const clusterColor = cssVar("--palette-primary", "#3B82F6");
+    // Cluster markers use a neutral, high-contrast bubble with the total count as the primary carrier
+    // and a compact R/C/M/S composition below it. Keeping the cluster neutral prevents the marker from
+    // disappearing into the same neon line/region palette used elsewhere on the map.
+    const clusterFill = "rgba(33,41,54,0.94)";
+    const clusterBorder = isDark ? "#7B8493" : "#5F6672";
+    if (!map.getLayer(NODES_CLUSTER_HALO_LAYER_ID)) {
+      map.addLayer({
+        id: NODES_CLUSTER_HALO_LAYER_ID,
+        type: "circle",
+        source: NODES_SOURCE_ID,
+        filter: ["has", "point_count"],
+        paint: {
+          "circle-radius": ["+", clusterRadiusExpression(), 3] as unknown as ExpressionSpecification,
+          "circle-color": "rgba(0,0,0,0.58)",
+          "circle-opacity": 0.72,
+          "circle-blur": 0.55,
+        },
+      } as CircleLayerSpecification);
+    }
     if (!map.getLayer(NODES_CLUSTER_FALLBACK_LAYER_ID)) {
       map.addLayer({
         id: NODES_CLUSTER_FALLBACK_LAYER_ID,
@@ -214,23 +231,19 @@ export function useMapNodes(
         source: NODES_SOURCE_ID,
         filter: ["has", "point_count"],
         paint: {
-          "circle-radius": clusterFallbackRadiusExpression() as ExpressionSpecification,
-          "circle-color": isDark ? "rgba(12,16,24,0.96)" : "rgba(255,255,255,0.96)",
-          "circle-stroke-color": clusterColor,
-          "circle-stroke-width": 1.8,
+          "circle-radius": clusterRadiusExpression() as ExpressionSpecification,
+          "circle-color": clusterFill,
+          "circle-stroke-color": clusterBorder,
+          "circle-stroke-width": ["step", ["get", "point_count"], 1.5, 30, 2.25, 100, 2.6],
           "circle-opacity": 1,
         },
       } as CircleLayerSpecification);
     }
-    map.setPaintProperty(NODES_CLUSTER_FALLBACK_LAYER_ID, "circle-stroke-color", clusterColor);
-    map.setPaintProperty(
-      NODES_CLUSTER_FALLBACK_LAYER_ID,
-      "circle-color",
-      isDark ? "rgba(12,16,24,0.96)" : "rgba(255,255,255,0.96)",
-    );
+    map.setPaintProperty(NODES_CLUSTER_FALLBACK_LAYER_ID, "circle-stroke-color", clusterBorder);
+    map.setPaintProperty(NODES_CLUSTER_FALLBACK_LAYER_ID, "circle-color", clusterFill);
 
-    // Keep a SYMBOL layer for Spiderfy, and decorate the resilient fallback with the themed hexagon
-    // when its image is available. The count is drawn as centered text.
+    // This text-only symbol remains the Spiderfy parent layer; the circle below it owns the visual
+    // bubble/hit target, so cluster rendering no longer depends on async rasterized SVG images.
     if (!map.getLayer(NODES_CLUSTER_LAYER_ID)) {
       map.addLayer({
         id: NODES_CLUSTER_LAYER_ID,
@@ -238,16 +251,52 @@ export function useMapNodes(
         source: NODES_SOURCE_ID,
         filter: ["has", "point_count"],
         layout: {
-          "icon-image": clusterIconImageExpression() as unknown as ExpressionSpecification,
-          "icon-size": clusterIconSizeExpression() as ExpressionSpecification,
-          "icon-allow-overlap": true,
           "text-field": ["get", "point_count_abbreviated"],
           "text-font": ["Noto Sans Bold"],
           "text-size": clusterTextSizeExpression() as ExpressionSpecification,
+          "text-offset": [0, -0.35],
           "text-allow-overlap": true,
+          "text-ignore-placement": true,
         },
-        paint: { "text-color": "#FFFFFF", "text-halo-color": "rgba(0,0,0,0.55)", "text-halo-width": 1.2 },
+        paint: {
+          "text-color": "#FFFFFF",
+          "text-halo-color": "rgba(0,0,0,0.6)",
+          "text-halo-width": 1,
+        },
       } as SymbolLayerSpecification);
+    }
+    if (!map.getLayer(NODES_CLUSTER_BREAKDOWN_LAYER_ID)) {
+      map.addLayer({
+        id: NODES_CLUSTER_BREAKDOWN_LAYER_ID,
+        type: "symbol",
+        source: NODES_SOURCE_ID,
+        filter: ["has", "point_count"],
+        layout: {
+          "text-field": clusterBreakdownTextExpression() as ExpressionSpecification,
+          "text-font": ["Noto Sans Bold"],
+          "text-size": 9,
+          "text-offset": [0, 0.85],
+          "text-allow-overlap": true,
+          "text-ignore-placement": true,
+        },
+        paint: {
+          "text-halo-color": "rgba(12,16,24,0.96)",
+          "text-halo-width": 0.9,
+        },
+      } as SymbolLayerSpecification);
+    }
+
+    // Cluster layers are meaningful only while the source is clustered. Hiding them immediately on
+    // Live/Off transitions prevents stale worker tiles from flashing an old cluster during the
+    // asynchronous setClusterOptions update; enabling them makes the normal-map contract explicit.
+    const clusterVisibility = effectiveClustered ? "visible" : "none";
+    for (const layerId of [
+      NODES_CLUSTER_HALO_LAYER_ID,
+      NODES_CLUSTER_FALLBACK_LAYER_ID,
+      NODES_CLUSTER_LAYER_ID,
+      NODES_CLUSTER_BREAKDOWN_LAYER_ID,
+    ]) {
+      if (map.getLayer(layerId)) map.setLayoutProperty(layerId, "visibility", clusterVisibility);
     }
 
     // At overview zooms the detailed SVG glyphs collapse into compact role-coloured dots. This is
@@ -418,6 +467,7 @@ export function useMapNodes(
 
     // seed the (possibly just-recreated) source; live updates flow through the geojson effect below
     (map.getSource(NODES_SOURCE_ID) as GeoJSONSource).setData(geojsonRef.current);
+    syncMapOverlayLayerOrder(map);
   }, [mapRef, isReady, isDark, effectiveClustered, liveMode, themeKey]);
 
   // Supply and re-color the marker images. SVG glyphs rasterize async, so they're provided both
@@ -480,10 +530,8 @@ export function useMapNodes(
     if (map.getLayer(NODES_SELECTED_LAYER_ID)) {
       map.setPaintProperty(NODES_SELECTED_LAYER_ID, "circle-radius", selectionRadiusExpression(liveMode));
     }
-    if (map.getLayer(NODES_CLUSTER_LAYER_ID)) {
-      map.setPaintProperty(NODES_CLUSTER_LAYER_ID, "icon-opacity", 1);
-      map.setPaintProperty(NODES_CLUSTER_LAYER_ID, "text-opacity", 1);
-    }
+    if (map.getLayer(NODES_CLUSTER_LAYER_ID)) map.setPaintProperty(NODES_CLUSTER_LAYER_ID, "text-opacity", 1);
+    if (map.getLayer(NODES_CLUSTER_BREAKDOWN_LAYER_ID)) map.setPaintProperty(NODES_CLUSTER_BREAKDOWN_LAYER_ID, "text-opacity", 1);
   }, [mapRef, isReady, effectiveClustered, liveMode, themeKey]);
 
   // Push new node data into the source as it arrives; the source re-clusters automatically. A data
@@ -544,10 +592,10 @@ export function useMapNodes(
         return;
       }
 
-      const cluster = map.queryRenderedFeatures(e.point, { layers: [NODES_CLUSTER_LAYER_ID] })[0];
-      const clusterFeature = cluster ?? map.queryRenderedFeatures(e.point, {
-        layers: [NODES_CLUSTER_FALLBACK_LAYER_ID],
+      const cluster = map.queryRenderedFeatures(e.point, {
+        layers: [NODES_CLUSTER_LAYER_ID, NODES_CLUSTER_BREAKDOWN_LAYER_ID, NODES_CLUSTER_FALLBACK_LAYER_ID],
       })[0];
+      const clusterFeature = cluster;
       if (clusterFeature?.geometry.type === "Point") {
         const clusterId = Number(clusterFeature.properties?.["cluster_id"]);
         const center = clusterFeature.geometry.coordinates as [number, number];
@@ -605,7 +653,7 @@ export function useMapNodes(
     const setPointer = () => { map.getCanvas().style.cursor = "pointer"; };
     const clearPointer = () => { map.getCanvas().style.cursor = ""; };
     map.on("click", onMapClick);
-    for (const layer of [NODES_POINT_LAYER_ID, NODES_DOT_LAYER_ID, NODES_CLUSTER_LAYER_ID, NODES_CLUSTER_FALLBACK_LAYER_ID]) {
+    for (const layer of [NODES_POINT_LAYER_ID, NODES_DOT_LAYER_ID, NODES_CLUSTER_LAYER_ID, NODES_CLUSTER_BREAKDOWN_LAYER_ID, NODES_CLUSTER_FALLBACK_LAYER_ID]) {
       map.on("mouseenter", layer, setPointer);
       map.on("mouseleave", layer, clearPointer);
     }
@@ -622,7 +670,7 @@ export function useMapNodes(
       map.off("click", onMapClick);
       cancelPendingClusterAction();
       map.off("movestart", onMoveStart);
-      for (const layer of [NODES_POINT_LAYER_ID, NODES_DOT_LAYER_ID, NODES_CLUSTER_LAYER_ID, NODES_CLUSTER_FALLBACK_LAYER_ID]) {
+      for (const layer of [NODES_POINT_LAYER_ID, NODES_DOT_LAYER_ID, NODES_CLUSTER_LAYER_ID, NODES_CLUSTER_BREAKDOWN_LAYER_ID, NODES_CLUSTER_FALLBACK_LAYER_ID]) {
         map.off("mouseenter", layer, setPointer);
         map.off("mouseleave", layer, clearPointer);
       }

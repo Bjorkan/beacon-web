@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { nodesToFeatureCollection, filterByNodeType, buildNeighborEdges, buildFocusedNeighborEdges, buildFocusedNeighborPoints } from "../../../src/features/map/node-geojson";
+import { nodesToFeatureCollection, filterByNodeType, buildNeighborEdges, buildFocusedNeighborEdges, buildFocusedNeighborPoints, neighborRenderMode } from "../../../src/features/map/node-geojson";
 import type { NodeSummary, NodeNeighbor } from "../../../src/features/nodes/types";
 
 function node(overrides: Partial<NodeSummary>): NodeSummary {
@@ -175,6 +175,27 @@ describe("buildFocusedNeighborPoints", () => {
       { id: "missing", name: "Missing", publicKey: "c", nodeType: 2, nodeTypeName: "sensor", iata: "GOT", observationCount: 1, firstSeen: 0, lastSeen: 1 },
     ]);
     expect(points.features).toEqual([{ type: "Feature", geometry: { type: "Point", coordinates: [11.9, 57.7] }, properties: { id: "n1", name: "Neighbor", nodeTypeName: "repeater" } }]);
+  });
+});
+
+
+describe("neighborRenderMode", () => {
+  it("shows the ambient mesh only for On without a selection in normal mode", () => {
+    expect(neighborRenderMode("on", null, false)).toBe("ambient");
+    expect(neighborRenderMode("selected", null, false)).toBe("off");
+    expect(neighborRenderMode("off", null, false)).toBe("off");
+  });
+
+  it("always focuses a selected node when neighbor lines are visible", () => {
+    expect(neighborRenderMode("on", "n1", false)).toBe("focused");
+    expect(neighborRenderMode("selected", "n1", false)).toBe("focused");
+    expect(neighborRenderMode("off", "n1", false)).toBe("off");
+  });
+
+  it("suppresses ambient neighbor noise in Live but keeps selected-node inspection", () => {
+    expect(neighborRenderMode("on", null, true)).toBe("off");
+    expect(neighborRenderMode("selected", null, true)).toBe("off");
+    expect(neighborRenderMode("on", "n1", true)).toBe("focused");
   });
 });
 

@@ -1,5 +1,6 @@
 import type { Feature, FeatureCollection, LineString, Point } from "geojson";
 import type { NodeSummary, NodeNeighbor } from "../nodes/types";
+import type { NeighborLinesMode } from "./types";
 
 // Build the maplibre GeoJSON source from the nodes API response. Properties stay primitive because
 // clustering serializes them, and there's no maplibre import, so this stays unit-testable.
@@ -47,6 +48,22 @@ export interface FocusedNeighborPointProps {
   name: string | null;
   nodeTypeName: string;
   selected?: boolean;
+}
+
+export type NeighborRenderMode = "ambient" | "focused" | "off";
+
+// Selection is an explicit inspection task: once a node is selected, both visible neighbor modes
+// collapse to that node's detailed edge set. Live suppresses the ambient mesh so packet paths stay
+// legible, but a selected node can still be inspected without leaving Live.
+export function neighborRenderMode(
+  mode: NeighborLinesMode,
+  selectedId: string | null,
+  liveMode: boolean,
+): NeighborRenderMode {
+  if (mode === "off") return "off";
+  if (selectedId) return "focused";
+  if (mode === "selected" || liveMode) return "off";
+  return "ambient";
 }
 
 // LineString edges between located nodes and their neighbors (from each node's neighborIds). Each

@@ -214,6 +214,7 @@
     "nodeType": "Node Type",
     "clustering": "Clustering",
     "liveUnclusteredHint": "Live shows every node as an individual dot; your clustering preference returns when Live stops.",
+    "liveNeighborHint": "Live hides the ambient neighbor mesh so packet paths stay readable; selecting a node still shows only that node’s neighbors.",
     "neighborLines": "Neighbor Lines",
     "iataBorders": "IATA Borders",
     "on": "On",

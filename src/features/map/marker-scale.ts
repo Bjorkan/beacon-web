@@ -61,32 +61,18 @@ export const LIVE_NODE_OPACITY = 0.88;
 export const LIVE_NODE_STROKE_WIDTH_PX = 0.8;
 export const LIVE_SELECTION_RADIUS_PX = 5.5;
 
-export const CLUSTER_ZOOM_SCALE_STOPS: readonly NumericStop[] = [
-  [0, 0.54],
-  [5, 0.64],
-  [8, 0.76],
-  [11, 0.9],
-  [14, 1],
+export const CLUSTER_RADIUS_STOPS: readonly NumericStop[] = [
+  [2, 20],
+  [30, 24],
+  [100, 28],
+  [500, 30],
 ];
 
-export const CLUSTER_COUNT_SCALE_STOPS: readonly NumericStop[] = [
-  [2, 0.76],
-  [25, 0.92],
-  [100, 1.12],
-];
-
-export const CLUSTER_TEXT_ZOOM_SCALE_STOPS: readonly NumericStop[] = [
-  [0, 0.7],
-  [5, 0.78],
-  [8, 0.86],
-  [11, 0.95],
-  [14, 1],
-];
-
-export const CLUSTER_TEXT_COUNT_STOPS: readonly NumericStop[] = [
+export const CLUSTER_TEXT_SIZE_STOPS: readonly NumericStop[] = [
   [2, 13],
-  [25, 16],
-  [100, 20],
+  [30, 14],
+  [100, 16],
+  [500, 17],
 ];
 
 export const GLOW_BASE_RADIUS_STOPS: readonly NumericStop[] = [
@@ -141,30 +127,12 @@ export function selectionStrokeExpression(): unknown[] {
   return zoomInterpolate(SELECTION_STROKE_STOPS);
 }
 
-export function clusterIconSizeExpression(): unknown[] {
-  return [
-    "*",
-    zoomInterpolate(CLUSTER_ZOOM_SCALE_STOPS),
-    propertyInterpolate("point_count", CLUSTER_COUNT_SCALE_STOPS),
-  ];
+export function clusterRadiusExpression(): unknown[] {
+  return propertyInterpolate("point_count", CLUSTER_RADIUS_STOPS);
 }
 
 export function clusterTextSizeExpression(): unknown[] {
-  return [
-    "*",
-    zoomInterpolate(CLUSTER_TEXT_ZOOM_SCALE_STOPS),
-    propertyInterpolate("point_count", CLUSTER_TEXT_COUNT_STOPS),
-  ];
-}
-
-// The circle is a resilient visual/hit-target fallback for clusters while the themed SVG image is
-// being rasterized asynchronously. It shares the same zoom/count contract as the hexagon image.
-export function clusterFallbackRadiusExpression(): unknown[] {
-  return [
-    "*",
-    zoomInterpolate(CLUSTER_ZOOM_SCALE_STOPS.map(([zoom, value]) => [zoom, value * 19])),
-    propertyInterpolate("point_count", CLUSTER_COUNT_SCALE_STOPS),
-  ];
+  return propertyInterpolate("point_count", CLUSTER_TEXT_SIZE_STOPS);
 }
 
 export function glowRadiusExpression(): unknown[] {
