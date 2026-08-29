@@ -355,7 +355,9 @@ export function useMapNodes(
           filter: ["==", ["get", "id"], selectedNodeIdRef.current ?? ""],
           paint: {
             "circle-radius": selectionRadiusExpression(liveMode) as ExpressionSpecification,
-            "circle-color": "rgba(0,0,0,0)",
+            // A small opaque knockout prevents focused-neighbor lines from visually cutting through
+            // the selected repeater while the symbol icon remains on top.
+            "circle-color": isDark ? "rgba(9,9,11,0.9)" : "rgba(255,255,255,0.92)",
             "circle-stroke-width": selectionStrokeExpression() as ExpressionSpecification,
             "circle-stroke-color": primary,
             "circle-stroke-opacity": 0.95,
@@ -365,6 +367,7 @@ export function useMapNodes(
       );
     }
     map.setPaintProperty(NODES_SELECTED_LAYER_ID, "circle-stroke-color", primary);
+    map.setPaintProperty(NODES_SELECTED_LAYER_ID, "circle-color", isDark ? "rgba(9,9,11,0.9)" : "rgba(255,255,255,0.92)");
 
     // Same ring for a node shown as a spiderfied leaf, but as a SYMBOL so it tracks the leaf's
     // offset (see syncLeafSelectionRing). The ring image is supplied by the icons effect.

@@ -3,7 +3,7 @@ import type { Map as MapLibreMap, GeoJSONSource, LineLayerSpecification, Express
 import type { FeatureCollection, LineString } from "geojson";
 import type { NeighborEdgeProps } from "./node-geojson";
 import { OBS_STOPS, AGE } from "./neighbor-thresholds";
-import { NEIGHBORS_SOURCE_ID, NEIGHBORS_LINE_LAYER_ID, NODES_CLUSTER_LAYER_ID } from "./types";
+import { NEIGHBORS_SOURCE_ID, NEIGHBORS_LINE_LAYER_ID, NODES_GLOW_LAYER_ID } from "./types";
 
 type EdgeFC = FeatureCollection<LineString, NeighborEdgeProps>;
 
@@ -72,8 +72,8 @@ export function useMapNeighbors(
             "line-opacity": NEIGHBOR_OPACITY,
           },
         } as LineLayerSpecification,
-        // beneath the node markers; guard the beforeId in case the nodes layer isn't added yet
-        map.getLayer(NODES_CLUSTER_LAYER_ID) ? NODES_CLUSTER_LAYER_ID : undefined,
+        // Glow is the bottom-most node decoration, keeping lines below selection, dots and icons.
+        map.getLayer(NODES_GLOW_LAYER_ID) ? NODES_GLOW_LAYER_ID : undefined,
       );
     }
     map.setPaintProperty(NEIGHBORS_LINE_LAYER_ID, "line-color", lineColor);

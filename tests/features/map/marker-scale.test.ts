@@ -19,6 +19,7 @@ import {
   selectionRadiusExpression,
   shouldClusterNodes,
 } from "../../../src/features/map/marker-scale";
+import { CLUSTER_MAX_ZOOM, CLUSTER_RADIUS } from "../../../src/features/map/types";
 
 function values(stops: readonly (readonly [number, number])[]): number[] {
   return stops.map(([, value]) => value);
@@ -58,6 +59,13 @@ describe("zoom-aware map marker sizing", () => {
     expect(shouldClusterNodes(false, false)).toBe(false);
     expect(shouldClusterNodes(true, true)).toBe(false);
     expect(shouldClusterNodes(false, true)).toBe(false);
+  });
+
+  it("uses a practical cluster ceiling instead of clustering through close zoom", () => {
+    expect(CLUSTER_RADIUS).toBeGreaterThanOrEqual(35);
+    expect(CLUSTER_RADIUS).toBeLessThanOrEqual(40);
+    expect(CLUSTER_MAX_ZOOM).toBeGreaterThanOrEqual(14);
+    expect(CLUSTER_MAX_ZOOM).toBeLessThanOrEqual(16);
   });
 
   it("shrinks clusters at low zoom while preserving point-count scaling", () => {

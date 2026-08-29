@@ -5,12 +5,13 @@ import "maplibre-gl/dist/maplibre-gl.css";
 import { useMapLibre } from "./useMapLibre";
 import { useMapNodes } from "./useMapNodes";
 import { useMapNeighbors } from "./useMapNeighbors";
+import { useMapFocusedNeighbors } from "./useMapFocusedNeighbors";
 import { useMapBorders } from "./useMapBorders";
 import { useMapBordersData } from "./useMapBordersData";
 import { useMapPacketFlow } from "./useMapPacketFlow";
 import { PacketFlowButton } from "./PacketFlowButton";
 import { useMapNodesData } from "./useMapNodesData";
-import { nodesToFeatureCollection, filterByNodeType, buildNeighborEdges, buildFocusedNeighborEdges, type NeighborEdgeProps } from "./node-geojson";
+import { nodesToFeatureCollection, filterByNodeType, buildNeighborEdges, buildFocusedNeighborEdges, buildFocusedNeighborPoints, buildFocusedSelectedPoint, type NeighborEdgeProps } from "./node-geojson";
 import { MapSettingsPanel } from "./MapSettingsPanel";
 import { buildMapParams, type MapViewSnapshot, type ParsedMapView } from "./map-url";
 import { MAP_BORDERS_STORAGE_KEY, mapStyleForTheme, resolveMapStyle, MAP_NEIGHBOR_LINES_STORAGE_KEY, MAP_CLUSTER_STORAGE_KEY, MAP_NODE_TYPE_STORAGE_KEY, DEFAULT_CENTER, DEFAULT_ZOOM, type NeighborLinesMode } from "./types";
@@ -148,6 +149,16 @@ export function MapView({ wsManager, selectedNodeId, onSelectNode, urlView }: Ma
     }
     return buildNeighborEdges(nodes, "on", selectedNodeId);
   }, [nodes, neighborLines, selectedNodeId, focusNeighbors]);
+  const focusedNeighborPoints = useMemo(
+    () => selectedNodeId && neighborLines !== "off" ? {
+      type: "FeatureCollection" as const,
+      features: [
+        ...buildFocusedSelectedPoint(nodes.find((node) => node.id === selectedNodeId)).features,
+        ...buildFocusedNeighborPoints(selectedNodeId, focusNeighbors ?? []).features,
+      ],
+    } : { type: "FeatureCollection" as const, features: [] },
+    [nodes, selectedNodeId, neighborLines, focusNeighbors],
+  );
 
   // IATA coords to frame: the selection's airports, or every airport for "All". Regions carry no
   // bounds from the API, so their member IATAs stand in for the extent. See CLAUDE.md (map framing).
@@ -203,6 +214,7 @@ export function MapView({ wsManager, selectedNodeId, onSelectNode, urlView }: Ma
     `${regionKey}:${typeFilter}`,
   );
   useMapNeighbors(mapRef, isReady, neighborEdges, themeKey);
+  useMapFocusedNeighbors(mapRef, isReady, focusedNeighborPoints, packetFlow, themeKey, onSelectNode);
   useMapBorders(mapRef, isReady, borderData, themeKey);
   useMapPacketFlow(mapRef, isReady, packetFlow, wsManager, themeKey, regionKey);
 

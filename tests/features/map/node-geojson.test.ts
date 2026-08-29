@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { nodesToFeatureCollection, filterByNodeType, buildNeighborEdges, buildFocusedNeighborEdges } from "../../../src/features/map/node-geojson";
+import { nodesToFeatureCollection, filterByNodeType, buildNeighborEdges, buildFocusedNeighborEdges, buildFocusedNeighborPoints } from "../../../src/features/map/node-geojson";
 import type { NodeSummary, NodeNeighbor } from "../../../src/features/nodes/types";
 
 function node(overrides: Partial<NodeSummary>): NodeSummary {
@@ -163,6 +163,18 @@ describe("buildFocusedNeighborEdges", () => {
       nb({ id: "c", lat: 47, lng: -77, observationCount: 5 }),
     ], NOW);
     expect(fc.features.map((f) => f.properties.obs)).toEqual([5]);
+  });
+});
+
+describe("buildFocusedNeighborPoints", () => {
+  it("deduplicates IATA rows, omits unlocated/self neighbors and keeps click identity", () => {
+    const points = buildFocusedNeighborPoints("selected", [
+      { id: "n1", name: "Neighbor", publicKey: "a", nodeType: 2, nodeTypeName: "repeater", lat: 57.7, lng: 11.9, iata: "GOT", observationCount: 1, firstSeen: 0, lastSeen: 1 },
+      { id: "n1", name: "Neighbor", publicKey: "a", nodeType: 2, nodeTypeName: "repeater", lat: 57.7, lng: 11.9, iata: "STO", observationCount: 1, firstSeen: 0, lastSeen: 1 },
+      { id: "selected", name: "Self", publicKey: "b", nodeType: 2, nodeTypeName: "repeater", lat: 57.7, lng: 11.9, iata: "GOT", observationCount: 1, firstSeen: 0, lastSeen: 1 },
+      { id: "missing", name: "Missing", publicKey: "c", nodeType: 2, nodeTypeName: "sensor", iata: "GOT", observationCount: 1, firstSeen: 0, lastSeen: 1 },
+    ]);
+    expect(points.features).toEqual([{ type: "Feature", geometry: { type: "Point", coordinates: [11.9, 57.7] }, properties: { id: "n1", name: "Neighbor", nodeTypeName: "repeater" } }]);
   });
 });
 

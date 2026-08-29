@@ -42,6 +42,13 @@ export interface NeighborEdgeProps {
   ageDays?: number;
 }
 
+export interface FocusedNeighborPointProps {
+  id: string;
+  name: string | null;
+  nodeTypeName: string;
+  selected?: boolean;
+}
+
 // LineString edges between located nodes and their neighbors (from each node's neighborIds). Each
 // undirected pair is emitted once, and only when both ends are located nodes in this set. "selected"
 // keeps just the selected node's edges; "on" emits all and flags its edges with the `selected` prop.
@@ -113,6 +120,38 @@ export function buildFocusedNeighborEdges(
     });
   }
   return { type: "FeatureCollection", features };
+}
+
+// Detailed neighbor rows may repeat the same node for several IATAs. Keep one stable, unclustered
+// overlay endpoint per id so focused lines never terminate in empty map space.
+export function buildFocusedNeighborPoints(
+  selectedId: string | null,
+  neighbors: NodeNeighbor[],
+): FeatureCollection<Point, FocusedNeighborPointProps> {
+  const byId = new Map<string, Feature<Point, FocusedNeighborPointProps>>();
+  for (const neighbor of neighbors) {
+    if (neighbor.id === selectedId || neighbor.lat == null || neighbor.lng == null || byId.has(neighbor.id)) continue;
+    byId.set(neighbor.id, {
+      type: "Feature",
+      geometry: { type: "Point", coordinates: [neighbor.lng, neighbor.lat] },
+      properties: { id: neighbor.id, name: neighbor.name ?? null, nodeTypeName: neighbor.nodeTypeName },
+    });
+  }
+  return { type: "FeatureCollection", features: [...byId.values()] };
+}
+
+export function buildFocusedSelectedPoint(
+  selected: Pick<NodeSummary, "id" | "name" | "nodeTypeName" | "lat" | "lng"> | undefined,
+): FeatureCollection<Point, FocusedNeighborPointProps> {
+  if (!selected || selected.lat == null || selected.lng == null) return { type: "FeatureCollection", features: [] };
+  return {
+    type: "FeatureCollection",
+    features: [{
+      type: "Feature",
+      geometry: { type: "Point", coordinates: [selected.lng, selected.lat] },
+      properties: { id: selected.id, name: selected.name, nodeTypeName: selected.nodeTypeName, selected: true },
+    }],
+  };
 }
 
 // Filter to a single device type ("" = All). Filtering the data (not a layer filter) lets the

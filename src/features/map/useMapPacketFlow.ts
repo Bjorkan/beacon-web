@@ -19,17 +19,19 @@ import {
   PACKET_FLOW_DOT_SOURCE_ID,
   PACKET_FLOW_DOT_HALO_LAYER_ID,
   PACKET_FLOW_DOT_LAYER_ID,
-  PACKET_FLOW_COLOR,
   PACKET_FLOW_HOP_MS,
   PACKET_FLOW_TRAIL_FADE_MS,
   PACKET_FLOW_MAX,
   NODES_SOURCE_ID,
 } from "./types";
+import { packetFlowColor } from "./packet-flow-colors";
 
 const EMPTY_FC: FeatureCollection = { type: "FeatureCollection", features: [] };
 
 // one packet riding its hop path once
 interface Flow {
+  packetHash: string;
+  color: string;
   coords: [number, number][];
   ids: (string | null)[];
   start: number;
@@ -107,14 +109,14 @@ export function useMapPacketFlow(
         if (coords.length >= 2) {
           lines.push({
             type: "Feature",
-            properties: { a: 0.6 * fade },
+            properties: { a: 0.6 * fade, color: p.color },
             geometry: { type: "LineString", coordinates: coords },
           });
         }
         if (t <= nSeg) {
           dots.push({
             type: "Feature",
-            properties: { r: 5, a: 1 },
+            properties: { r: 5, a: 1, color: p.color },
             geometry: { type: "Point", coordinates: posAtHop(p.coords, headT) },
           });
         }
@@ -155,8 +157,7 @@ export function useMapPacketFlow(
     rafRef.current = requestAnimationFrame(frame);
   }, [mapRef]);
 
-  // build the trail + dot layers (re-add after a style switch); the dot is orange with a white stroke
-  // and a dark halo behind it, the trail a dashed line whose opacity is data-driven
+  // One source/layer pair carries all flows; each feature has a stable per-packet color.
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !isReady) return;
@@ -174,7 +175,7 @@ export function useMapPacketFlow(
         source: PACKET_FLOW_TRAIL_SOURCE_ID,
         layout: { "line-cap": "round", "line-join": "round" },
         paint: {
-          "line-color": PACKET_FLOW_COLOR,
+          "line-color": ["get", "color"],
           "line-width": 2.5,
           "line-dasharray": [2, 2],
           "line-opacity": ["get", "a"],
@@ -207,7 +208,7 @@ export function useMapPacketFlow(
         source: PACKET_FLOW_DOT_SOURCE_ID,
         paint: {
           "circle-radius": ["get", "r"],
-          "circle-color": PACKET_FLOW_COLOR,
+          "circle-color": ["get", "color"],
           "circle-opacity": ["get", "a"],
           "circle-stroke-color": "#ffffff",
           "circle-stroke-width": ["*", ["get", "a"], 1.1],
@@ -248,6 +249,8 @@ export function useMapPacketFlow(
       while (flowsRef.current.length >= PACKET_FLOW_MAX)
         flowsRef.current.shift();
       flowsRef.current.push({
+        packetHash: data.packetHash,
+        color: packetFlowColor(data.packetHash),
         coords: nodes.map((n) => [n.lng, n.lat] as [number, number]),
         ids: nodes.map((n) => n.id),
         start: performance.now(),

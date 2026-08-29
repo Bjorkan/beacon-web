@@ -121,6 +121,8 @@ export const NODES_SELECTED_LEAF_LAYER_ID = "nodes-selected-leaf";
 // --- Neighbor edges layer ---
 export const NEIGHBORS_SOURCE_ID = "neighbors";
 export const NEIGHBORS_LINE_LAYER_ID = "neighbor-lines"; // line layer drawn beneath the node markers
+export const FOCUSED_NEIGHBORS_SOURCE_ID = "focused-neighbors";
+export const FOCUSED_NEIGHBORS_LAYER_ID = "focused-neighbors-markers";
 export const MAP_NEIGHBOR_LINES_STORAGE_KEY = "beacon-map-neighbor-lines";
 export type NeighborLinesMode = "on" | "selected" | "off";
 
@@ -144,17 +146,11 @@ export const PACKET_FLOW_MAX = 120; // cap on concurrent packet animations (busy
 // Live activity halo. The base network switches to small uniform dots; crossed nodes bloom via this
 // feature-state layer without changing the dot size itself.
 export const NODES_GLOW_LAYER_ID = "nodes-glow";
-export const CLUSTER_RADIUS = 50; // px
-// Keep clustering alive across the whole reachable zoom range (default max is 22). maplibre drops
-// clustering above clusterMaxZoom, which would leave co-located nodes as stacked, un-spiderfy-able
-// points at high zoom. clusterRadius (50px) shrinks to a tiny ground distance when zoomed in, so
-// only genuinely overlapping points stay clustered — which is what spiderfy is for.
-// Cluster clicks keep zooming through this level; a cluster that still exists at the ceiling is
-// genuinely overlapping and becomes eligible for the terminal spiderfy fallback.
-export const CLUSTER_MAX_ZOOM = 22;
-// Tile maxzoom for the nodes source. Must stay GREATER than CLUSTER_MAX_ZOOM so the deepest tile is
-// a real clustered tile, not an overzoom of an unclustered one (else maplibre warns).
-export const NODES_SOURCE_MAXZOOM = 24;
+// Country/city overviews still cluster, but ordinary nearby nodes are released by neighbourhood
+// zoom. Terminal spiderfy handles the rare co-located remainder at this practical ceiling.
+export const CLUSTER_RADIUS = 38; // px
+export const CLUSTER_MAX_ZOOM = 15;
+export const NODES_SOURCE_MAXZOOM = 16; // must exceed CLUSTER_MAX_ZOOM
 // Node name labels fade in at/above this zoom (hidden when zoomed out / clustered).
 export const NODE_LABEL_MIN_ZOOM = 12;
 
