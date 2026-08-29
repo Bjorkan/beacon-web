@@ -14,6 +14,7 @@ import type { NodeFeatureProps } from "./node-geojson";
 import {
   NODES_SOURCE_ID,
   NODES_CLUSTER_LAYER_ID,
+  NODES_CLUSTER_FALLBACK_LAYER_ID,
   NODES_DOT_LAYER_ID,
   NODES_POINT_LAYER_ID,
   NODES_SELECTED_LAYER_ID,
@@ -33,6 +34,7 @@ import { CLUSTER_ZOOM_DURATION_MS, clusterClickDecision, fallbackClusterZoom } f
 import { prepareSpiderfyForDirectUse } from "./spiderfy-adapter";
 import {
   clusterIconSizeExpression,
+  clusterFallbackRadiusExpression,
   clusterTextSizeExpression,
   glowRadiusExpression,
   nodeDotOpacityExpression,
@@ -177,6 +179,7 @@ export function useMapNodes(
         NODES_SELECTED_LAYER_ID,
         NODES_POINT_LAYER_ID,
         NODES_DOT_LAYER_ID,
+        NODES_CLUSTER_FALLBACK_LAYER_ID,
         NODES_CLUSTER_LAYER_ID,
       ]) {
         if (map.getLayer(id)) map.removeLayer(id);
@@ -200,9 +203,34 @@ export function useMapNodes(
       });
     }
 
-    // Cluster as a SYMBOL layer (hexagon icon + count) — spiderfy requires a symbol layer. The icon
-    // is a density level picked by point_count; the count is drawn as centered text (the icon has
-    // none baked in). text-size isn't scaled by icon-size, so both are interpolated together.
+    // This circle is both the always-available cluster visual and its hit target. SVG marker images
+    // are rasterized asynchronously, so relying only on the symbol hexagon can leave a valid
+    // clustered source looking empty during an image/style race.
+    const clusterColor = cssVar("--palette-primary", "#3B82F6");
+    if (!map.getLayer(NODES_CLUSTER_FALLBACK_LAYER_ID)) {
+      map.addLayer({
+        id: NODES_CLUSTER_FALLBACK_LAYER_ID,
+        type: "circle",
+        source: NODES_SOURCE_ID,
+        filter: ["has", "point_count"],
+        paint: {
+          "circle-radius": clusterFallbackRadiusExpression() as ExpressionSpecification,
+          "circle-color": isDark ? "rgba(12,16,24,0.96)" : "rgba(255,255,255,0.96)",
+          "circle-stroke-color": clusterColor,
+          "circle-stroke-width": 1.8,
+          "circle-opacity": 1,
+        },
+      } as CircleLayerSpecification);
+    }
+    map.setPaintProperty(NODES_CLUSTER_FALLBACK_LAYER_ID, "circle-stroke-color", clusterColor);
+    map.setPaintProperty(
+      NODES_CLUSTER_FALLBACK_LAYER_ID,
+      "circle-color",
+      isDark ? "rgba(12,16,24,0.96)" : "rgba(255,255,255,0.96)",
+    );
+
+    // Keep a SYMBOL layer for Spiderfy, and decorate the resilient fallback with the themed hexagon
+    // when its image is available. The count is drawn as centered text.
     if (!map.getLayer(NODES_CLUSTER_LAYER_ID)) {
       map.addLayer({
         id: NODES_CLUSTER_LAYER_ID,
@@ -310,7 +338,7 @@ export function useMapNodes(
             "circle-blur": 1,
           },
         } as CircleLayerSpecification,
-        NODES_CLUSTER_LAYER_ID, // beneath the markers
+        NODES_CLUSTER_FALLBACK_LAYER_ID, // beneath the cluster + point layers
       );
     }
     map.setPaintProperty(NODES_GLOW_LAYER_ID, "circle-color", flowColor);
@@ -333,7 +361,7 @@ export function useMapNodes(
             "circle-stroke-opacity": 0.95,
           },
         },
-        NODES_CLUSTER_LAYER_ID, // insert beneath the cluster + point symbol layers
+        NODES_CLUSTER_FALLBACK_LAYER_ID, // insert beneath the cluster + point symbol layers
       );
     }
     map.setPaintProperty(NODES_SELECTED_LAYER_ID, "circle-stroke-color", primary);
@@ -356,7 +384,7 @@ export function useMapNodes(
             "icon-allow-overlap": true,
           },
         },
-        NODES_CLUSTER_LAYER_ID, // beneath the markers; the dynamic leaf layers still render on top
+        NODES_CLUSTER_FALLBACK_LAYER_ID, // beneath the markers; the dynamic leaf layers still render on top
       );
     }
     syncLeafSelectionRing(map, selectedNodeIdRef.current);
@@ -514,9 +542,12 @@ export function useMapNodes(
       }
 
       const cluster = map.queryRenderedFeatures(e.point, { layers: [NODES_CLUSTER_LAYER_ID] })[0];
-      if (cluster?.geometry.type === "Point") {
-        const clusterId = Number(cluster.properties?.["cluster_id"]);
-        const center = cluster.geometry.coordinates as [number, number];
+      const clusterFeature = cluster ?? map.queryRenderedFeatures(e.point, {
+        layers: [NODES_CLUSTER_FALLBACK_LAYER_ID],
+      })[0];
+      if (clusterFeature?.geometry.type === "Point") {
+        const clusterId = Number(clusterFeature.properties?.["cluster_id"]);
+        const center = clusterFeature.geometry.coordinates as [number, number];
         const source = map.getSource(NODES_SOURCE_ID) as GeoJSONSource | undefined;
         if (source && Number.isFinite(clusterId)) {
           const actionId = ++clusterActionRef.current;
@@ -571,7 +602,7 @@ export function useMapNodes(
     const setPointer = () => { map.getCanvas().style.cursor = "pointer"; };
     const clearPointer = () => { map.getCanvas().style.cursor = ""; };
     map.on("click", onMapClick);
-    for (const layer of [NODES_POINT_LAYER_ID, NODES_DOT_LAYER_ID, NODES_CLUSTER_LAYER_ID]) {
+    for (const layer of [NODES_POINT_LAYER_ID, NODES_DOT_LAYER_ID, NODES_CLUSTER_LAYER_ID, NODES_CLUSTER_FALLBACK_LAYER_ID]) {
       map.on("mouseenter", layer, setPointer);
       map.on("mouseleave", layer, clearPointer);
     }
@@ -588,7 +619,7 @@ export function useMapNodes(
       map.off("click", onMapClick);
       cancelPendingClusterAction();
       map.off("movestart", onMoveStart);
-      for (const layer of [NODES_POINT_LAYER_ID, NODES_DOT_LAYER_ID, NODES_CLUSTER_LAYER_ID]) {
+      for (const layer of [NODES_POINT_LAYER_ID, NODES_DOT_LAYER_ID, NODES_CLUSTER_LAYER_ID, NODES_CLUSTER_FALLBACK_LAYER_ID]) {
         map.off("mouseenter", layer, setPointer);
         map.off("mouseleave", layer, clearPointer);
       }

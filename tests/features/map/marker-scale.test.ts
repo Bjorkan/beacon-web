@@ -11,6 +11,7 @@ import {
   LIVE_SELECTION_RADIUS_PX,
   SELECTION_RADIUS_STOPS,
   clusterIconSizeExpression,
+  clusterFallbackRadiusExpression,
   nodeDotOpacityExpression,
   nodeDotRadiusExpression,
   nodeIconOpacityExpression,
@@ -91,6 +92,11 @@ describe("zoom-aware map marker sizing", () => {
     expect(clusterIconSizeExpression()).toEqual([
       "*",
       ["interpolate", ["linear"], ["zoom"], ...CLUSTER_ZOOM_SCALE_STOPS.flatMap(([zoom, value]) => [zoom, value])],
+      ["interpolate", ["linear"], ["get", "point_count"], ...CLUSTER_COUNT_SCALE_STOPS.flatMap(([count, value]) => [count, value])],
+    ]);
+    expect(clusterFallbackRadiusExpression()).toEqual([
+      "*",
+      ["interpolate", ["linear"], ["zoom"], ...CLUSTER_ZOOM_SCALE_STOPS.flatMap(([zoom, value]) => [zoom, value * 19])],
       ["interpolate", ["linear"], ["get", "point_count"], ...CLUSTER_COUNT_SCALE_STOPS.flatMap(([count, value]) => [count, value])],
     ]);
   });

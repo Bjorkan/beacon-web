@@ -110,6 +110,7 @@ export const IATA_PITCH = 45;
 // --- Nodes data layer ---
 export const NODES_SOURCE_ID = "nodes";
 export const NODES_CLUSTER_LAYER_ID = "nodes-clusters"; // symbol layer (bubble icon + count)
+export const NODES_CLUSTER_FALLBACK_LAYER_ID = "nodes-clusters-fallback"; // visible/clickable while SVG images load
 export const NODES_DOT_LAYER_ID = "nodes-dots"; // compact low-zoom network overview
 export const NODES_POINT_LAYER_ID = "nodes-unclustered";
 export const NODES_SELECTED_LAYER_ID = "nodes-selected"; // circle ring under the selected node's icon

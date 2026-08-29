@@ -133,15 +133,17 @@ export function MapView({ wsManager, selectedNodeId, onSelectNode, urlView }: Ma
   // (same key), so selecting a node — which opens the panel — usually has this already warm.
   const { data: focusNeighbors } = useQuery({
     ...nodeQueries.neighbors(selectedNodeId ?? ""),
-    enabled: neighborLines === "selected" && !!selectedNodeId,
+    enabled: neighborLines !== "off" && !!selectedNodeId,
   });
 
-  // "on" is a pure client-side render over already-loaded nodes (neighborIds ship with every map
-  // page) so it never refetches; "selected" colours the detail edges; "off" short-circuits to none.
+  // With no selection, "on" renders the loaded mesh from neighborIds. Selecting a node turns either
+  // visible mode into a focused inspection view and fetches that node's richer neighbor details;
+  // "off" always short-circuits to none.
   const neighborEdges = useMemo(() => {
     if (neighborLines === "off") return EMPTY_EDGES;
-    if (neighborLines === "selected") {
-      if (!selectedNodeId) return EMPTY_EDGES;
+    if (selectedNodeId) {
+      // A selected node is a deliberate inspection task: suppress the ambient mesh even when the
+      // user chose "On", so its own neighbors and repeater glyph remain readable.
       return buildFocusedNeighborEdges(nodes.find((n) => n.id === selectedNodeId), focusNeighbors ?? []);
     }
     return buildNeighborEdges(nodes, "on", selectedNodeId);

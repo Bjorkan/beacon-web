@@ -157,6 +157,16 @@ export function clusterTextSizeExpression(): unknown[] {
   ];
 }
 
+// The circle is a resilient visual/hit-target fallback for clusters while the themed SVG image is
+// being rasterized asynchronously. It shares the same zoom/count contract as the hexagon image.
+export function clusterFallbackRadiusExpression(): unknown[] {
+  return [
+    "*",
+    zoomInterpolate(CLUSTER_ZOOM_SCALE_STOPS.map(([zoom, value]) => [zoom, value * 19])),
+    propertyInterpolate("point_count", CLUSTER_COUNT_SCALE_STOPS),
+  ];
+}
+
 export function glowRadiusExpression(): unknown[] {
   return [
     "+",
