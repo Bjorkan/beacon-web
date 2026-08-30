@@ -14,13 +14,13 @@ export interface LatestObserver {
   id: string;
   displayName?: string;
   iata: string;
-  // path fields land on the REST list from beacon-server ae0669c, and on live rows via the WS feed;
-  // resolvedSource/Destination are WS-only for now — the list endpoints leave them nil on purpose.
+  // Stored path fields are always present when the latest observation has them. Packet-list REST
+  // queries opt into resolvedPath; resolvedSource/Destination remain WS/detail-only.
   pathLength?: PathLength;
   pathBytes?: string;
   resolvedSource?: ResolvedHop;
   resolvedDestination?: ResolvedHop;
-  // per-hop resolved path, for the REST list once the backend fills it in — nothing populates it today.
+  // per-hop resolved path; populated by REST include=resolvedPath and by opt-in WS events.
   resolvedPath?: ResolvedHop[];
 }
 

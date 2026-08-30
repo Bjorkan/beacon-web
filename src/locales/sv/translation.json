@@ -384,6 +384,9 @@
     "keyPrefix": "Nyckelprefix",
     "raw": "Rådata",
     "destinationHash": "Destinationshash",
-    "ephemeralKey": "Tillfällig nyckel"
+    "ephemeralKey": "Tillfällig nyckel",
+    "observerArea": "Observatör / Område",
+    "path": "Sökväg",
+    "hopsHash": "Hopp · Hash"
   }
 }

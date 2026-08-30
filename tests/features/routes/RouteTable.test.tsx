@@ -99,8 +99,8 @@ describe("RouteTable search", () => {
       expect(mockSearchCrossIATARoutes).toHaveBeenCalledWith("aa11", "AAA", "bb22", "BBB"),
     );
     expect(mockSearchKnownRoutes).not.toHaveBeenCalled();
-    expect(await screen.findByText("Src Node")).toBeInTheDocument();
-    expect(screen.getByText("Dst Node")).toBeInTheDocument();
+    expect((await screen.findAllByText("Src Node")).length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Dst Node").length).toBeGreaterThan(0);
   });
 
   it("keeps paging for a multi-IATA region until its routes surface", async () => {

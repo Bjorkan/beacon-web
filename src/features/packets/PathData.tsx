@@ -18,8 +18,9 @@ function nodeLabel(node: ResolvedNode): string {
 }
 
 // Portals to <body> so the drawer's overflow doesn't clip it; a close delay bridges the mouse gap.
-function HopPopover({ hop, onViewNode, showSnr = true, children }: {
+function HopPopover({ hop, rawLabel, onViewNode, showSnr = true, children }: {
   hop: ResolvedHop | undefined;
+  rawLabel: string;
   onViewNode?: (nodeId: string) => void;
   showSnr?: boolean;
   children: ReactNode;
@@ -129,6 +130,7 @@ function HopPopover({ hop, onViewNode, showSnr = true, children }: {
             ) : (
               nodes.map((node) => <span key={node.id}>{nodeLabel(node)}</span>)
             )}
+            <span className="text-text-dim">Hash {rawLabel}</span>
             {showSnr && hop?.snr != null && (
               <span className="text-text-dim">
                 SNR <span className={SIGNAL_LEVEL_CLASSES[snrLevel(hop.snr) ?? "bad"]}>{formatSnr(hop.snr)}</span>
@@ -150,11 +152,14 @@ export function ResolvedHopBlock({ hop, label, onViewNode, showSnr = true }: {
 }) {
   const hasHover = useHasHover();
   const confidence: PathConfidence = hop?.confidence ?? "none";
+  const highNode = confidence === "high" && hop?.nodes.length === 1 ? hop.nodes[0] : undefined;
+  // High-confidence identity is primary; ambiguous/none deliberately keep the raw hash visible.
+  const primaryLabel = highNode ? nodeLabel(highNode) : label;
   const blockClass = `px-1.5 py-px rounded-sm font-semibold ${HOP_BLOCK_CLASSES[confidence]}`;
-  // mouse-only shortcut: a lone resolved match makes the block jump straight to the node (touch taps open the popover)
-  const single = hasHover && hop && hop.nodes.length === 1 && onViewNode ? hop.nodes[0] : undefined;
+  // mouse-only shortcut: a single high-confidence match jumps straight to the node (touch opens popover)
+  const single = hasHover && highNode && onViewNode ? highNode : undefined;
   return (
-    <HopPopover hop={hop} onViewNode={onViewNode} showSnr={showSnr}>
+    <HopPopover hop={hop} rawLabel={label} onViewNode={onViewNode} showSnr={showSnr}>
       {single ? (
         <button
           type="button"
@@ -164,10 +169,10 @@ export function ResolvedHopBlock({ hop, label, onViewNode, showSnr = true }: {
           }}
           className={`${blockClass} cursor-pointer hover:brightness-125`}
         >
-          {label}
+          {primaryLabel}
         </button>
       ) : (
-        <span className={blockClass}>{label}</span>
+        <span className={blockClass}>{primaryLabel}</span>
       )}
     </HopPopover>
   );

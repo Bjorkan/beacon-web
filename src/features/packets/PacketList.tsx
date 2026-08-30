@@ -15,7 +15,7 @@ import { LoadingPill } from "../../components/LoadingPill";
 import { SkeletonRows } from "../../components/SkeletonRows";
 import { PAYLOAD_TYPE_NAMES, ROUTE_TYPE_NAMES } from "../../types/enums";
 import type { WsManager } from "../../api/ws-manager";
-import type { PacketDetail } from "../../types/api";
+import type { PacketDetail, PacketSummary } from "../../types/api";
 import type { WsPacketObservation } from "../../types/ws";
 
 // filter options and storage keys
@@ -36,6 +36,35 @@ interface PacketListProps {
   onViewPath: (detail: PacketDetail) => void;
   selectedObservationId: number | null;
   onSelectObservation: (id: number) => void;
+}
+
+function summaryFromDetail(detail: PacketDetail): PacketSummary {
+  const latest = detail.observations.reduce<(typeof detail.observations)[number] | undefined>(
+    (current, observation) => !current || observation.heardAt > current.heardAt ? observation : current,
+    undefined,
+  );
+
+  return {
+    packetHash: detail.packetHash,
+    payloadType: detail.header.payloadType,
+    payloadTypeName: detail.header.payloadTypeName,
+    routeType: detail.header.routeType,
+    routeTypeName: detail.header.routeTypeName,
+    firstHeardAt: detail.firstHeardAt,
+    lastHeardAt: detail.lastHeardAt,
+    observationCount: detail.observationCount,
+    scope: detail.scope,
+    latestObserver: latest ? {
+      id: latest.observerId,
+      displayName: latest.observerName,
+      iata: latest.iata,
+      pathLength: latest.pathLength,
+      pathBytes: latest.pathBytes,
+      resolvedPath: latest.resolvedPath,
+      resolvedSource: latest.resolvedSource,
+      resolvedDestination: latest.resolvedDestination,
+    } : undefined,
+  };
 }
 
 // main packet view: filters, banner, virtual list
@@ -75,13 +104,22 @@ export function PacketList({ wsManager, onAnalyze, onViewPath, selectedObservati
     dismissLagged,
   } = usePackets(!isAtTop, serverFilter);
 
-  const packets = useMemo(
-    () => allPackets.filter((p) => matchesFilters(p, filters, observersByHash)),
-    [allPackets, filters, observersByHash],
-  );
-
   // ?hash is the selected packet — it expands the row inline. The analyzer is a separate state (?analyze=1).
   const expandedHash = search.hash ?? null;
+
+  // Shared with the expanded row's own usePacketDetail, so reading it here costs no extra request.
+  const { data: expandedDetail } = usePacketDetail(expandedHash);
+
+  const packets = useMemo(() => {
+    const matching = allPackets.filter((p) => matchesFilters(p, filters, observersByHash));
+    if (!expandedDetail || matching.some((packet) => packet.packetHash === expandedDetail.packetHash)) {
+      return matching;
+    }
+
+    // A deep-linked packet can have aged out of the first history page. Keep the URL contract by
+    // materializing the already-fetched detail as one list row; PacketExpansion reuses its query.
+    return [summaryFromDetail(expandedDetail), ...matching];
+  }, [allPackets, expandedDetail, filters, observersByHash]);
 
   const handleToggleExpand = useCallback((hash: string) => {
     const next = expandedHash === hash ? null : hash;
@@ -95,9 +133,6 @@ export function PacketList({ wsManager, onAnalyze, onViewPath, selectedObservati
       replace: true,
     });
   }, [expandedHash, navigate]);
-
-  // Shared with the expanded row's own usePacketDetail, so reading it here costs no extra request.
-  const { data: expandedDetail } = usePacketDetail(expandedHash);
 
   const handleOpenAnalyzer = useCallback(() => {
     if (expandedHash) onAnalyze(expandedHash);
@@ -118,6 +153,13 @@ export function PacketList({ wsManager, onAnalyze, onViewPath, selectedObservati
 
   useWsPacketHandler(wsManager, handleObservation);
   useWsLaggedHandler(wsManager, handleLagged);
+
+  // Keep live rows at parity with the REST list's include=resolvedPath enrichment while this view is
+  // mounted. Other tabs leave the connection on its cheaper default unless they explicitly need it.
+  useEffect(() => {
+    wsManager.setResolvePath(true);
+    return () => wsManager.setResolvePath(false);
+  }, [wsManager]);
 
   const bannerCount = isScrolledAway ? newPacketCount : 0;
 

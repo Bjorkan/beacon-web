@@ -64,7 +64,7 @@ function iatasParam(iatas?: string[]): string | undefined {
 
 export function getPackets(
   iatas: string[] | undefined,
-  params?: { cursor?: number; limit?: number; payloadTypes?: number[]; routeTypes?: number[]; scopes?: string[] },
+  params?: { cursor?: number; limit?: number; payloadTypes?: number[]; routeTypes?: number[]; scopes?: string[]; includeResolvedPath?: boolean },
 ): Promise<CursorPage<PacketSummary>> {
   return request("/packets", {
     iatas: iatasParam(iatas),
@@ -73,6 +73,7 @@ export function getPackets(
     payloadTypes: params?.payloadTypes?.length ? params.payloadTypes.join(",") : undefined,
     routeTypes: params?.routeTypes?.length ? params.routeTypes.join(",") : undefined,
     scopes: params?.scopes?.length ? params.scopes.join(",") : undefined,
+    include: params?.includeResolvedPath ? "resolvedPath" : undefined,
   });
 }
 

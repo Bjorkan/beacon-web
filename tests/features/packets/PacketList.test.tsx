@@ -107,12 +107,14 @@ async function renderList(url = "/", props: Partial<Parameters<typeof PacketList
   const onAnalyze = props.onAnalyze ?? vi.fn();
   const onViewPath = props.onViewPath ?? vi.fn();
   const onSelectObservation = props.onSelectObservation ?? vi.fn();
+  const setResolvePath = vi.fn();
+  const wsManager = { setResolvePath } as unknown as WsManager;
 
   render(
     <TestRouter initialEntry={url}>
       <QueryClientProvider client={queryClient}>
         <PacketList
-          wsManager={{} as unknown as WsManager}
+          wsManager={wsManager}
           onAnalyze={onAnalyze}
           onViewPath={onViewPath}
           selectedObservationId={null}
@@ -124,7 +126,7 @@ async function renderList(url = "/", props: Partial<Parameters<typeof PacketList
 
   await waitFor(() => expect(usePackets.mock.calls.length).toBeGreaterThan(previousCallCount));
 
-  return { onAnalyze, onViewPath, onSelectObservation, invalidate };
+  return { onAnalyze, onViewPath, onSelectObservation, invalidate, setResolvePath };
 }
 
 describe("PacketList server filter wiring", () => {
@@ -178,6 +180,13 @@ describe("PacketList loading feedback", () => {
   });
 });
 
+describe("PacketList resolved-path parity", () => {
+  it("opts the packet-list WS feed into resolved paths while mounted", async () => {
+    const { setResolvePath } = await renderList();
+    expect(setResolvePath).toHaveBeenCalledWith(true);
+  });
+});
+
 describe("PacketList compact layout", () => {
   it("does not render the redundant live packets banner", async () => {
     await renderList();
@@ -199,6 +208,39 @@ describe("PacketList expanded row", () => {
 
     expect(screen.getByRole("button", { name: /AA11/ })).toHaveAttribute("aria-expanded", "true");
     expect(onAnalyze).not.toHaveBeenCalled();
+  });
+
+  it("materializes a deep-linked packet that has aged out of the loaded history", async () => {
+    usePackets.mockImplementation(basePackets);
+    usePacketDetail.mockReturnValue({
+      data: {
+        packetHash: "AA11",
+        header: {
+          raw: "11", payloadType: 1, payloadTypeName: "ADVERT",
+          routeType: 1, routeTypeName: "FLOOD", payloadVersion: 0,
+        },
+        rawPayload: "", decrypted: false,
+        firstHeardAt: 1700000000, lastHeardAt: 1700000002,
+        firstToLastMs: 2000, observationCount: 2,
+        observations: [
+          {
+            id: 1, observerId: "old", observerName: "Old", iata: "YOW",
+            heardAt: 1700000000, pathLength: { raw: "00", hashSize: 1, hopCount: 0 },
+            sourceBroker: "b1", resolvedPath: [],
+          },
+          {
+            id: 2, observerId: "latest", observerName: "Latest", iata: "MMX",
+            heardAt: 1700000002, pathLength: { raw: "11", hashSize: 1, hopCount: 1 },
+            pathBytes: "AB", sourceBroker: "b1",
+            resolvedPath: [{ confidence: "high", nodes: [{ id: "n1", name: "Node AB", publicKey: "ab" }] }],
+          },
+        ],
+      },
+    });
+
+    await renderList("/?tab=Packets&hash=AA11");
+
+    expect(screen.getByRole("button", { name: /AA11/ })).toHaveAttribute("aria-expanded", "true");
   });
 
   it("clicking a row sets ?hash and does not open the analyzer", async () => {

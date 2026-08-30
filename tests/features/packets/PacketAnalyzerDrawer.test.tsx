@@ -17,7 +17,7 @@ describe("PacketAnalyzerDrawer close", () => {
   });
 });
 
-const hop = (id: string, lng: number, lat: number) => ({ confidence: "high" as const, nodes: [{ id, publicKey: "pk", longitude: lng, latitude: lat }] });
+const hop = (id: string, lng: number, lat: number) => ({ confidence: "high" as const, nodes: [{ id, name: `Node ${id.toUpperCase()}`, publicKey: "pk", longitude: lng, latitude: lat }] });
 
 function makeDetail(resolvedPath: unknown[]): PacketDetail {
   return {
@@ -98,7 +98,7 @@ describe("PacketAnalyzerDrawer TRACE path data", () => {
     );
     expect(screen.queryByText("Path SNR Data")).not.toBeInTheDocument();
     expect(screen.getByText("Path Data")).toBeInTheDocument();
-    // the first trace hash renders as a resolved hop block, tinted green for high confidence
-    expect(screen.getAllByText("AB").some((el) => el.className.includes("text-green"))).toBe(true);
+    // the first trace hop renders its high-confidence node name as primary, tinted green.
+    expect(screen.getByText("Node A").className).toContain("text-green");
   });
 });

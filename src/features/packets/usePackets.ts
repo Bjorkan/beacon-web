@@ -168,6 +168,7 @@ export function usePackets(frozen: boolean = false, serverFilter: PacketServerFi
           iata: data.observation.iata,
           pathLength: data.observation.pathLength,
           pathBytes: data.observation.pathBytes,
+          resolvedPath: data.observation.resolvedPath ?? undefined,
           // WS nulls these when the payload type carries no endpoint; the REST shape uses undefined
           resolvedSource: data.observation.resolvedSource ?? undefined,
           resolvedDestination: data.observation.resolvedDestination ?? undefined,

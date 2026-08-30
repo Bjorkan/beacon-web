@@ -384,6 +384,9 @@
     "keyPrefix": "Key Prefix",
     "raw": "Raw",
     "destinationHash": "Destination Hash",
-    "ephemeralKey": "Ephemeral Key"
+    "ephemeralKey": "Ephemeral Key",
+    "observerArea": "Observer / Area",
+    "path": "Path",
+    "hopsHash": "Hops · Hash"
   }
 }

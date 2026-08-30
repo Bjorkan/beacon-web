@@ -36,6 +36,14 @@ describe("getPackets", () => {
     expect(url.searchParams.get("scopes")).toBe("#bc,#west");
   });
 
+  it("opts into resolved path enrichment only when requested", async () => {
+    const getUrl = mockFetchOnce({ items: [], nextCursor: null, hasMore: false });
+
+    await getPackets(["YOW"], { includeResolvedPath: true });
+
+    expect(new URL(getUrl()).searchParams.get("include")).toBe("resolvedPath");
+  });
+
   it("omits the filter params when none are given", async () => {
     const getUrl = mockFetchOnce({ items: [], nextCursor: null, hasMore: false });
 

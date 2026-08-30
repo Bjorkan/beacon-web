@@ -134,17 +134,17 @@ describe("TraceList", () => {
     renderTraces();
     fireEvent.click(await screen.findByText("3F2A11C0"));
 
-    // raw bytes shown uppercase, like the packet path renderer
-    const hopA = await screen.findByText("A1");
+    // High-confidence identity is primary; unresolved hops remain raw.
+    const hopA = await screen.findByText("GatewayX");
     expect(hopA).toBeInTheDocument();
     expect(screen.getByText("B2")).toBeInTheDocument();
 
-    // per-hop SNR sits on a sub-line below the hash, like the TRACE payload view
+    // per-hop SNR sits on a sub-line below the hop, like the TRACE payload view
     expect(screen.getByText("-7.50 dB")).toBeInTheDocument();
 
-    // hovering a resolved hop reveals its candidate node
+    // raw hash remains available in the resolved hop popover for debugging.
     fireEvent.mouseEnter(hopA);
-    expect(await screen.findByRole("tooltip")).toHaveTextContent("GatewayX");
+    expect(await screen.findByRole("tooltip")).toHaveTextContent("Hash A1");
   });
 
   it("tags each card as TRACE or PING and previews the most complete path with per-hop SNR", async () => {

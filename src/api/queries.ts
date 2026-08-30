@@ -372,7 +372,7 @@ export const packetQueries = {
         ? (["packets", args.regionKey, args.filter] as const)
         : (["packets", args.regionKey] as const),
       queryFn: ({ pageParam }) =>
-        getPackets(args.iatas, { cursor: pageParam, ...(args.filter ?? {}) }),
+        getPackets(args.iatas, { cursor: pageParam, ...(args.filter ?? {}), includeResolvedPath: true }),
       getNextPageParam: (last) => last.nextCursor ?? undefined,
       initialPageParam: undefined,
       staleTime: Infinity,
@@ -383,6 +383,10 @@ export const packetQueries = {
       queryKey: ["packet-detail", hash] as const,
       queryFn: () => getPacketDetail(hash!),
       enabled: !!hash,
+      // PacketList and the expansion mount in succession for a cold deep-link. Keep that one
+      // response fresh briefly so both consumers share it instead of issuing identical requests;
+      // incoming observations still invalidate the query immediately.
+      staleTime: 5_000,
     }),
 };
 

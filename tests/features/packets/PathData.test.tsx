@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, within } from "@testing-library/react";
 import { ResolvedHopBlock } from "../../../src/features/packets/PathData";
 import type { ResolvedHop } from "../../../src/types/api";
 
@@ -29,15 +29,16 @@ describe("ResolvedHopBlock per-hop SNR", () => {
   it("shows the formatted SNR in the popover when the hop carries one", () => {
     setMobile(true);
     render(<ResolvedHopBlock hop={{ ...singleHop, snr: 10.75 }} label="ABC1" />);
-    fireEvent.click(screen.getByText("ABC1"));
+    fireEvent.click(screen.getByText("Repeater A"));
     expect(screen.getByText(/SNR/)).toBeInTheDocument();
+    expect(screen.getByText("Hash ABC1")).toBeInTheDocument();
     expect(screen.getByText("10.75")).toBeInTheDocument();
   });
 
   it("shows no SNR line when the hop has none", () => {
     setMobile(true);
     render(<ResolvedHopBlock hop={singleHop} label="ABC1" />);
-    fireEvent.click(screen.getByText("ABC1"));
+    fireEvent.click(screen.getByText("Repeater A"));
     expect(screen.queryByText(/SNR/)).not.toBeInTheDocument();
   });
 });
@@ -47,7 +48,7 @@ describe("ResolvedHopBlock (desktop)", () => {
     setMobile(false);
     const onViewNode = vi.fn();
     render(<ResolvedHopBlock hop={singleHop} label="ABC1" onViewNode={onViewNode} />);
-    fireEvent.click(screen.getByText("ABC1"));
+    fireEvent.click(screen.getByText("Repeater A"));
     expect(onViewNode).toHaveBeenCalledWith("node-1");
   });
 });
@@ -58,9 +59,10 @@ describe("ResolvedHopBlock (mobile)", () => {
     const onViewNode = vi.fn();
     render(<ResolvedHopBlock hop={singleHop} label="ABC1" onViewNode={onViewNode} />);
 
-    fireEvent.click(screen.getByText("ABC1"));
+    fireEvent.click(screen.getByText("Repeater A"));
     // popover shows the resolved name, and we did NOT jump straight into the node
-    expect(screen.getByText("Repeater A")).toBeInTheDocument();
+    const popover = screen.getByRole("tooltip");
+    expect(within(popover).getByText("Repeater A")).toBeInTheDocument();
     expect(onViewNode).not.toHaveBeenCalled();
   });
 
@@ -69,8 +71,8 @@ describe("ResolvedHopBlock (mobile)", () => {
     const onViewNode = vi.fn();
     render(<ResolvedHopBlock hop={singleHop} label="ABC1" onViewNode={onViewNode} />);
 
-    fireEvent.click(screen.getByText("ABC1"));
     fireEvent.click(screen.getByText("Repeater A"));
+    fireEvent.click(within(screen.getByRole("tooltip")).getByRole("button", { name: "Repeater A" }));
     expect(onViewNode).toHaveBeenCalledWith("node-1");
   });
 
@@ -91,8 +93,8 @@ describe("ResolvedHopBlock (mobile)", () => {
     const onViewNode = vi.fn();
     render(<ResolvedHopBlock hop={singleHop} label="ABC1" onViewNode={onViewNode} />);
 
-    fireEvent.click(screen.getByText("ABC1"));
-    expect(screen.getByText("Repeater A")).toBeInTheDocument();
+    fireEvent.click(screen.getByText("Repeater A"));
+    expect(within(screen.getByRole("tooltip")).getByText("Repeater A")).toBeInTheDocument();
     expect(onViewNode).not.toHaveBeenCalled();
   });
 });

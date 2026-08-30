@@ -19,7 +19,7 @@ const resolvedRoute: ResolvedHop[] = [
 describe("PayloadBreakdown — trace resolvedRoute overlay", () => {
   it("tints each trace-path hash block by its resolved confidence", () => {
     render(<PayloadBreakdown payload={tracePayload} resolvedRoute={resolvedRoute} />);
-    expect(screen.getByText("AB").className).toContain("text-green"); // high
+    expect(screen.getByText("Node A").className).toContain("text-green"); // high name is primary
     expect(screen.getByText("CD").className).toContain("text-warn"); // ambiguous
   });
 
@@ -31,8 +31,8 @@ describe("PayloadBreakdown — trace resolvedRoute overlay", () => {
   it("makes a single-resolution hop's badge directly clickable (like other packets)", () => {
     const onViewNode = vi.fn();
     render(<PayloadBreakdown payload={tracePayload} resolvedRoute={resolvedRoute} onViewNode={onViewNode} />);
-    // hop 0 is high-confidence with one node → the hash badge itself opens that node
-    fireEvent.click(screen.getByRole("button", { name: "AB" }));
+    // hop 0 is high-confidence with one node → its human-readable name opens that node
+    fireEvent.click(screen.getByRole("button", { name: "Node A" }));
     expect(onViewNode).toHaveBeenCalledWith("n1");
     // hop 1 is ambiguous (two candidates) → not a direct button; resolved via the popover instead
     expect(screen.queryByRole("button", { name: "CD" })).not.toBeInTheDocument();
@@ -61,9 +61,9 @@ describe("PayloadBreakdown — resolved source/destination endpoints", () => {
   it("makes the resolved From/To hashes clickable node blocks", () => {
     const onViewNode = vi.fn();
     render(<PayloadBreakdown payload={envelope} resolvedSource={resolvedSource} resolvedDestination={resolvedDestination} onViewNode={onViewNode} />);
-    fireEvent.click(screen.getByRole("button", { name: "BB" })); // To → destination node
+    fireEvent.click(screen.getByRole("button", { name: "Bob" })); // To → destination node
     expect(onViewNode).toHaveBeenCalledWith("d1");
-    fireEvent.click(screen.getByRole("button", { name: "AA" })); // From → source node
+    fireEvent.click(screen.getByRole("button", { name: "Alice" })); // From → source node
     expect(onViewNode).toHaveBeenCalledWith("s1");
   });
 
@@ -87,7 +87,7 @@ describe("PayloadBreakdown — resolved source/destination endpoints", () => {
     const onViewNode = vi.fn();
     const anon = { type: "ANON_REQUEST", destination: 0xbb, ephemeralPubKey: "cc" };
     render(<PayloadBreakdown payload={anon} resolvedDestination={resolvedDestination} onViewNode={onViewNode} />);
-    fireEvent.click(screen.getByRole("button", { name: "0xBB" }));
+    fireEvent.click(screen.getByRole("button", { name: "Bob" }));
     expect(onViewNode).toHaveBeenCalledWith("d1");
   });
 });

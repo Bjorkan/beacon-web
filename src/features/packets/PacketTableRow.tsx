@@ -1,7 +1,5 @@
 import { formatHex } from "../../lib/formatters";
 import { useTranslation } from "react-i18next";
-import { useQuery } from "@tanstack/react-query";
-import { iataQueries } from "../../api/queries";
 import { Timestamp } from "../../components/Timestamp";
 import { Badge } from "../../components/Badge";
 import { ScopeTag } from "../../components/ScopeTag";
@@ -9,6 +7,7 @@ import { payloadTypeVariant } from "../../components/badge-utils";
 import { PAYLOAD_TYPE_NAMES, type PayloadTypeValue } from "../../types/enums";
 import type { PacketSummary } from "../../types/api";
 import { GRID_TEMPLATE } from "./packet-grid";
+import { InlinePacketPath } from "./InlinePacketPath";
 
 interface PacketTableRowProps {
   packet: PacketSummary;
@@ -17,18 +16,14 @@ interface PacketTableRowProps {
   onToggle: () => void;
 }
 
-// Single-line table row sharing GRID_TEMPLATE with the sticky header. The observer and the packet's
-// endpoints live in the expansion / analyzer instead — endpoint resolution is n/a for most
-// packets, so it gets no column of its own. The region column shows the IATA's full display name.
 export function PacketTableRow({ packet, expanded, isFresh, onToggle }: PacketTableRowProps) {
   const { t } = useTranslation();
-  // Shared cache with MapView's iatas query — one request serves every row.
-  const { data: iataNames } = useQuery({
-    ...iataQueries.list(),
-    select: (rows) => new Map(rows.map((r) => [r.iata, r.displayName ?? r.iata])),
-  });
-  // ?? not ||, so a legitimate 0-hop direct packet still shows its count
-  const pathLength = packet.latestObserver?.pathLength;
+  const observer = packet.latestObserver;
+  const pathLength = observer?.pathLength;
+  const observerName = observer?.displayName ?? observer?.id.slice(0, 8);
+  const area = observer?.iata;
+  const observerTitle = observerName ? `${observerName}${area ? ` · ${area}` : ""}${observer?.id ? ` · ${observer.id}` : ""}` : undefined;
+  const pathMeta = pathLength ? `${pathLength.hopCount}h · ${pathLength.hashSize}B` : null;
   const na = <span className="text-text-dim">n/a</span>;
 
   return (
@@ -45,7 +40,7 @@ export function PacketTableRow({ packet, expanded, isFresh, onToggle }: PacketTa
         type="button"
         onClick={onToggle}
         aria-expanded={expanded}
-        className="grid w-full items-center gap-x-3 px-3 py-1.5 text-left text-[11px] cursor-pointer"
+        className="grid w-full items-center gap-x-3 px-3 py-1 text-left text-[11px] cursor-pointer"
         style={{ gridTemplateColumns: GRID_TEMPLATE }}
       >
         <span className={`text-text-dim transition-transform ${expanded ? "rotate-90" : ""}`} aria-hidden>
@@ -63,14 +58,17 @@ export function PacketTableRow({ packet, expanded, isFresh, onToggle }: PacketTa
           <span className="truncate">{packet.routeTypeName || t("packets.unknown")}</span>
           {packet.scope && <ScopeTag className="shrink-0">{packet.scope}</ScopeTag>}
         </span>
-        <span className="font-mono text-text-muted">×{packet.observationCount}</span>
-        <span className="font-mono text-text-muted">{pathLength?.hopCount ?? na}</span>
-        <span className="font-mono text-text-muted">{pathLength?.hashSize ?? na}</span>
-        <span className="min-w-0 truncate">
-          {iataNames?.get(packet.latestObserver?.iata ?? "") ?? packet.latestObserver?.iata ?? (
-            <span className="font-normal text-text-muted">{na}</span>
-          )}
+        <span className="min-w-0 truncate" title={observerTitle}>
+          {observerName ? (
+            <>
+              <span className="font-medium text-text-normal">{observerName}</span>
+              {area && <span className="text-text-dim"> · {area}</span>}
+            </>
+          ) : na}
         </span>
+        <span className="min-w-0 overflow-hidden"><InlinePacketPath packet={packet} /></span>
+        <span className="font-mono text-text-muted">×{packet.observationCount}</span>
+        <span className="font-mono text-text-muted">{pathMeta ?? na}</span>
         <span className="text-right text-text-muted">
           <Timestamp value={packet.lastHeardAt} />
         </span>

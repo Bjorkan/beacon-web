@@ -65,7 +65,7 @@ describe("usePackets gap healing", () => {
       expect(data?.pages).toHaveLength(1);
     });
     expect(getPackets).toHaveBeenCalledTimes(1);
-    expect(getPackets.mock.calls[0]![1]).toEqual({ cursor: undefined });
+    expect(getPackets.mock.calls[0]![1]).toEqual({ cursor: undefined, includeResolvedPath: true });
   });
 
   it("resets to a single first-page fetch on a lagged notice (no page-by-page storm)", async () => {
@@ -109,7 +109,7 @@ describe("usePackets server filter", () => {
 
     await waitFor(() => expect(getPackets).toHaveBeenCalledTimes(1));
     expect(getPackets.mock.calls[0]![0]).toEqual(["YOW"]);
-    expect(getPackets.mock.calls[0]![1]).toEqual({ cursor: undefined, payloadType: 4 });
+    expect(getPackets.mock.calls[0]![1]).toEqual({ cursor: undefined, payloadType: 4, includeResolvedPath: true });
     await waitFor(() => {
       expect(qc.getQueryData(["packets", "YOW", { payloadType: 4 }])).toBeDefined();
     });
@@ -125,7 +125,7 @@ describe("usePackets server filter", () => {
     });
 
     expect(getPackets).toHaveBeenCalledTimes(2);
-    expect(getPackets.mock.calls[1]![1]).toEqual({ cursor: 999, payloadType: 4 });
+    expect(getPackets.mock.calls[1]![1]).toEqual({ cursor: 999, payloadType: 4, includeResolvedPath: true });
   });
 
   it("reuses the cached unfiltered pages when the filter clears (no refetch)", async () => {
@@ -211,7 +211,7 @@ describe("usePackets server filter", () => {
       const data = qc.getQueryData<{ pages: unknown[] }>(["packets", "YOW", { payloadType: 4 }]);
       expect(data?.pages).toHaveLength(1);
     });
-    expect(getPackets.mock.calls[0]![1]).toEqual({ cursor: undefined, payloadType: 4 });
+    expect(getPackets.mock.calls[0]![1]).toEqual({ cursor: undefined, payloadType: 4, includeResolvedPath: true });
   });
 });
 
@@ -264,6 +264,10 @@ describe("usePackets path and endpoint fields", () => {
           sourceBroker: "b1",
           pathLength: { raw: "42", hashSize: 1, hopCount: 2 },
           pathBytes: "7fa4",
+          resolvedPath: [
+            { confidence: "high", nodes: [{ id: "r1", publicKey: "7f00", name: "Lambhov" }] },
+            { confidence: "none", nodes: [] },
+          ],
           resolvedSource: { confidence: "high", nodes: [{ id: "n1", publicKey: "ab", name: "Salish" }] },
           resolvedDestination: null,
         },
@@ -274,6 +278,7 @@ describe("usePackets path and endpoint fields", () => {
     const obs = result.current.allPackets[0]!.latestObserver;
     expect(obs?.pathLength).toEqual({ raw: "42", hashSize: 1, hopCount: 2 });
     expect(obs?.pathBytes).toBe("7fa4");
+    expect(obs?.resolvedPath?.[0]?.nodes[0]?.name).toBe("Lambhov");
     expect(obs?.resolvedSource?.nodes[0]!.name).toBe("Salish");
     expect(obs?.resolvedDestination).toBeUndefined();
   });

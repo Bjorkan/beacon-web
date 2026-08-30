@@ -6,17 +6,17 @@ export function PacketTableHeader() {
   const { t } = useTranslation();
   return (
     <div
-      className="hidden md:grid sticky top-0 z-10 gap-x-3 px-3 py-1.5 bg-bg-surface border-b border-border text-[9px] uppercase tracking-wider text-text-muted"
+      className="hidden md:grid sticky top-0 z-10 gap-x-3 px-3 py-1 bg-bg-surface border-b border-border text-[9px] uppercase tracking-wider text-text-muted"
       style={{ gridTemplateColumns: GRID_TEMPLATE }}
     >
       <span aria-hidden />
       <span>Hash</span>
       <span>{t("entities.type")}</span>
       <span>{t("routes.route")}</span>
+      <span>{t("packets.observerArea")}</span>
+      <span>{t("packets.path")}</span>
       <span>Obs</span>
-      <span>{t("packets.hops")}</span>
-      <span>{t("packets.hashSize")}</span>
-      <span>IATA</span>
+      <span>{t("packets.hopsHash")}</span>
       <span className="text-right">{t("packets.age")}</span>
     </div>
   );
