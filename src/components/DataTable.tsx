@@ -24,6 +24,9 @@ interface DataTableProps<T> {
   rowKey: (row: T) => string;
   selectedKey: string | null;
   onSelect: (key: string | null) => void;
+  // Optional route/data preload signal. Fired only on explicit user intent (hover/focus/touch), never
+  // merely because a virtual row enters the viewport.
+  onRowIntent?: (key: string) => void;
   isLoading?: boolean;
   emptyLabel: string;
   defaultSort?: { header: string; direction?: SortDirection };
@@ -58,6 +61,7 @@ export function DataTable<T>({
   rowKey,
   selectedKey,
   onSelect,
+  onRowIntent,
   isLoading,
   emptyLabel,
   defaultSort,
@@ -154,6 +158,9 @@ export function DataTable<T>({
                       : "border-l-transparent hover:bg-primary/5 hover:border-l-primary/50"
                   }`}
                   style={item ? { position: "absolute", top: 0, left: 0, transform: `translateY(${item.start}px)` } : undefined}
+                  onMouseEnter={() => onRowIntent?.(key)}
+                  onFocus={() => onRowIntent?.(key)}
+                  onTouchStart={() => onRowIntent?.(key)}
                   onClick={() => onSelect(isSelected ? null : key)}
                 >
                   {renderCard!(row)}
@@ -223,6 +230,17 @@ export function DataTable<T>({
                       ? "bg-primary/10 border-l-primary"
                       : "border-l-transparent hover:bg-primary/5 hover:border-l-primary/50"
                   }`}
+                  role="button"
+                  tabIndex={0}
+                  onMouseEnter={() => onRowIntent?.(key)}
+                  onFocus={() => onRowIntent?.(key)}
+                  onTouchStart={() => onRowIntent?.(key)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault();
+                      onSelect(isSelected ? null : key);
+                    }
+                  }}
                   onClick={() => onSelect(isSelected ? null : key)}
                 >
                   {columns.map((col) => (

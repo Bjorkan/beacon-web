@@ -12,8 +12,9 @@
 // not shareable navigation state, so it deliberately never touches the URL.
 
 import { createContext, Suspense, lazy, useCallback, useContext, useEffect, useMemo, useState } from "react";
-import { Outlet, createRootRoute, createRoute, createRouter, redirect, useNavigate, useParams, useSearch, useRouterState } from "@tanstack/react-router";
+import { Outlet, createRootRouteWithContext, createRoute, createRouter, redirect, useNavigate, useParams, useSearch, useRouterState } from "@tanstack/react-router";
 import type { RouterHistory } from "@tanstack/react-router";
+import type { QueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { RegionProvider, useRegion, useRegionSelection } from "./hooks/useRegion";
 import {
@@ -41,6 +42,8 @@ import { ChannelList } from "./features/channels/ChannelList";
 import { usePacketDetail } from "./features/packets/usePacketDetail";
 import { wsManager } from "./api/ws-instance";
 import { QueryWsBridge } from "./api/query-ws-bridge";
+import { queryClient } from "./api/query-client";
+import { nodeQueries, observerQueries } from "./api/queries";
 import {
   validateChannelsSearch,
   validateNodesSearch,
@@ -801,7 +804,7 @@ function legacyRedirect(search: Record<string, unknown>) {
 
 // ── tree ─────────────────────────────────────────────────────────────────────────────────────
 
-const rootRoute = createRootRoute({
+const rootRoute = createRootRouteWithContext<{ queryClient: QueryClient }>()({
   component: RootLayout,
   validateSearch: validateRootSearch,
   notFoundComponent: () => <EmptyState title="404" />,
@@ -846,6 +849,15 @@ const nodesRoute = createRoute({
 const nodeDetailRoute = createRoute({
   getParentRoute: () => nodesRoute,
   path: "$nodeId",
+  loader: ({ context, params }) => {
+    // Preload into Query's cache without making navigation depend on transport success. The detail
+    // panel owns loading/error UX and reuses any in-flight result through Query deduplication.
+    void Promise.allSettled([
+      context.queryClient.ensureQueryData(nodeQueries.detail(params.nodeId)),
+      context.queryClient.ensureQueryData(nodeQueries.observations(params.nodeId)),
+      context.queryClient.ensureQueryData(nodeQueries.neighbors(params.nodeId)),
+    ]);
+  },
   component: NodeDetailRoute,
 });
 
@@ -859,6 +871,12 @@ const observersRoute = createRoute({
 const observerDetailRoute = createRoute({
   getParentRoute: () => observersRoute,
   path: "$observerId",
+  loader: ({ context, params }) => {
+    void Promise.allSettled([
+      context.queryClient.ensureQueryData(observerQueries.detail(params.observerId)),
+      context.queryClient.ensureQueryData(observerQueries.adverts(params.observerId)),
+    ]);
+  },
   component: ObserverDetailRoute,
 });
 
@@ -894,10 +912,11 @@ const routeTree = rootRoute.addChildren([
   analyticsRoute,
 ]);
 
-export function createAppRouter(history?: RouterHistory) {
+export function createAppRouter(history?: RouterHistory, client: QueryClient = queryClient) {
   return createRouter({
     routeTree,
     history,
+    context: { queryClient: client },
     parseSearch,
     stringifySearch,
     defaultPreload: "intent",

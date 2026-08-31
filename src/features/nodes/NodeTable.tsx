@@ -221,6 +221,7 @@ export function NodeTable({ selectedNodeId, onSelectNode, viewState, onViewState
           rowKey={(n) => n.id}
           selectedKey={selectedNodeId}
           onSelect={onSelectNode}
+          onRowIntent={onRowIntent}
           isLoading={isLoading}
           emptyLabel={t("entities.noNodes")}
           sort={sort}

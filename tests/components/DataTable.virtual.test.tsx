@@ -109,4 +109,32 @@ describe("DataTable virtualization", () => {
     fireEvent.click(rendered[0]!);
     expect(onSelect).toHaveBeenCalledWith("row-0");
   });
+
+  it("does not preload rendered virtual rows, but forwards hover, focus, and touch intent", () => {
+    const onRowIntent = vi.fn();
+    const { container } = render(
+      <DataTable
+        columns={columns}
+        rows={rows}
+        rowKey={(row) => row.id}
+        selectedKey={null}
+        onSelect={() => {}}
+        onRowIntent={onRowIntent}
+        emptyLabel="none"
+        virtualize
+      />,
+    );
+    flushResize();
+
+    const row = container.querySelector("tbody tr[data-index]")!;
+    expect(row).not.toBeNull();
+    expect(onRowIntent).not.toHaveBeenCalled();
+
+    fireEvent.mouseEnter(row);
+    fireEvent.focus(row);
+    fireEvent.touchStart(row);
+    expect(onRowIntent).toHaveBeenNthCalledWith(1, "row-0");
+    expect(onRowIntent).toHaveBeenNthCalledWith(2, "row-0");
+    expect(onRowIntent).toHaveBeenNthCalledWith(3, "row-0");
+  });
 });

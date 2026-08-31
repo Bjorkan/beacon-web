@@ -194,6 +194,7 @@ export function ObserverTable({ selectedObserverId, onSelectObserver, viewState,
           rowKey={(o) => o.id}
           selectedKey={selectedObserverId}
           onSelect={onSelectObserver}
+          onRowIntent={onRowIntent}
           isLoading={isLoading}
           emptyLabel={t("entities.noObservers")}
           sort={sort}
