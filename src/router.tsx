@@ -11,8 +11,8 @@
 // Transient overlay state (the analyzer/node/path overlays) stays in React state below — it is
 // not shareable navigation state, so it deliberately never touches the URL.
 
-import { createContext, Suspense, lazy, useCallback, useContext, useEffect, useMemo, useState } from "react";
-import { Outlet, createRootRouteWithContext, createRoute, createRouter, redirect, useNavigate, useParams, useSearch, useRouterState } from "@tanstack/react-router";
+import { Suspense, lazy, useCallback, useEffect, useMemo, useState } from "react";
+import { Outlet, createRootRouteWithContext, createRoute, createRouter, lazyRouteComponent, redirect, useNavigate, useSearch, useRouterState } from "@tanstack/react-router";
 import type { RouterHistory } from "@tanstack/react-router";
 import type { QueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
@@ -26,44 +26,31 @@ import {
 import { useIsMobile } from "./hooks/useMediaQuery";
 import { AppShell } from "./components/AppShell";
 import { EmptyState } from "./components/EmptyState";
-import { PacketList } from "./features/packets/PacketList";
 import { PacketAnalyzerDrawer } from "./features/packets/PacketAnalyzerDrawer";
 import { PacketAnalyzerOverlay } from "./features/packets/PacketAnalyzerOverlay";
 import { PathLinkRestore } from "./features/packets/PathLinkRestore";
 import { SelectionResetOnRegion } from "./state/SelectionResetOnRegion";
-import { NodeTable } from "./features/nodes/NodeTable";
-import { NodeDetailPanel } from "./features/nodes/NodeDetailPanel";
 import { NodeDetailOverlay } from "./features/nodes/NodeDetailOverlay";
-import { ObserverTable } from "./features/observers/ObserverTable";
-import { ObserverDetailPanel } from "./features/observers/ObserverDetailPanel";
-import { RouteTable } from "./features/routes/RouteTable";
-import { TraceList } from "./features/traces/TraceList";
-import { ChannelList } from "./features/channels/ChannelList";
 import { usePacketDetail } from "./features/packets/usePacketDetail";
 import { wsManager } from "./api/ws-instance";
 import { QueryWsBridge } from "./api/query-ws-bridge";
 import { queryClient } from "./api/query-client";
 import { nodeQueries, observerQueries } from "./api/queries";
+import { OverlaysContext, type Overlays } from "./routes/overlays";
 import {
+  validateAnalyticsSearch,
   validateChannelsSearch,
+  validateMapSearch,
   validateNodesSearch,
   validateObserversSearch,
   validateTracesSearch,
 } from "./routes/search-contracts";
-import { parseMapViewSearch } from "./features/map/map-url";
 import type { PacketDetail } from "./types/api";
-import type { StatsRange, StatsTab } from "./features/stats/types";
 
 
-// Map is the only heavy tab (maplibre-gl is ~1MB), so lazy-load it — its chunk is fetched the
-// first time someone opens the Map route instead of bloating the initial bundle.
-const MapView = lazy(() => import("./features/map/MapView").then((m) => ({ default: m.MapView })));
 // The packet path modal also imports MapLibre through PacketPathMap. Keep it out of the startup
 // bundle even when the user never visits /map; it is only needed after an explicit "view path" action.
 const PacketPathMapModal = lazy(() => import("./features/map/PacketPathMapModal").then((m) => ({ default: m.PacketPathMapModal })));
-
-// Stats pulls in ECharts (~150-200KB gz), so lazy-load it too.
-const StatsOverview = lazy(() => import("./features/stats/StatsOverview").then((m) => ({ default: m.StatsOverview })));
 
 const WS_EVENTS = ["packetObservation", "channelMessage", "observerStatus", "nodeUpdate"];
 
@@ -96,25 +83,6 @@ interface RootSearch {
   path?: string;
 }
 
-interface MapSearch {
-  node?: string;
-  lat?: number;
-  lng?: number;
-  zoom?: number;
-  clustering?: boolean;
-  node_type?: string;
-  neighbor_lines?: "on" | "selected" | "off";
-  style?: string;
-  flow?: boolean;
-  borders?: boolean;
-}
-
-interface AnalyticsSearch {
-  statsTab?: StatsTab;
-  observerId?: string;
-  range?: StatsRange;
-}
-
 function validateRootSearch(search: Record<string, unknown>): RootSearch {
   return {
     regions: csv(search.regions),
@@ -129,34 +97,6 @@ function validateRootSearch(search: Record<string, unknown>): RootSearch {
     hash: str(search.hash),
     analyze: search.analyze === "1" ? "1" : undefined,
     path: str(search.path),
-  };
-}
-
-function validateMapSearch(search: Record<string, unknown>): MapSearch {
-  const mapView = parseMapViewSearch(search);
-  return {
-    node: str(search.node),
-    lat: mapView.center?.[1],
-    lng: mapView.center?.[0],
-    zoom: mapView.zoom,
-    clustering: mapView.clustered,
-    node_type: mapView.nodeType,
-    neighbor_lines: mapView.neighborLines,
-    style: mapView.styleId,
-    flow: mapView.flow,
-    borders: mapView.borders,
-  };
-}
-
-function validateAnalyticsSearch(search: Record<string, unknown>): AnalyticsSearch {
-  const statsTab = str(search.statsTab);
-  const range = str(search.range);
-  return {
-    statsTab: ["mesh", "talkers", "clockdrift", "observer", "graph"].includes(statsTab ?? "")
-      ? statsTab as StatsTab
-      : undefined,
-    observerId: str(search.observerId),
-    range: ["24h", "7d", "30d"].includes(range ?? "") ? range as StatsRange : undefined,
   };
 }
 
@@ -206,37 +146,6 @@ function stringifySearch(search: Record<string, unknown>): string {
   }
   const value = params.toString();
   return value ? `?${value}` : "";
-}
-
-// ── transient overlay state (React state — never in the URL) ────────────────────────────────
-
-interface Overlays {
-  // packet analyzer shown as a modal over any tab (clicking an observation on Nodes/Traces/Map)
-  overlayPacketHash: string | null;
-  setOverlayPacketHash: (hash: string | null) => void;
-  // node detail shown as a modal over the packet analyzer (clicking a resolved path hop)
-  overlayNodeId: string | null;
-  setOverlayNodeId: (id: string | null) => void;
-  // packet path popup shown over the analyzer ("View path on map")
-  pathMapDetail: PacketDetail | null;
-  openPath: (detail: PacketDetail, initialKey: string | null) => void;
-  // expanded-row observation selection shared with the analyzer drawer
-  selectedObservationId: number | null;
-  setSelectedObservationId: (id: number | null) => void;
-  // URL-backed analyzer open/close (Packets + Channels search params)
-  analyze: (hash: string | null) => void;
-  // entity selection via route params
-  selectNode: (id: string | null) => void;
-  selectObserver: (id: string | null) => void;
-  viewObserverStats: (observerId: string) => void;
-}
-
-const OverlaysContext = createContext<Overlays | null>(null);
-
-function useOverlays(): Overlays {
-  const ctx = useContext(OverlaysContext);
-  if (!ctx) throw new Error("useOverlays must be used within the route tree");
-  return ctx;
 }
 
 // ── tab <-> path mapping (AppShell still speaks in tab names) ────────────────────────────────
@@ -567,157 +476,6 @@ function RootLayout() {
   );
 }
 
-// ── route components (thin adapters: router search/state -> feature props) ───────────────────
-
-function PacketsRoute() {
-  const overlays = useOverlays();
-  return (
-    <PacketList
-      wsManager={wsManager}
-      onAnalyze={overlays.analyze}
-      onViewPath={(detail) => overlays.openPath(detail, null)}
-      selectedObservationId={overlays.selectedObservationId}
-      onSelectObservation={overlays.setSelectedObservationId}
-    />
-  );
-}
-
-function ChannelsRoute() {
-  const overlays = useOverlays();
-  return <ChannelList wsManager={wsManager} onAnalyze={overlays.analyze} />;
-}
-
-function MapRoute() {
-  const search = useSearch({ from: "/map" });
-  const overlays = useOverlays();
-  const navigate = useNavigate({ from: "/map" });
-  const urlView = parseMapViewSearch(search);
-  const selectMapNode = useCallback(
-    (id: string | null) =>
-      navigate({
-        to: ".",
-        search: (prev) => ({ ...prev, node: id ?? undefined }),
-      }),
-    [navigate],
-  );
-  return (
-    <>
-      <MapView
-        key={JSON.stringify(urlView)}
-        wsManager={wsManager}
-        urlView={urlView}
-        selectedNodeId={search.node ?? null}
-        onSelectNode={selectMapNode}
-        onOpenPacket={overlays.setOverlayPacketHash}
-      />
-      {search.node && (
-        <NodeDetailPanel
-          nodeId={search.node}
-          onClose={() => selectMapNode(null)}
-          onViewObserver={overlays.selectObserver}
-          onViewNode={selectMapNode}
-          onAnalyzePacket={overlays.setOverlayPacketHash}
-        />
-      )}
-    </>
-  );
-}
-
-// The Nodes route renders the table at both /nodes and /nodes/$nodeId; the detail panel only
-// exists on the child route (the table reads the child param for its selection highlight).
-function NodesLayout() {
-  const params = useParams({ strict: false }) as { nodeId?: string };
-  const overlays = useOverlays();
-  return (
-    <>
-      <NodeTable
-        wsManager={wsManager}
-        selectedNodeId={params.nodeId ?? null}
-        onSelectNode={overlays.selectNode}
-      />
-      <Outlet />
-    </>
-  );
-}
-
-function NodeDetailRoute() {
-  const { nodeId } = useParams({ from: "/nodes/$nodeId" });
-  const overlays = useOverlays();
-  return (
-    <NodeDetailPanel
-      nodeId={nodeId}
-      onClose={() => overlays.selectNode(null)}
-      onViewObserver={overlays.selectObserver}
-      onViewNode={overlays.selectNode}
-      onAnalyzePacket={overlays.setOverlayPacketHash}
-    />
-  );
-}
-
-function ObserversLayout() {
-  const params = useParams({ strict: false }) as { observerId?: string };
-  const overlays = useOverlays();
-  return (
-    <>
-      <ObserverTable
-        wsManager={wsManager}
-        selectedObserverId={params.observerId ?? null}
-        onSelectObserver={overlays.selectObserver}
-      />
-      <Outlet />
-    </>
-  );
-}
-
-function ObserverDetailRoute() {
-  const { observerId } = useParams({ from: "/observers/$observerId" });
-  const overlays = useOverlays();
-  return (
-    <ObserverDetailPanel
-      observerId={observerId}
-      onClose={() => overlays.selectObserver(null)}
-      onAnalyzePacket={overlays.setOverlayPacketHash}
-      onViewStats={overlays.viewObserverStats}
-    />
-  );
-}
-
-function RoutesRoute() {
-  return <RouteTable />;
-}
-
-function TracesRoute() {
-  const overlays = useOverlays();
-  return <TraceList onAnalyze={overlays.setOverlayPacketHash} onViewNode={overlays.setOverlayNodeId} />;
-}
-
-function AnalyticsRoute() {
-  const search = useSearch({ from: "/analytics" });
-  const navigate = useNavigate();
-  return (
-    <StatsOverview
-      wsManager={wsManager}
-      statsTab={search.statsTab ?? "mesh"}
-      range={search.range ?? "7d"}
-      observerId={search.observerId ?? null}
-      onPatch={(updates) =>
-        navigate({
-          to: ".",
-          search: (prev) => {
-            const next = { ...prev };
-            for (const [key, value] of Object.entries(updates)) {
-              if (value == null) (next as Record<string, unknown>)[key] = undefined;
-              else (next as Record<string, unknown>)[key] = value;
-            }
-            return next;
-          },
-          replace: true,
-        })
-      }
-    />
-  );
-}
-
 // ── legacy deep-link redirects ───────────────────────────────────────────────────────────────
 // The app historically lived on /?tab=<name> with a pile of companion params. Those links exist
 // in copy/paste history and bookmarks, so the index route normalizes them to the path routes:
@@ -732,11 +490,11 @@ function legacyRedirect(search: Record<string, unknown>) {
   const observer = str(search.observer);
   const statsTabValue = str(search.statsTab);
   const statsTab = ["mesh", "talkers", "clockdrift", "observer", "graph"].includes(statsTabValue ?? "")
-    ? statsTabValue as StatsTab
+    ? statsTabValue as "mesh" | "talkers" | "clockdrift" | "observer" | "graph"
     : undefined;
   const observerId = str(search.observerId);
   const rangeValue = str(search.range);
-  const range = ["24h", "7d", "30d"].includes(rangeValue ?? "") ? rangeValue as StatsRange : undefined;
+  const range = ["24h", "7d", "30d"].includes(rangeValue ?? "") ? rangeValue as "24h" | "7d" | "30d" : undefined;
   // Carry the geographic filter + packet filters across the redirect so a deep link keeps its context.
   const regions = csv(search.regions);
   const iata = csv(search.iata).map((c) => c.toUpperCase());
@@ -821,7 +579,7 @@ const indexRoute = createRoute({
 const packetsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "packets",
-  component: PacketsRoute,
+  component: lazyRouteComponent(() => import("./routes/packets-route"), "PacketsRoute"),
 });
 
 
@@ -829,21 +587,21 @@ const channelsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "channels",
   validateSearch: validateChannelsSearch,
-  component: ChannelsRoute,
+  component: lazyRouteComponent(() => import("./routes/channels-route"), "ChannelsRoute"),
 });
 
 const mapRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "map",
   validateSearch: validateMapSearch,
-  component: MapRoute,
+  component: lazyRouteComponent(() => import("./routes/map-route"), "MapRoute"),
 });
 
 const nodesRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "nodes",
   validateSearch: validateNodesSearch,
-  component: NodesLayout,
+  component: lazyRouteComponent(() => import("./routes/nodes-route"), "NodesRoute"),
 });
 
 const nodeDetailRoute = createRoute({
@@ -858,14 +616,14 @@ const nodeDetailRoute = createRoute({
       context.queryClient.ensureQueryData(nodeQueries.neighbors(params.nodeId)),
     ]);
   },
-  component: NodeDetailRoute,
+  component: lazyRouteComponent(() => import("./routes/nodes-route"), "NodeDetailRoute"),
 });
 
 const observersRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "observers",
   validateSearch: validateObserversSearch,
-  component: ObserversLayout,
+  component: lazyRouteComponent(() => import("./routes/observers-route"), "ObserversRoute"),
 });
 
 const observerDetailRoute = createRoute({
@@ -877,27 +635,27 @@ const observerDetailRoute = createRoute({
       context.queryClient.ensureQueryData(observerQueries.adverts(params.observerId)),
     ]);
   },
-  component: ObserverDetailRoute,
+  component: lazyRouteComponent(() => import("./routes/observers-route"), "ObserverDetailRoute"),
 });
 
 const routesRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "routes",
-  component: RoutesRoute,
+  component: lazyRouteComponent(() => import("./routes/routes-route"), "RoutesRoute"),
 });
 
 const tracesRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "traces",
   validateSearch: validateTracesSearch,
-  component: TracesRoute,
+  component: lazyRouteComponent(() => import("./routes/traces-route"), "TracesRoute"),
 });
 
 const analyticsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "analytics",
   validateSearch: validateAnalyticsSearch,
-  component: AnalyticsRoute,
+  component: lazyRouteComponent(() => import("./routes/analytics-route"), "AnalyticsRoute"),
 });
 
 const routeTree = rootRoute.addChildren([
