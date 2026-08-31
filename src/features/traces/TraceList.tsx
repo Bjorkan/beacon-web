@@ -20,6 +20,8 @@ const TRACE_LIST_LIMIT = 200;
 interface TraceListProps {
   onAnalyze: (hash: string | null) => void;
   onViewNode?: (nodeId: string) => void;
+  typeFilter: "" | TraceType;
+  onTypeFilterChange: (value: "" | TraceType) => void;
 }
 
 // The list now carries the most complete observation's path, so we can show the hops (and the SNR we
@@ -88,11 +90,10 @@ function TraceTagCard({ tag, selected, onSelect }: {
   );
 }
 
-export function TraceList({ onAnalyze, onViewNode }: TraceListProps) {
+export function TraceList({ onAnalyze, onViewNode, typeFilter, onTypeFilterChange }: TraceListProps) {
   const { t } = useTranslation();
   const { iatas, regionKey } = useRegion();
   const [selectedTag, setSelectedTag] = useState<string | null>(null);
-  const [typeFilter, setTypeFilter] = useState<"" | TraceType>("");
   const typeOptions = [
     { value: "", label: t("common.all") },
     { value: "TRACE", label: "Trace" },
@@ -120,7 +121,7 @@ export function TraceList({ onAnalyze, onViewNode }: TraceListProps) {
           <Segmented
             options={typeOptions}
             value={typeFilter}
-            onChange={(v) => setTypeFilter(v as "" | TraceType)}
+            onChange={(v) => onTypeFilterChange(v as "" | TraceType)}
             ariaLabel={t("traces.type")}
           />
         </div>

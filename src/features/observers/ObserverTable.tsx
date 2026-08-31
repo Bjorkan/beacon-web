@@ -1,25 +1,19 @@
-import { useState, useCallback, useMemo } from "react";
+import { useMemo } from "react";
 import { type TFunction } from "i18next";
 import { useTranslation } from "react-i18next";
-import { useQuery, useQueryClient, type InfiniteData } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { brokerQueries, observerQueries } from "../../api/queries";
 import { useRegion } from "../../hooks/useRegion";
 import { useScopes } from "../../hooks/useScopes";
 import { useInfinitePages } from "../../hooks/useInfinitePages";
-import { patchInfinitePages } from "../../lib/infinite-pages";
-import { useWsObserverStatusHandler } from "../../hooks/useWsHandlers";
 import { formatHex, formatRadio } from "../../lib/formatters";
 import { Badge } from "../../components/Badge";
 import { DataTable, type Column, type SortState } from "../../components/DataTable";
 import { LoadingPill } from "../../components/LoadingPill";
 import { ObserverFilterBar } from "./ObserverFilterBar";
-import { observerListUpdateRequiresRefetch, patchObserverSummary } from "./observer-updates";
 import { deriveObserverStatus } from "./observer-status";
 import { useTick } from "../../hooks/useTick";
 import type { ObserverSummary } from "./types";
-import type { CursorPage } from "../../types/api";
-import type { WsManager } from "../../api/ws-manager";
-import type { WsObserverStatus } from "../../types/ws";
 
 const observerId = (o: ObserverSummary) => o.id; // stable id accessor for the paged hook's dedup
 
@@ -31,10 +25,22 @@ const OBSERVER_SORT_BY_HEADER = {
   Status: "status",
 } as const;
 
+export interface ObserverTableViewState {
+  search: string;
+  searchField: string;
+  statusFilter: string;
+  typeFilter: string;
+  brokerFilter: string;
+  scopeFilter: string;
+  sort: SortState;
+}
+
 interface ObserverTableProps {
-  wsManager: WsManager;
   selectedObserverId: string | null;
   onSelectObserver: (id: string | null) => void;
+  viewState: ObserverTableViewState;
+  onViewStateChange: (patch: Partial<ObserverTableViewState>, options?: { replace?: boolean }) => void;
+  onRowIntent?: (id: string) => void;
 }
 
 function observerColumns(t: TFunction): Column<ObserverSummary>[] {
@@ -108,17 +114,10 @@ function renderObserverCard(obs: ObserverSummary, t: TFunction) {
   );
 }
 
-export function ObserverTable({ wsManager, selectedObserverId, onSelectObserver }: ObserverTableProps) {
+export function ObserverTable({ selectedObserverId, onSelectObserver, viewState, onViewStateChange, onRowIntent }: ObserverTableProps) {
   const { t } = useTranslation();
   const { iatas, regionKey } = useRegion();
-  const queryClient = useQueryClient();
-  const [search, setSearch] = useState("");
-  const [searchField, setSearchField] = useState("name");
-  const [statusFilter, setStatusFilter] = useState("");
-  const [typeFilter, setTypeFilter] = useState("");
-  const [brokerFilter, setBrokerFilter] = useState("");
-  const [scopeFilter, setScopeFilter] = useState("");
-  const [sort, setSort] = useState<SortState>({ header: "Name", direction: "asc" });
+  const { search, searchField, statusFilter, typeFilter, brokerFilter, scopeFilter, sort } = viewState;
 
   useTick(); // keep recency-derived status badges fresh
 
@@ -166,56 +165,26 @@ export function ObserverTable({ wsManager, selectedObserverId, onSelectObserver 
   const scopeOptions = useScopes();
   const columns = useMemo(() => observerColumns(t), [t]);
 
-  // patch the live status into the paged cache (mirrors NodeTable). A brand-new observer not on any
-  // loaded page isn't pulled in here — it surfaces on the next reload/region switch (see the
-  // beacon-docs ticket about carrying the full summary in WS events for true live insertion).
-  const handleObserverStatus = useCallback(
-    (data: WsObserverStatus["data"]) => {
-      const cached = queryClient.getQueryData<InfiniteData<CursorPage<ObserverSummary>>>(listOptions.queryKey);
-      const previous = cached?.pages.flatMap((page) => page.items).find((observer) => observer.id === data.observerId);
-      if (previous && observerListUpdateRequiresRefetch(previous, data, {
-        sort: serverSort,
-        status: statusFilter || undefined,
-        type: typeFilter || undefined,
-        name: searchField === "name" ? search || undefined : undefined,
-        scope: scopeFilter || undefined,
-        iatas,
-      })) {
-        void queryClient.invalidateQueries({ queryKey: listOptions.queryKey, exact: true });
-      } else {
-        queryClient.setQueryData<InfiniteData<CursorPage<ObserverSummary>>>(
-          listOptions.queryKey,
-          (old) => patchInfinitePages(old, (items) => patchObserverSummary(items, data) ?? items),
-        );
-      }
-      // refresh detail panel if it's showing this observer
-      if (selectedObserverId === data.observerId) {
-        void queryClient.invalidateQueries({ queryKey: observerQueries.detail(data.observerId).queryKey });
-      }
-    },
-    [queryClient, listOptions, selectedObserverId, serverSort, statusFilter, typeFilter, searchField, search, scopeFilter, iatas],
-  );
 
-  useWsObserverStatusHandler(wsManager, handleObserverStatus);
 
   return (
     <div className="flex flex-1 min-h-0">
       <div className="relative flex flex-col flex-1 min-w-0">
         <ObserverFilterBar
           search={search}
-          onSearchChange={setSearch}
+          onSearchChange={(value) => onViewStateChange({ search: value }, { replace: true })}
           searchField={searchField}
-          onSearchFieldChange={setSearchField}
+          onSearchFieldChange={(value) => onViewStateChange({ searchField: value, search: "" })}
           statusFilter={statusFilter}
-          onStatusChange={setStatusFilter}
+          onStatusChange={(value) => onViewStateChange({ statusFilter: value })}
           typeFilter={typeFilter}
-          onTypeChange={setTypeFilter}
+          onTypeChange={(value) => onViewStateChange({ typeFilter: value })}
           typeOptions={typeOptions}
           brokerFilter={brokerFilter}
-          onBrokerChange={setBrokerFilter}
+          onBrokerChange={(value) => onViewStateChange({ brokerFilter: value })}
           brokerOptions={brokerNames}
           scopeFilter={scopeFilter}
-          onScopeChange={setScopeFilter}
+          onScopeChange={(value) => onViewStateChange({ scopeFilter: value })}
           scopeOptions={scopeOptions}
         />
 
@@ -228,7 +197,7 @@ export function ObserverTable({ wsManager, selectedObserverId, onSelectObserver 
           isLoading={isLoading}
           emptyLabel={t("entities.noObservers")}
           sort={sort}
-          onSortChange={setSort}
+          onSortChange={(value) => onViewStateChange({ sort: value })}
           sortMode="server"
           virtualize
           onEndReached={loadMore}

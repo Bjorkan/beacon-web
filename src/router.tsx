@@ -41,6 +41,12 @@ import { ChannelList } from "./features/channels/ChannelList";
 import { usePacketDetail } from "./features/packets/usePacketDetail";
 import { wsManager } from "./api/ws-instance";
 import { QueryWsBridge } from "./api/query-ws-bridge";
+import {
+  validateChannelsSearch,
+  validateNodesSearch,
+  validateObserversSearch,
+  validateTracesSearch,
+} from "./routes/search-contracts";
 import { parseMapViewSearch } from "./features/map/map-url";
 import type { PacketDetail } from "./types/api";
 import type { StatsRange, StatsTab } from "./features/stats/types";
@@ -819,6 +825,7 @@ const packetsRoute = createRoute({
 const channelsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "channels",
+  validateSearch: validateChannelsSearch,
   component: ChannelsRoute,
 });
 
@@ -832,6 +839,7 @@ const mapRoute = createRoute({
 const nodesRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "nodes",
+  validateSearch: validateNodesSearch,
   component: NodesLayout,
 });
 
@@ -844,6 +852,7 @@ const nodeDetailRoute = createRoute({
 const observersRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "observers",
+  validateSearch: validateObserversSearch,
   component: ObserversLayout,
 });
 
@@ -862,6 +871,7 @@ const routesRoute = createRoute({
 const tracesRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: "traces",
+  validateSearch: validateTracesSearch,
   component: TracesRoute,
 });
 

@@ -1,5 +1,5 @@
 import { useState, useCallback, useMemo, useEffect, useRef } from "react";
-import { useQuery, useQueryClient, type InfiniteData } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { channelQueries } from "../../api/queries";
 import { useRegion } from "../../hooks/useRegion";
 import { useIsMobile } from "../../hooks/useMediaQuery";
@@ -9,25 +9,29 @@ import { ChannelSidebar } from "./ChannelSidebar";
 import { ChannelFilterBar } from "./ChannelFilterBar";
 import { MessagePanel } from "./MessagePanel";
 import { filterChannels, type ChannelKeyFilter, type ChannelHashtagFilter } from "./channel-filters";
-import type { ChannelMessage, ChannelSummary } from "./types";
-import type { CursorPage } from "../../types/api";
+import type { ChannelMessage } from "./types";
 import type { WsManager } from "../../api/ws-manager";
+
+export interface ChannelListViewState {
+  search: string;
+  searchField: string;
+  keyFilter: ChannelKeyFilter;
+  hashtagFilter: ChannelHashtagFilter;
+}
 
 interface ChannelListProps {
   wsManager: WsManager;
   onAnalyze: (hash: string | null) => void;
+  viewState: ChannelListViewState;
+  onViewStateChange: (patch: Partial<ChannelListViewState>, options?: { replace?: boolean }) => void;
 }
 
-export function ChannelList({ wsManager, onAnalyze }: ChannelListProps) {
+export function ChannelList({ wsManager, onAnalyze, viewState, onViewStateChange }: ChannelListProps) {
   const { iatas, regionKey } = useRegion();
   const isMobile = useIsMobile();
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [heardCounts, setHeardCounts] = useState<Record<string, number>>({});
-  const [search, setSearch] = useState("");
-  const [searchField, setSearchField] = useState("name");
-  const [keyFilter, setKeyFilter] = useState<ChannelKeyFilter>("");
-  const [hashtagFilter, setHashtagFilter] = useState<ChannelHashtagFilter>("");
-  const queryClient = useQueryClient();
+  const { search, searchField, keyFilter, hashtagFilter } = viewState;
 
   const prevRegion = useRef(regionKey);
   useEffect(() => {
@@ -35,9 +39,6 @@ export function ChannelList({ wsManager, onAnalyze }: ChannelListProps) {
       prevRegion.current = regionKey;
       setSelectedId(null);
       setHeardCounts({});
-      setSearch("");
-      setKeyFilter("");
-      setHashtagFilter("");
     }
   }, [regionKey]);
 
@@ -72,41 +73,16 @@ export function ChannelList({ wsManager, onAnalyze }: ChannelListProps) {
 
   const handleChannelMessage = useCallback(
     (data: ChannelMessage) => {
-      // bump lastSeen, or refetch the list if this is a channel we haven't seen yet
-      queryClient.setQueryData<ChannelSummary[]>(channelQueries.list({ regionKey, iatas }).queryKey, (old) => {
-        if (!old) return old;
-        const idx = old.findIndex((ch) => ch.channelHash === data.channelHash);
-        if (idx === -1) {
-          queryClient.invalidateQueries({ queryKey: channelQueries.all() });
-          return old;
-        }
-        const updated = [...old];
-        updated[idx] = { ...updated[idx]!, lastSeen: data.sentAt };
-        return updated;
-      });
-
-      // use cache directly to avoid stale closure over selectedChannel
-      const cached = queryClient.getQueryData<ChannelSummary[]>(channelQueries.list({ regionKey, iatas }).queryKey);
-      const selected = cached?.find((ch) => ch.id === selectedId);
-      if (selected && data.channelHash === selected.channelHash) {
-        // same message, multiple observer paths — count the reach
+      // Shared channel/message Query caches are synchronized by QueryWsBridge. This route-owned
+      // listener only tracks ephemeral reach for the thread currently on screen.
+      if (selectedChannel && data.channelHash === selectedChannel.channelHash) {
         setHeardCounts((prev) => ({
           ...prev,
           [data.packetHash]: (prev[data.packetHash] ?? 0) + 1,
         }));
-        // append to the newest InfiniteData page; MessagePanel re-sorts by sentAt, so the page is arbitrary
-        queryClient.setQueryData<InfiniteData<CursorPage<ChannelMessage>>>(
-          channelQueries.messages({ channelId: selectedId ?? undefined, regionKey, iatas }).queryKey,
-          (old) => {
-            if (!old) return old;
-            if (old.pages.some((p) => p.items.some((msg) => msg.packetHash === data.packetHash))) return old;
-            const pages = old.pages.map((p, i) => (i === 0 ? { ...p, items: [...p.items, data] } : p));
-            return { ...old, pages };
-          },
-        );
       }
     },
-    [queryClient, selectedId, regionKey, iatas],
+    [selectedChannel],
   );
 
   useWsChannelMessageHandler(wsManager, handleChannelMessage);
@@ -119,13 +95,13 @@ export function ChannelList({ wsManager, onAnalyze }: ChannelListProps) {
       {showList && (
         <ChannelFilterBar
           search={search}
-          onSearchChange={setSearch}
+          onSearchChange={(value) => onViewStateChange({ search: value }, { replace: true })}
           searchField={searchField}
-          onSearchFieldChange={setSearchField}
+          onSearchFieldChange={(value) => onViewStateChange({ searchField: value, search: "" })}
           keyFilter={keyFilter}
-          onKeyChange={setKeyFilter}
+          onKeyChange={(value) => onViewStateChange({ keyFilter: value })}
           hashtagFilter={hashtagFilter}
-          onHashtagChange={setHashtagFilter}
+          onHashtagChange={(value) => onViewStateChange({ hashtagFilter: value })}
         />
       )}
       <div className="flex flex-1 min-h-0">

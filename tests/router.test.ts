@@ -89,4 +89,80 @@ describe("application routes", () => {
     expect(router.state.location.pathname).toBe("/packets");
     expect(routeSearch(router).types).toEqual([4]);
   });
+
+  it("validates Nodes, Observers, Channels, and Traces list state from URLs", async () => {
+    const nodes = await routerAt("/nodes?nq=alice&nsf=pubkey&nt=REPEATER&np=true&ntr=false&ns=%23east&nsort=radio&ndir=desc");
+    expect(routeSearch(nodes)).toMatchObject({
+      nq: "alice", nsf: "pubkey", nt: "REPEATER", np: "true", ntr: "false",
+      ns: "#east", nsort: "radio", ndir: "desc",
+    });
+
+    const observers = await routerAt("/observers?oq=raven&ost=offline&ot=mqtt&ob=broker-1&os=%23west&osort=status&odir=desc");
+    expect(routeSearch(observers)).toMatchObject({
+      oq: "raven", ost: "offline", ot: "mqtt", ob: "broker-1", os: "#west",
+      osort: "status", odir: "desc",
+    });
+
+    const channels = await routerAt("/channels?cq=ops&csf=hash&ck=known&ch=false");
+    expect(routeSearch(channels)).toMatchObject({ cq: "ops", csf: "hash", ck: "known", ch: "false" });
+
+    const traces = await routerAt("/traces?tt=PING");
+    expect(routeSearch(traces).tt).toBe("PING");
+  });
+
+  it("falls back safely for invalid list params", async () => {
+    const nodes = await routerAt("/nodes?nsf=anything&np=maybe&ntr=yes&nsort=last_seen&ndir=sideways");
+    expect(routeSearch(nodes)).toMatchObject({
+      nsf: undefined,
+      np: undefined,
+      ntr: undefined,
+      nsort: undefined,
+      ndir: undefined,
+    });
+
+    const observers = await routerAt("/observers?ost=away&osort=unknown&odir=sideways");
+    expect(routeSearch(observers)).toMatchObject({ ost: undefined, osort: undefined, odir: undefined });
+    const channels = await routerAt("/channels?csf=id&ck=maybe&ch=yes");
+    expect(routeSearch(channels)).toMatchObject({ csf: undefined, ck: undefined, ch: undefined });
+    const traces = await routerAt("/traces?tt=UNKNOWN");
+    expect(routeSearch(traces).tt).toBeUndefined();
+  });
+
+  it("reproduces configured list state after reload", async () => {
+    const first = await routerAt("/nodes");
+    await first.navigate({
+      to: "/nodes",
+      search: (prev) => ({ ...prev, nq: "alice", nt: "REPEATER", nsort: "radio", ndir: "desc" }),
+    });
+
+    const reloaded = await routerAt(first.state.location.href);
+    expect(routeSearch(reloaded)).toMatchObject({ nq: "alice", nt: "REPEATER", nsort: "radio", ndir: "desc" });
+  });
+
+  it("restores list filters and sorting through Back and Forward", async () => {
+    const router = await routerAt("/nodes");
+    await router.navigate({ to: "/nodes", search: (prev) => ({ ...prev, nt: "REPEATER" }) });
+    await router.navigate({ to: "/nodes", search: (prev) => ({ ...prev, nsort: "radio", ndir: "desc" }) });
+
+    router.history.back();
+    await router.load();
+    expect(routeSearch(router)).toMatchObject({ nt: "REPEATER", nsort: undefined, ndir: undefined });
+
+    router.history.forward();
+    await router.load();
+    expect(routeSearch(router)).toMatchObject({ nt: "REPEATER", nsort: "radio", ndir: "desc" });
+  });
+
+  it("keeps repeated text-search replacements out of browser history", async () => {
+    const router = await routerAt("/nodes");
+    await router.navigate({ to: "/nodes", search: (prev) => ({ ...prev, nt: "REPEATER" }) });
+    for (const nq of ["a", "al", "ali", "alice"]) {
+      await router.navigate({ to: "/nodes", replace: true, search: (prev) => ({ ...prev, nq }) });
+    }
+
+    router.history.back();
+    await router.load();
+    expect(routeSearch(router).nt).toBeUndefined();
+    expect(routeSearch(router).nq).toBeUndefined();
+  });
 });

@@ -1,7 +1,7 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { TraceList } from "../../../src/features/traces/TraceList";
 import { RegionProvider } from "../../../src/hooks/useRegion";
 import { ALL_REGIONS } from "../../../src/hooks/region-selection";
@@ -38,7 +38,17 @@ function renderTraces(onAnalyze = vi.fn()) {
       <RegionProvider defaultSelection={ALL_REGIONS}>{children}</RegionProvider>
     </QueryClientProvider>
   );
-  render(<TraceList onAnalyze={onAnalyze} />, { wrapper });
+  function TraceHarness() {
+    const [typeFilter, setTypeFilter] = useState<"" | "TRACE" | "PING">("");
+    return (
+      <TraceList
+        onAnalyze={onAnalyze}
+        typeFilter={typeFilter}
+        onTypeFilterChange={setTypeFilter}
+      />
+    );
+  }
+  render(<TraceHarness />, { wrapper });
   return { onAnalyze };
 }
 

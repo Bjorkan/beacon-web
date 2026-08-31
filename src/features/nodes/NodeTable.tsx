@@ -1,14 +1,11 @@
-import { useState, useCallback, useMemo } from "react";
+import { useCallback, useMemo } from "react";
 import { type TFunction } from "i18next";
 import { useTranslation } from "react-i18next";
-import { useQueryClient, type InfiniteData } from "@tanstack/react-query";
 import { nodeQueries } from "../../api/queries";
 import { useRegion } from "../../hooks/useRegion";
 import { useScopes } from "../../hooks/useScopes";
 import { useTick } from "../../hooks/useTick";
 import { useInfinitePages } from "../../hooks/useInfinitePages";
-import { patchInfinitePages } from "../../lib/infinite-pages";
-import { useWsNodeUpdateHandler } from "../../hooks/useWsHandlers";
 import { formatHex, timeAgoMs, formatRadio } from "../../lib/formatters";
 import { Badge } from "../../components/Badge";
 import { Tooltip } from "../../components/Tooltip";
@@ -17,11 +14,7 @@ import { DataTable, type Column, type SortState } from "../../components/DataTab
 import { LoadingPill } from "../../components/LoadingPill";
 import { NodeFilterBar, type MultibyteFilter } from "./NodeFilterBar";
 import { nodeSearchParams } from "./node-search";
-import { nodeListUpdateRequiresRefetch, patchNodeTableSummary } from "./node-updates";
 import type { NodeSummary } from "./types";
-import type { CursorPage } from "../../types/api";
-import type { WsManager } from "../../api/ws-manager";
-import type { WsNodeUpdate } from "../../types/ws";
 
 const nodeId = (n: NodeSummary) => n.id; // stable id accessor for the paged hook's dedup
 
@@ -32,11 +25,22 @@ const NODE_SORT_BY_HEADER = {
   Neighbors: "neighbors",
 } as const;
 
+export interface NodeTableViewState {
+  typeFilter: string;
+  pathsFilter: MultibyteFilter;
+  tracesFilter: MultibyteFilter;
+  scopeFilter: string;
+  sort: SortState;
+  search: string;
+  searchField: string;
+}
+
 interface NodeTableProps {
-  wsManager: WsManager;
-  // shared with the Map tab (lifted to AppInner) so the detail panel persists across tab switches
   selectedNodeId: string | null;
   onSelectNode: (id: string | null) => void;
+  viewState: NodeTableViewState;
+  onViewStateChange: (patch: Partial<NodeTableViewState>, options?: { replace?: boolean }) => void;
+  onRowIntent?: (id: string) => void;
 }
 
 function nodeColumns(t: TFunction): Column<NodeSummary>[] {
@@ -144,25 +148,17 @@ function renderNodeCard(node: NodeSummary, t: TFunction) {
   );
 }
 
-export function NodeTable({ wsManager, selectedNodeId, onSelectNode }: NodeTableProps) {
+export function NodeTable({ selectedNodeId, onSelectNode, viewState, onViewStateChange, onRowIntent }: NodeTableProps) {
   const { t } = useTranslation();
   const { iatas, regionKey } = useRegion();
-  const queryClient = useQueryClient();
-  const [typeFilter, setTypeFilter] = useState("");
-  const [pathsFilter, setPathsFilter] = useState<MultibyteFilter>("");
-  const [tracesFilter, setTracesFilter] = useState<MultibyteFilter>("");
-  const [scopeFilter, setScopeFilter] = useState("");
-  const [sort, setSort] = useState<SortState>({ header: "Name", direction: "asc" });
-  const [search, setSearch] = useState("");
-  const [searchField, setSearchField] = useState("name");
+  const { typeFilter, pathsFilter, tracesFilter, scopeFilter, sort, search, searchField } = viewState;
 
   useTick();
 
   // switching the field flips what the box means (a name vs a hex prefix), so stale text mustn't carry over
   const handleSearchFieldChange = useCallback((field: string) => {
-    setSearchField(field);
-    setSearch("");
-  }, []);
+    onViewStateChange({ searchField: field, search: "" });
+  }, [onViewStateChange]);
 
   // derive the actual server params (name vs pubkeyPrefix, hex-guarded) and key the query on THOSE,
   // so toggling the field with an empty box is a no-op and a name never gets sent as a hex prefix
@@ -198,52 +194,24 @@ export function NodeTable({ wsManager, selectedNodeId, onSelectNode }: NodeTable
   const scopeOptions = useScopes();
   const columns = useMemo(() => nodeColumns(t), [t]);
 
-  const handleNodeUpdate = useCallback(
-    (data: WsNodeUpdate["data"]) => {
-      const cached = queryClient.getQueryData<InfiniteData<CursorPage<NodeSummary>>>(listOptions.queryKey);
-      const previous = cached?.pages.flatMap((page) => page.items).find((node) => node.id === data.nodeId);
-      if (previous && nodeListUpdateRequiresRefetch(previous, data, {
-        sort: serverSort,
-        type: typeFilter || undefined,
-        name: nameParam || undefined,
-        pubkeyPrefix: pubkeyPrefixParam || undefined,
-        scope: scopeFilter || undefined,
-        iatas,
-      })) {
-        // Server owns ordering/filter membership. Rare changes to either invalidate this exact
-        // active list rather than leaving a keyset-paginated cache in an impossible order.
-        void queryClient.invalidateQueries({ queryKey: listOptions.queryKey, exact: true });
-      } else {
-        queryClient.setQueryData<InfiniteData<CursorPage<NodeSummary>>>(
-          listOptions.queryKey,
-          (old) => patchInfinitePages(old, (items) => patchNodeTableSummary(items, data) ?? items),
-        );
-      }
-      if (selectedNodeId === data.nodeId) {
-        void queryClient.invalidateQueries({ queryKey: nodeQueries.detail(data.nodeId).queryKey });
-      }
-    },
-    [queryClient, listOptions, selectedNodeId, serverSort, typeFilter, nameParam, pubkeyPrefixParam, scopeFilter, iatas],
-  );
 
-  useWsNodeUpdateHandler(wsManager, handleNodeUpdate);
 
   return (
     <div className="flex flex-1 min-h-0">
       <div className="relative flex flex-col flex-1 min-w-0">
         <NodeFilterBar
           search={search}
-          onSearchChange={setSearch}
+          onSearchChange={(value) => onViewStateChange({ search: value }, { replace: true })}
           searchField={searchField}
           onSearchFieldChange={handleSearchFieldChange}
           typeFilter={typeFilter}
-          onTypeChange={setTypeFilter}
+          onTypeChange={(value) => onViewStateChange({ typeFilter: value })}
           pathsFilter={pathsFilter}
-          onPathsChange={setPathsFilter}
+          onPathsChange={(value) => onViewStateChange({ pathsFilter: value })}
           tracesFilter={tracesFilter}
-          onTracesChange={setTracesFilter}
+          onTracesChange={(value) => onViewStateChange({ tracesFilter: value })}
           scopeFilter={scopeFilter}
-          onScopeChange={setScopeFilter}
+          onScopeChange={(value) => onViewStateChange({ scopeFilter: value })}
           scopeOptions={scopeOptions}
         />
 
@@ -256,7 +224,7 @@ export function NodeTable({ wsManager, selectedNodeId, onSelectNode }: NodeTable
           isLoading={isLoading}
           emptyLabel={t("entities.noNodes")}
           sort={sort}
-          onSortChange={setSort}
+          onSortChange={(value) => onViewStateChange({ sort: value })}
           sortMode="server"
           virtualize
           onEndReached={loadMore}
