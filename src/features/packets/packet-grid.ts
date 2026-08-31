@@ -3,4 +3,4 @@
 // identity cell, hops+hash-size share one diagnostic cell, and the freed width becomes the inline
 // path column rather than making the table wider.
 export const GRID_TEMPLATE =
-  "1.25rem 5rem 5.75rem 7rem minmax(8rem, 0.9fr) minmax(11rem, 1.35fr) 3.25rem 5.25rem 5.5rem";
+  "1.25rem 4.75rem 5.25rem 5.75rem minmax(5.75rem, 0.8fr) minmax(7.75rem, 1.2fr) 2.75rem 4.25rem 4rem";

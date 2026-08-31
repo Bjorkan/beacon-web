@@ -6,7 +6,7 @@ export function PacketTableHeader() {
   const { t } = useTranslation();
   return (
     <div
-      className="hidden md:grid sticky top-0 z-10 gap-x-3 px-3 py-1 bg-bg-surface border-b border-border text-[9px] uppercase tracking-wider text-text-muted"
+      className="hidden md:grid sticky top-0 z-10 gap-x-2 px-2 py-1 bg-bg-surface border-b border-border text-[9px] uppercase tracking-wider text-text-muted"
       style={{ gridTemplateColumns: GRID_TEMPLATE }}
     >
       <span aria-hidden />

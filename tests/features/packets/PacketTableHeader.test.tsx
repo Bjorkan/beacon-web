@@ -27,6 +27,12 @@ describe("PacketTableHeader", () => {
     expect(GRID_TEMPLATE).not.toMatch(/auto|min-content|max-content|fit-content/);
   });
 
+  it("does not exceed the previous 42.75rem minimum track width", () => {
+    const minimumRem = [...GRID_TEMPLATE.matchAll(/(?:minmax\()?([\d.]+)rem/g)]
+      .reduce((sum, match) => sum + Number(match[1]), 0);
+    expect(minimumRem).toBeLessThanOrEqual(42.75);
+  });
+
   it("leaves the leading chevron-alignment cell unlabeled", () => {
     const { container } = render(<PacketTableHeader />);
     const first = container.firstElementChild?.children[0];

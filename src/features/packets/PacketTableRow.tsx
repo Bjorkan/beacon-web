@@ -40,7 +40,7 @@ export function PacketTableRow({ packet, expanded, isFresh, onToggle }: PacketTa
         type="button"
         onClick={onToggle}
         aria-expanded={expanded}
-        className="grid w-full items-center gap-x-3 px-3 py-1 text-left text-[11px] cursor-pointer"
+        className="grid w-full items-center gap-x-2 px-2 py-1 text-left text-[11px] cursor-pointer"
         style={{ gridTemplateColumns: GRID_TEMPLATE }}
       >
         <span className={`text-text-dim transition-transform ${expanded ? "rotate-90" : ""}`} aria-hidden>
