@@ -60,6 +60,13 @@ beforeEach(() => {
 });
 
 describe("RouteTable search", () => {
+  it("allows the route root to shrink inside the mobile flex chain", async () => {
+    renderTable();
+    await screen.findByText("Find path");
+    const root = screen.getByText("Find path").closest(".flex.flex-col.flex-1");
+    expect(root).toHaveClass("min-w-0", "w-full");
+  });
+
   it("searches within a single IATA when exactly one IATA is selected", async () => {
     renderTable();
     await screen.findByText("Find path");

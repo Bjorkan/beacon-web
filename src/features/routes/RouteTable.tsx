@@ -244,7 +244,7 @@ export function RouteTable() {
   };
 
   return (
-    <div className="flex flex-col flex-1 min-h-0">
+    <div className="flex flex-col flex-1 min-h-0 min-w-0 w-full">
       {/* stacks into two rows on mobile (the inputs would otherwise wrap around the arrow); one row at md+ */}
       <div className="flex flex-col md:flex-row md:flex-wrap md:items-center gap-1.5 gap-y-1.5 px-4 py-2 border-b border-border-subtle bg-bg-base shrink-0">
         <div className="flex items-center gap-1.5">

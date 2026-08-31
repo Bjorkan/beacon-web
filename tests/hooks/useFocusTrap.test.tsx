@@ -1,5 +1,5 @@
 import { useRef, type ReactNode } from "react";
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import { useFocusTrap } from "../../src/hooks/useFocusTrap";
 
@@ -28,6 +28,27 @@ function Harness({ trapped }: { trapped: boolean }) {
 }
 
 describe("useFocusTrap", () => {
+  it("uses preventScroll for entry, wrapping, and focus restoration", () => {
+    const focus = vi.spyOn(HTMLElement.prototype, "focus");
+    const { rerender } = render(<Harness trapped={false} />);
+    screen.getByTestId("outside").focus();
+    focus.mockClear();
+
+    rerender(<Harness trapped />);
+    expect(focus).toHaveBeenLastCalledWith({ preventScroll: true });
+    focus.mockClear();
+
+    screen.getByTestId("last").focus();
+    focus.mockClear();
+    fireEvent.keyDown(screen.getByTestId("last"), { key: "Tab" });
+    expect(focus).toHaveBeenLastCalledWith({ preventScroll: true });
+    focus.mockClear();
+
+    rerender(<Harness trapped={false} />);
+    expect(focus).toHaveBeenLastCalledWith({ preventScroll: true });
+    focus.mockRestore();
+  });
+
   it("focuses the container itself on mount (so the dialog name is announced before its controls)", () => {
     render(<Harness trapped={true} />);
     expect(document.activeElement).toBe(screen.getByTestId("dialog"));

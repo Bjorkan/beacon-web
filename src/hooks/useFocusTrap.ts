@@ -22,7 +22,7 @@ export function useFocusTrap<T extends HTMLElement>(ref: RefObject<T | null>): v
     const focusable = () => Array.from(node.querySelectorAll<HTMLElement>(FOCUSABLE));
     // Focus the dialog itself (it carries tabIndex={-1}) so a screen reader announces its name before
     // the first Tab moves into the controls.
-    node.focus();
+    node.focus({ preventScroll: true });
 
     function onKeyDown(e: KeyboardEvent) {
       if (e.key !== "Tab") return;
@@ -36,10 +36,10 @@ export function useFocusTrap<T extends HTMLElement>(ref: RefObject<T | null>): v
       // node itself holds focus right after open — Shift+Tab from there must wrap, not escape
       if (e.shiftKey && (document.activeElement === first || document.activeElement === node)) {
         e.preventDefault();
-        last.focus();
+        last.focus({ preventScroll: true });
       } else if (!e.shiftKey && document.activeElement === last) {
         e.preventDefault();
-        first.focus();
+        first.focus({ preventScroll: true });
       }
     }
 
@@ -48,7 +48,7 @@ export function useFocusTrap<T extends HTMLElement>(ref: RefObject<T | null>): v
       node.removeEventListener("keydown", onKeyDown);
       // Only return focus to a real, still-connected trigger. If the modal was opened from a click that
       // left focus on <body>, restoring would blur wherever the user has since moved.
-      if (restoreTo && restoreTo !== document.body && document.contains(restoreTo)) restoreTo.focus();
+      if (restoreTo && restoreTo !== document.body && document.contains(restoreTo)) restoreTo.focus({ preventScroll: true });
     };
   }, [ref]);
 }

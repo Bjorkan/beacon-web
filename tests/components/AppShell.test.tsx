@@ -63,7 +63,7 @@ describe("AppShell", () => {
 
   it("keeps the primary header controls visible and hides GitHub when mobile space is tight", () => {
     vi.mocked(getIatas).mockResolvedValue([]);
-    renderShell();
+    const { container } = renderShell();
 
     expect(screen.getByRole("img", { name: "Meshat.se" }).parentElement).toHaveClass(
       "min-w-0",
@@ -82,6 +82,7 @@ describe("AppShell", () => {
       "shrink-0",
     );
     expect(screen.getByRole("link", { name: "GitHub" })).toHaveClass("hidden", "sm:inline-flex", "shrink-0");
+    expect(container.querySelector("main")).toHaveClass("min-w-0");
   });
 });
 
