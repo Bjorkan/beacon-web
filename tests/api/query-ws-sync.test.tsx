@@ -93,6 +93,21 @@ describe("global WebSocket to Query cache policy", () => {
     expect(client.getQueryState(nodeKey)?.observers).toBeUndefined();
   });
 
+  it("invalidates every neighbor cache when a node moves", () => {
+    const client = new QueryClient();
+    const ownNeighborsKey = nodeQueries.neighbors(node.id).queryKey;
+    const otherNeighborsKey = nodeQueries.neighbors("node-2").queryKey;
+    client.setQueryData(ownNeighborsKey, []);
+    client.setQueryData(otherNeighborsKey, [{ ...node }]);
+
+    syncNodeUpdate(client, nodeUpdate());
+    expect(client.getQueryState(ownNeighborsKey)?.isInvalidated).toBe(true);
+    expect(client.getQueryState(otherNeighborsKey)?.isInvalidated).toBe(false);
+
+    syncNodeUpdate(client, nodeUpdate({ lat: 46, lng: -76 }));
+    expect(client.getQueryState(otherNeighborsKey)?.isInvalidated).toBe(true);
+  });
+
   it("invalidates server-sorted or filtered lists when a direct patch could break membership/order", () => {
     const client = new QueryClient();
     const nodeKey = nodeQueries.list({ regionKey: "YOW", iatas: ["YOW"], name: "alp", sort: "name" }).queryKey;

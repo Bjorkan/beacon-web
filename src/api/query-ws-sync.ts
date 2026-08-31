@@ -24,12 +24,30 @@ function invalidateExact(queryClient: QueryClient, queryKey: QueryKey) {
   void queryClient.invalidateQueries({ queryKey, exact: true, refetchType: "active" });
 }
 
+function nodeCoordinatesChanged(
+  previous: { lat?: number | null; lng?: number | null } | undefined,
+  data: WsNodeUpdate["data"],
+): boolean {
+  if (!previous) return false;
+  return (data.lat !== undefined && data.lat !== previous.lat)
+    || (data.lng !== undefined && data.lng !== previous.lng);
+}
+
 export function syncNodeUpdate(queryClient: QueryClient, data: WsNodeUpdate["data"]): void {
+  let coordinatesChanged = false;
+
+  // A focused neighbor may sit outside the currently loaded map region, so its only cached copy can
+  // be inside another node's detailed neighbor response. Inspect those before patching map/list data.
+  for (const [, neighbors] of queryClient.getQueriesData<Array<{ id: string; lat?: number; lng?: number }>>({ queryKey: ["node-neighbors"] })) {
+    coordinatesChanged ||= nodeCoordinatesChanged(neighbors?.find((node) => node.id === data.nodeId), data);
+  }
+
   // Map caches exist per region. Keep known/current-region entries hot; invalidate a cache when
   // membership may have changed instead of ever inserting an out-of-region node.
   for (const [queryKey, cached] of queryClient.getQueriesData<InfiniteData<CursorPage<NodeSummary>>>({ queryKey: ["map-nodes"] })) {
     const regionIatas = iatasFromRegionKey(queryKey[1]);
     const old = cached?.pages.flatMap((page) => page.items).find((node) => node.id === data.nodeId);
+    coordinatesChanged ||= nodeCoordinatesChanged(old, data);
     const belongs = intersects(regionIatas, data.iatas.map((entry) => entry.iata));
     if (old && !belongs) {
       invalidateExact(queryClient, queryKey);
@@ -41,6 +59,7 @@ export function syncNodeUpdate(queryClient: QueryClient, data: WsNodeUpdate["dat
   for (const [queryKey, cached] of queryClient.getQueriesData<InfiniteData<CursorPage<NodeSummary>>>({ queryKey: nodeQueries.all() })) {
     if (queryKey[0] !== "nodes") continue;
     const previous = cached?.pages.flatMap((page) => page.items).find((node) => node.id === data.nodeId);
+    coordinatesChanged ||= nodeCoordinatesChanged(previous, data);
     const regionIatas = iatasFromRegionKey(queryKey[1]);
     if (!previous) {
       if (intersects(regionIatas, data.iatas.map((entry) => entry.iata))) invalidateExact(queryClient, queryKey);
@@ -66,7 +85,13 @@ export function syncNodeUpdate(queryClient: QueryClient, data: WsNodeUpdate["dat
   }
 
   invalidateExact(queryClient, nodeQueries.detail(data.nodeId).queryKey);
-  invalidateExact(queryClient, nodeQueries.neighbors(data.nodeId).queryKey);
+  if (coordinatesChanged) {
+    // A moved node can be present in any other node's cached neighbor response. Invalidate the
+    // whole family so focused map markers and edges cannot retain its previous coordinates.
+    void queryClient.invalidateQueries({ queryKey: ["node-neighbors"], refetchType: "active" });
+  } else {
+    invalidateExact(queryClient, nodeQueries.neighbors(data.nodeId).queryKey);
+  }
 }
 
 export function syncObserverStatus(queryClient: QueryClient, data: WsObserverStatus["data"]): void {
