@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { useQuery, useQueryClient, type InfiniteData } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { useMapLibre } from "./useMapLibre";
 import { useMapNodes } from "./useMapNodes";
@@ -21,13 +21,8 @@ import { EmptyState } from "../../components/EmptyState";
 import { LoadingPill } from "../../components/LoadingPill";
 import { useRegion } from "../../hooks/useRegion";
 import { useTheme } from "../../hooks/useTheme";
-import { useWsNodeUpdateHandler } from "../../hooks/useWsHandlers";
 import { iataQueries, nodeQueries } from "../../api/queries";
-import { upsertNodePages } from "../nodes/node-updates";
 import type { WsManager } from "../../api/ws-manager";
-import type { NodeSummary } from "../nodes/types";
-import type { CursorPage } from "../../types/api";
-import type { WsNodeUpdate } from "../../types/ws";
 
 const EMPTY_EDGES: FeatureCollection<LineString, NeighborEdgeProps> = { type: "FeatureCollection", features: [] };
 
@@ -94,7 +89,6 @@ export function MapView({ wsManager, selectedNodeId, onSelectNode, onOpenPacket,
   );
 
   const { iatas: selectedIatas, regionKey } = useRegion();
-  const queryClient = useQueryClient();
   // marker/cluster icons are canvas-drawn from the active --palette-* vars, so useMapNodes has to
   // re-register them whenever the palette changes: on a theme switch, and once on load when the async
   // themes populate (from [] -> filled).
@@ -106,26 +100,10 @@ export function MapView({ wsManager, selectedNodeId, onSelectNode, onOpenPacket,
   const { data: iatas } = useQuery(iataQueries.list());
 
   // nodes for the selected region (its own key, independent of the Nodes-table filters/page cap).
-  // Pages in 50 at a time so the map fills batch by batch; nodesKey matches the hook's query key.
-  const nodesKey = useMemo(() => ["map-nodes", regionKey], [regionKey]);
+  // Pages in 50 at a time so the map fills batch by batch.
   const { nodes, loadedCount, isPaging, isError: nodesError } = useMapNodesData(selectedIatas, regionKey);
 
-  // patch-or-insert the live update into the paged node cache (the shared helper preserves refs
-  // when nothing changed, so a same-values re-advert doesn't trigger a full map repaint); brand-new
-  // nodes are appended from the event itself since the cache never refetches on its own.
-  const handleNodeUpdate = useCallback(
-    (data: WsNodeUpdate["data"]) => {
-      queryClient.setQueryData<InfiniteData<CursorPage<NodeSummary>>>(nodesKey, (old) =>
-        upsertNodePages(old, data),
-      );
-      // mirror NodeTable: refresh the shared detail panel when the open node changes live
-      if (selectedNodeId === data.nodeId) {
-        queryClient.invalidateQueries({ queryKey: nodeQueries.detail(data.nodeId).queryKey });
-      }
-    },
-    [queryClient, nodesKey, selectedNodeId],
-  );
-  useWsNodeUpdateHandler(wsManager, handleNodeUpdate);
+
 
   // split memos: rebuild the FeatureCollection only when nodes change; a type-filter change just
   // re-filters the already-built collection instead of re-running the full transform over all nodes

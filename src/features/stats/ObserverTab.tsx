@@ -14,8 +14,6 @@ import { deriveObserverStatus } from "../observers/observer-status";
 import { airtimeOption, batteryOption, noiseFloorOption, queueOption, receiveErrorsOption } from "./chartOptions";
 import { Card, ChartCard } from "./cards";
 import { hasTelemetry } from "./transforms";
-import { useLiveObserver } from "./useLiveStats";
-import type { WsManager } from "../../api/ws-manager";
 import type { Observer } from "../observers/types";
 import type { StatsRange } from "./types";
 
@@ -157,13 +155,11 @@ interface ObserverTabProps {
   range: StatsRange;
   selectedObserverId: string | null;
   onSelectObserver: (observerId: string) => void;
-  wsManager: WsManager;
 }
 
-export function ObserverTab({ range, selectedObserverId, onSelectObserver, wsManager }: ObserverTabProps) {
+export function ObserverTab({ range, selectedObserverId, onSelectObserver }: ObserverTabProps) {
   const { t } = useTranslation();
   const colors = useChartColors();
-  useLiveObserver(wsManager, selectedObserverId, range);
   const topObservers = useTopObservers(range, 15);
   const observer = useObserver(selectedObserverId);
   const telemetry = useObserverTelemetry(selectedObserverId, range);

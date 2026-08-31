@@ -1,5 +1,5 @@
-import { useState, useEffect, useCallback, useMemo, useSyncExternalStore } from "react";
-import { useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
+import { useState, useCallback, useMemo, useSyncExternalStore } from "react";
+import { useInfiniteQuery } from "@tanstack/react-query";
 import { packetQueries } from "../../api/queries";
 import { useRegion } from "../../hooks/useRegion";
 import type { WsPacketObservation, WsLagged } from "../../types/ws";
@@ -124,7 +124,6 @@ class LivePacketStore {
 
 export function usePackets(frozen: boolean = false, serverFilter: PacketServerFilter | null = null) {
   const { iatas, regionKey } = useRegion();
-  const queryClient = useQueryClient();
   const [store] = useState(() => new LivePacketStore());
   const [laggedCount, setLaggedCount] = useState(0);
 
@@ -180,23 +179,10 @@ export function usePackets(frozen: boolean = false, serverFilter: PacketServerFi
     [store],
   );
 
-  // Reset (drop to one fresh first page) instead of invalidate: an invalidate replays every cached
-  // page sequentially — up to 20 requests per lag notice during a flood. The 2-element key matches
-  // filtered variants by prefix, so those reset too.
-  const handleLagged = useCallback(
-    (data: WsLagged) => {
-      setLaggedCount((prev) => prev + data.droppedCount);
-      queryClient.resetQueries({ queryKey: packetQueries.all() });
-    },
-    [queryClient],
-  );
-
-  // The WS handler is down whenever this tab is unmounted, so cached history may hide a gap right
-  // where the live buffer begins. Refresh the first page on mount to close it (prefix match:
-  // filtered variants included).
-  useEffect(() => {
-    queryClient.resetQueries({ queryKey: packetQueries.all() });
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- mount only; region changes refetch via the key
+  // QueryWsBridge owns shared history healing on lag/reconnect. This route-local callback only
+  // maintains the user-visible dropped-event counter.
+  const handleLagged = useCallback((data: WsLagged) => {
+    setLaggedCount((prev) => prev + data.droppedCount);
   }, []);
 
   const dismissLagged = useCallback(() => setLaggedCount(0), []);

@@ -5,9 +5,7 @@ import { useChartColors, nodeTypeColor } from "./chartTheme";
 import { useStatsOverview, useStatsObservations, usePayloadBreakdown, useTopNodes, useTopObservers, useRadioPresets, useScopes, useNodeTypes } from "./useStats";
 import { observationsAreaOption, leaderboardOption, typeBarOption, donutOption, presetBarsOption } from "./chartOptions";
 import { Card, ChartCard, StatCard } from "./cards";
-import { useLiveOverview } from "./useLiveStats";
 import { aggregatePresets, formatPreset } from "./transforms";
-import type { WsManager } from "../../api/ws-manager";
 import type { ObservationPoint, StatsRange } from "./types";
 
 // The observations endpoint returns one row per hour+iata; collapse to one row per hour (a no-op for a
@@ -27,13 +25,11 @@ function aggregateByHour(points: ObservationPoint[]) {
 interface MeshTabProps {
   range: StatsRange;
   onSelectObserver: (observerId: string) => void;
-  wsManager: WsManager;
 }
 
-export function MeshTab({ range, onSelectObserver, wsManager }: MeshTabProps) {
+export function MeshTab({ range, onSelectObserver }: MeshTabProps) {
   const { t } = useTranslation();
   const colors = useChartColors();
-  useLiveOverview(wsManager);
   const overview = useStatsOverview();
   const observations = useStatsObservations(range);
   // top-row KPIs are a fixed 24h snapshot, so their sparklines use a dedicated

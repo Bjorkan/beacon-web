@@ -189,7 +189,7 @@ export const nodeQueries = {
         }),
       getNextPageParam: (last) => last.nextPageToken ?? last.nextCursor ?? undefined,
       initialPageParam: undefined,
-      staleTime: Infinity,
+      staleTime: 60_000,
     }),
   list: (f: NodeListFilters): PagedOptions<NodeSummary, SortablePageParam> =>
     infiniteQueryOptions<
@@ -215,7 +215,7 @@ export const nodeQueries = {
         }),
       getNextPageParam: (last) => last.nextPageToken ?? last.nextCursor ?? undefined,
       initialPageParam: undefined,
-      staleTime: Infinity,
+      staleTime: 60_000,
     }),
   detail: (id: string) =>
     queryOptions({
@@ -295,7 +295,7 @@ export const observerQueries = {
         }),
       getNextPageParam: (last) => last.nextPageToken ?? last.nextCursor ?? undefined,
       initialPageParam: undefined,
-      staleTime: Infinity,
+      staleTime: 60_000,
     }),
   detail: (id: string) =>
     queryOptions({
@@ -375,7 +375,7 @@ export const packetQueries = {
         getPackets(args.iatas, { cursor: pageParam, ...(args.filter ?? {}), includeResolvedPath: true }),
       getNextPageParam: (last) => last.nextCursor ?? undefined,
       initialPageParam: undefined,
-      staleTime: Infinity,
+      staleTime: 15_000,
       maxPages: 20,
     }),
   detail: (hash: string | null) =>

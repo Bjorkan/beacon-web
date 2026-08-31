@@ -283,13 +283,13 @@ describe("PacketList expanded row", () => {
   });
 });
 
-describe("PacketList live observation invalidation", () => {
+describe("PacketList live observation handoff", () => {
   afterEach(() => {
     usePackets.mockImplementation(basePackets);
     packetHandler = null;
   });
 
-  it("refetches the expanded row's detail when an observation arrives for it", async () => {
+  it("hands live observations to the ephemeral packet buffer without owning shared cache invalidation", async () => {
     const handlePacketObservation = vi.fn();
     usePackets.mockImplementation(() => ({ ...basePackets(), allPackets: [packet("AA11")], handlePacketObservation }));
 
@@ -298,10 +298,10 @@ describe("PacketList live observation invalidation", () => {
     packetHandler!(observation("AA11"));
 
     expect(handlePacketObservation).toHaveBeenCalledTimes(1);
-    expect(invalidate).toHaveBeenCalledWith({ queryKey: ["packet-detail", "AA11"] });
+    expect(invalidate).not.toHaveBeenCalled();
   });
 
-  it("leaves the detail query alone for observations on other packets", async () => {
+  it("leaves shared cache invalidation to the app-level bridge for other packets", async () => {
     const handlePacketObservation = vi.fn();
     usePackets.mockImplementation(() => ({ ...basePackets(), allPackets: [packet("AA11")], handlePacketObservation }));
 
@@ -313,7 +313,7 @@ describe("PacketList live observation invalidation", () => {
     expect(invalidate).not.toHaveBeenCalled();
   });
 
-  it("does not invalidate when no row is expanded", async () => {
+  it("does not invalidate shared Query state when no row is expanded", async () => {
     const handlePacketObservation = vi.fn();
     usePackets.mockImplementation(() => ({ ...basePackets(), allPackets: [packet("AA11")], handlePacketObservation }));
 

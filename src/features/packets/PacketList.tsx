@@ -1,8 +1,6 @@
 import { useState, useCallback, useEffect, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { useNavigate, useSearch } from "@tanstack/react-router";
-import { useQueryClient } from "@tanstack/react-query";
-import { packetQueries } from "../../api/queries";
 import { usePackets } from "./usePackets";
 import { usePacketDetail } from "./usePacketDetail";
 import { usePacketFilters, matchesFilters, toServerFilter } from "./usePacketFilters";
@@ -73,7 +71,6 @@ export function PacketList({ wsManager, onAnalyze, onViewPath, selectedObservati
   const { t } = useTranslation();
   const search = useSearch({ from: "__root__" });
   const navigate = useNavigate();
-  const queryClient = useQueryClient();
   const { filters, setFilter, setSearch, setSearchField, clearFilters } = usePacketFilters();
   // single-value selections go to the server so scrolling pages through matching history
   const serverFilter = useMemo(() => toServerFilter(filters), [filters]);
@@ -142,14 +139,11 @@ export function PacketList({ wsManager, onAnalyze, onViewPath, selectedObservati
     if (expandedDetail) onViewPath(expandedDetail);
   }, [expandedDetail, onViewPath]);
 
-  // Refetch only the open row's detail, so its observation table keeps pace with the count ticking
-  // up beside it. Every other observation just lands in the list.
+  // Shared packet-detail cache invalidation lives in QueryWsBridge. This route listener only feeds
+  // the ephemeral live buffer used by the scrolling packet UX.
   const handleObservation = useCallback((data: WsPacketObservation["data"]) => {
     handlePacketObservation(data);
-    if (data.packetHash === expandedHash) {
-      queryClient.invalidateQueries({ queryKey: packetQueries.detail(expandedHash).queryKey });
-    }
-  }, [handlePacketObservation, expandedHash, queryClient]);
+  }, [handlePacketObservation]);
 
   useWsPacketHandler(wsManager, handleObservation);
   useWsLaggedHandler(wsManager, handleLagged);

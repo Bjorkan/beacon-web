@@ -40,6 +40,7 @@ import { TraceList } from "./features/traces/TraceList";
 import { ChannelList } from "./features/channels/ChannelList";
 import { usePacketDetail } from "./features/packets/usePacketDetail";
 import { wsManager } from "./api/ws-instance";
+import { QueryWsBridge } from "./api/query-ws-bridge";
 import { parseMapViewSearch } from "./features/map/map-url";
 import type { PacketDetail } from "./types/api";
 import type { StatsRange, StatsTab } from "./features/stats/types";
@@ -481,6 +482,7 @@ function RootLayout() {
 
   return (
     <RegionProvider defaultSelection={initialSelection}>
+      <QueryWsBridge />
       <RegionWatcher />
       <RegionUrlSync />
       <SelectionResetOnRegion onRegionChange={clearSelection} />

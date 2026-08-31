@@ -40,7 +40,7 @@ function seedThreePages(qc: QueryClient) {
   });
 }
 
-describe("usePackets gap healing", () => {
+describe("usePackets cache ownership", () => {
   let qc: QueryClient;
 
   beforeEach(() => {
@@ -54,35 +54,24 @@ describe("usePackets gap healing", () => {
     <QueryClientProvider client={qc}>{children}</QueryClientProvider>
   );
 
-  it("refetches only the first page on mount instead of trusting stale cached pages", async () => {
+  it("leaves shared cached pages untouched on mount", async () => {
     seedThreePages(qc);
     renderHook(() => usePackets(), { wrapper });
 
-    // the remount gap is healed with a single first-page fetch, not a 3-page replay
-    await waitFor(() => expect(getPackets).toHaveBeenCalled());
-    await waitFor(() => {
-      const data = qc.getQueryData<{ pages: unknown[] }>(["packets", "YOW"]);
-      expect(data?.pages).toHaveLength(1);
-    });
-    expect(getPackets).toHaveBeenCalledTimes(1);
-    expect(getPackets.mock.calls[0]![1]).toEqual({ cursor: undefined, includeResolvedPath: true });
+    // QueryWsBridge heals gaps globally. A route remount must not reset otherwise-fresh history.
+    await act(async () => {});
+    expect(getPackets).not.toHaveBeenCalled();
+    expect(qc.getQueryData<{ pages: unknown[] }>(["packets", "YOW"])?.pages).toHaveLength(3);
   });
 
-  it("resets to a single first-page fetch on a lagged notice (no page-by-page storm)", async () => {
-    const { result } = renderHook(() => usePackets(), { wrapper });
-    await waitFor(() => expect(getPackets).toHaveBeenCalledTimes(1));
-
-    // simulate deep scroll state, then a lag notice
+  it("tracks the visible lag count without resetting shared history", async () => {
     seedThreePages(qc);
-    getPackets.mockClear();
+    const { result } = renderHook(() => usePackets(), { wrapper });
     act(() => result.current.handleLagged({ v: 1, type: "lagged", droppedCount: 5, since: 0, lastObservationId: 0 }));
 
-    await waitFor(() => expect(getPackets).toHaveBeenCalled());
-    await waitFor(() => {
-      const data = qc.getQueryData<{ pages: unknown[] }>(["packets", "YOW"]);
-      expect(data?.pages).toHaveLength(1);
-    });
-    expect(getPackets).toHaveBeenCalledTimes(1);
+    await act(async () => {});
+    expect(getPackets).not.toHaveBeenCalled();
+    expect(qc.getQueryData<{ pages: unknown[] }>(["packets", "YOW"])?.pages).toHaveLength(3);
     expect(result.current.laggedCount).toBe(5);
   });
 });
@@ -191,10 +180,7 @@ describe("usePackets server filter", () => {
     await waitFor(() => expect(result.current.isError).toBe(true));
   });
 
-  it("lag reset collapses the filtered entry and refetches with the filter", async () => {
-    const { result } = renderHook(() => usePackets(false, { payloadType: 4 }), { wrapper });
-    await waitFor(() => expect(getPackets).toHaveBeenCalledTimes(1));
-
+  it("leaves filtered history to the global bridge when a lag notice arrives", async () => {
     qc.setQueryData(["packets", "YOW", { payloadType: 4 }], {
       pages: [
         { items: [packet("a1")], nextCursor: 200 },
@@ -203,15 +189,13 @@ describe("usePackets server filter", () => {
       ],
       pageParams: [undefined, 200, 100],
     });
-    getPackets.mockClear();
+    const { result } = renderHook(() => usePackets(false, { payloadType: 4 }), { wrapper });
     act(() => result.current.handleLagged({ v: 1, type: "lagged", droppedCount: 5, since: 0, lastObservationId: 0 }));
 
-    await waitFor(() => expect(getPackets).toHaveBeenCalled());
-    await waitFor(() => {
-      const data = qc.getQueryData<{ pages: unknown[] }>(["packets", "YOW", { payloadType: 4 }]);
-      expect(data?.pages).toHaveLength(1);
-    });
-    expect(getPackets.mock.calls[0]![1]).toEqual({ cursor: undefined, payloadType: 4, includeResolvedPath: true });
+    await act(async () => {});
+    expect(getPackets).not.toHaveBeenCalled();
+    expect(qc.getQueryData<{ pages: unknown[] }>(["packets", "YOW", { payloadType: 4 }])?.pages).toHaveLength(3);
+    expect(result.current.laggedCount).toBe(5);
   });
 });
 
