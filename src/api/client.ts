@@ -18,42 +18,47 @@ import type {
   ClockDriftEntry,
 } from "../features/stats/types";
 import type { Feature, Polygon, MultiPolygon } from "geojson";
+import {
+  ApiError,
+  rawGetBrokers,
+  rawGetChannels,
+  rawGetChannelsChannelIDMessages,
+  rawGetIatas,
+  rawGetNodes,
+  rawGetNodesNodeId,
+  rawGetNodesNodeIdNeighbors,
+  rawGetNodesNodeIdObservations,
+  rawGetObservers,
+  rawGetObserversObserverId,
+  rawGetObserversObserverIdAdverts,
+  rawGetObserversObserverIdTelemetry,
+  rawGetPackets,
+  rawGetPacketsPacketHash,
+  rawGetRegions,
+  rawGetRegionsRegionId,
+  rawGetRoutes,
+  rawGetRoutesCross,
+  rawGetRoutesSearch,
+  rawGetScopes,
+  rawGetStatsClockDrift,
+  rawGetStatsNodeTypes,
+  rawGetStatsObservations,
+  rawGetStatsOverview,
+  rawGetStatsPayloadBreakdown,
+  rawGetStatsRadioPresets,
+  rawGetStatsScopes,
+  rawGetStatsTopAdvertisers,
+  rawGetStatsTopNodes,
+  rawGetStatsTopObservers,
+  rawGetStatsTopTalkers,
+  rawGetTraces,
+  rawGetTracesTag,
+} from "./generated/client";
 
 export type IataBorder = Feature<Polygon | MultiPolygon>;
 
-// typed fetch wrapper with query params
-
-class ApiError extends Error {
-  status: number;
-  code: string;
-
-  constructor(status: number, code: string, message: string) {
-    super(message);
-    this.name = "ApiError";
-    this.status = status;
-    this.code = code;
-  }
-}
-
-async function request<T>(path: string, params?: Record<string, string | number | undefined>): Promise<T> {
-  const url = new URL(`${API_BASE}${path}`, window.location.origin);
-  if (params) {
-    for (const [key, value] of Object.entries(params)) {
-      if (value !== undefined) {
-        url.searchParams.set(key, String(value));
-      }
-    }
-  }
-
-  const res = await fetch(url.toString());
-
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({ error: { code: "unknown", message: res.statusText } }));
-    throw new ApiError(res.status, body.error?.code ?? "unknown", body.error?.message ?? res.statusText);
-  }
-
-  return res.json();
-}
+// The generated transport owns HTTP/error/query serialization. This module is the hand-written
+// adapter boundary for app-specific CSV parameters, cursor wrappers, and GeoJSON 204 handling.
 
 // endpoint functions
 
@@ -66,7 +71,7 @@ export function getPackets(
   iatas: string[] | undefined,
   params?: { cursor?: number; limit?: number; payloadTypes?: number[]; routeTypes?: number[]; scopes?: string[]; includeResolvedPath?: boolean },
 ): Promise<CursorPage<PacketSummary>> {
-  return request("/packets", {
+  return rawGetPackets({
     iatas: iatasParam(iatas),
     cursor: params?.cursor,
     limit: params?.limit ?? DEFAULT_PAGE_SIZE,
@@ -74,15 +79,15 @@ export function getPackets(
     routeTypes: params?.routeTypes?.length ? params.routeTypes.join(",") : undefined,
     scopes: params?.scopes?.length ? params.scopes.join(",") : undefined,
     include: params?.includeResolvedPath ? "resolvedPath" : undefined,
-  });
+  }) as unknown as Promise<CursorPage<PacketSummary>>;
 }
 
 export function getPacketDetail(packetHash: string): Promise<PacketDetail> {
-  return request(`/packets/${packetHash}`);
+  return rawGetPacketsPacketHash({ packetHash }) as unknown as Promise<PacketDetail>;
 }
 
 export function getIatas(): Promise<IataCode[]> {
-  return request("/iatas");
+  return rawGetIatas() as unknown as Promise<IataCode[]>;
 }
 
 // An IATA's GeoJSON border, or null when none is configured. Can't use request(): the endpoint
@@ -97,22 +102,22 @@ export async function getIataBorder(iata: string): Promise<IataBorder | null> {
 }
 
 export function getRegions(): Promise<RegionSummary[]> {
-  return request("/regions");
+  return rawGetRegions() as unknown as Promise<RegionSummary[]>;
 }
 
 export function getRegion(regionId: number): Promise<Region> {
-  return request(`/regions/${regionId}`);
+  return rawGetRegionsRegionId({ regionId }) as unknown as Promise<Region>;
 }
 
 // /channels only honors a singular `iata`, so a one-IATA region goes through it; multi-IATA regions
 // still send `iatas` (ignored server-side, effectively global) until the backend supports it.
 export async function getChannels(params?: { iatas?: string[]; limit?: number }): Promise<ChannelSummary[]> {
   const iatas = params?.iatas ?? [];
-  const page = await request<{ items: ChannelSummary[] }>("/channels", {
+  const page = await rawGetChannels({
     iata: iatas.length === 1 ? iatas[0] : undefined,
     iatas: iatas.length > 1 ? iatasParam(iatas) : undefined,
     limit: params?.limit,
-  });
+  }) as unknown as { items: ChannelSummary[] };
   return page.items;
 }
 
@@ -124,22 +129,23 @@ export async function getChannelMessagesPage(
   params?: { iatas?: string[]; cursor?: number; limit?: number },
 ): Promise<CursorPage<ChannelMessage>> {
   const limit = params?.limit ?? DEFAULT_PAGE_SIZE;
-  const page = await request<{ items: ChannelMessage[] }>(`/channels/${channelId}/messages`, {
+  const page = await rawGetChannelsChannelIDMessages({
+    channelID: channelId,
     iatas: iatasParam(params?.iatas),
     cursor: params?.cursor,
     limit,
-  });
+  }) as unknown as { items: ChannelMessage[] };
   return toCursorPage(page.items, limit, (m) => m.id);
 }
 
 export function getBrokers(): Promise<BrokerStatus[]> {
-  return request("/brokers");
+  return rawGetBrokers() as unknown as Promise<BrokerStatus[]>;
 }
 
 // The authoritative list of configured transport scope names (e.g. "#bc", "#west"), used to populate
 // the scope filter dropdowns. The no-param /scopes endpoint returns the names directly.
 export function getScopes(): Promise<string[]> {
-  return request("/scopes");
+  return rawGetScopes({}) as unknown as Promise<string[]>;
 }
 
 // Wrap a bare-array endpoint into a CursorPage so it can drive the cursor-paginated hooks. A page that
@@ -157,19 +163,19 @@ export async function getKnownRoutesPage(
   params?: { iata?: string; hopCount?: number; cursor?: number; limit?: number },
 ): Promise<CursorPage<KnownRoute>> {
   const limit = params?.limit ?? DEFAULT_PAGE_SIZE;
-  const items = await request<KnownRoute[]>("/routes", {
+  const items = await rawGetRoutes({
     iata: params?.iata,
     hopCount: params?.hopCount,
     cursor: params?.cursor,
     limit,
-  });
+  }) as unknown as KnownRoute[];
   return toCursorPage(items, limit, (r) => r.lastSeen);
 }
 
 // Search known routes for a path between two node hash prefixes within a single IATA. All three params
 // are required by the server.
 export function searchKnownRoutes(iata: string, from: string, to: string): Promise<KnownRoute[]> {
-  return request("/routes/search", { iata, from, to });
+  return rawGetRoutesSearch({ iata, from, to }) as unknown as Promise<KnownRoute[]>;
 }
 
 // Search routes that cross IATA boundaries, from a hash in one IATA to a hash in another. All four
@@ -180,7 +186,7 @@ export function searchCrossIATARoutes(
   toHash: string,
   toIata: string,
 ): Promise<CrossIATARoute[]> {
-  return request("/routes/cross", { fromHash, fromIata, toHash, toIata });
+  return rawGetRoutesCross({ fromHash, fromIata, toHash, toIata }) as unknown as Promise<CrossIATARoute[]>;
 }
 
 // Trace tags. /traces returns a bare array of per-tag summaries (ordered newest-heard first, cursor is
@@ -189,33 +195,34 @@ export function getTraces(
   iatas: string[] | undefined,
   params?: { scope?: string; type?: TraceType; since?: number; until?: number; cursor?: number; limit?: number },
 ): Promise<TraceTagSummary[]> {
-  return request("/traces", {
+  return rawGetTraces({
     iatas: iatasParam(iatas),
     scope: params?.scope,
-    type: params?.type, // TRACE or PING; omitted = both (request() drops undefined params)
+    type: params?.type,
     since: params?.since,
     until: params?.until,
     cursor: params?.cursor,
     limit: params?.limit,
-  });
+  }) as unknown as Promise<TraceTagSummary[]>;
 }
 
 export function getTraceDetail(tag: string): Promise<TraceDetail> {
-  return request(`/traces/${tag}`);
+  return rawGetTracesTag({ tag }) as unknown as Promise<TraceDetail>;
 }
 
 export function getObserver(observerId: string): Promise<Observer> {
-  return request(`/observers/${observerId}`);
+  return rawGetObserversObserverId({ observerId }) as unknown as Promise<Observer>;
 }
 
 export function getObserverAdverts(
   observerId: string,
   params?: { cursor?: number; limit?: number },
 ): Promise<CursorPage<AdvertObservation>> {
-  return request(`/observers/${observerId}/adverts`, {
+  return rawGetObserversObserverIdAdverts({
+    observerId,
     cursor: params?.cursor,
     limit: params?.limit ?? DEFAULT_PAGE_SIZE,
-  });
+  }) as unknown as Promise<CursorPage<AdvertObservation>>;
 }
 
 // Paginated /nodes: returns the full cursor page so the caller can chain pages (cursor = the last
@@ -237,7 +244,7 @@ export function getNodesPage(
     neighbors?: boolean; // include each node's neighborIds (?neighbors=true)
   },
 ): Promise<CursorPage<NodeSummary>> {
-  return request("/nodes", {
+  return rawGetNodes({
     iatas: iatasParam(iatas),
     cursor: params?.cursor,
     pageToken: params?.pageToken,
@@ -247,11 +254,11 @@ export function getNodesPage(
     typeName: params?.type,
     name: params?.name,
     pubkeyPrefix: params?.pubkeyPrefix,
-    supportsMultibytePaths: params?.supportsMultibytePaths,
-    supportsMultibyteTraces: params?.supportsMultibyteTraces,
+    supportsMultibytePaths: params?.supportsMultibytePaths === "true" ? true : params?.supportsMultibytePaths === "false" ? false : undefined,
+    supportsMultibyteTraces: params?.supportsMultibyteTraces === "true" ? true : params?.supportsMultibyteTraces === "false" ? false : undefined,
     scope: params?.scope,
-    neighbors: params?.neighbors ? "true" : undefined,
-  });
+    neighbors: params?.neighbors || undefined,
+  }) as unknown as Promise<CursorPage<NodeSummary>>;
 }
 
 // Paginated /observers, mirroring getNodesPage; used by the Observers table.
@@ -270,7 +277,7 @@ export function getObserversPage(
     scope?: string;
   },
 ): Promise<CursorPage<ObserverSummary>> {
-  return request("/observers", {
+  return rawGetObservers({
     iatas: iatasParam(iatas),
     cursor: params?.cursor,
     pageToken: params?.pageToken,
@@ -282,75 +289,76 @@ export function getObserversPage(
     status: params?.status,
     name: params?.name,
     scope: params?.scope,
-  });
+  }) as unknown as Promise<CursorPage<ObserverSummary>>;
 }
 
 export function getNode(nodeId: string): Promise<Node> {
-  return request(`/nodes/${nodeId}`);
+  return rawGetNodesNodeId({ nodeId }) as unknown as Promise<Node>;
 }
 
 export function getNodeObservations(
   nodeId: string,
   params?: { cursor?: number; limit?: number },
 ): Promise<CursorPage<NodeObservation>> {
-  return request(`/nodes/${nodeId}/observations`, {
+  return rawGetNodesNodeIdObservations({
+    nodeId,
     cursor: params?.cursor,
     limit: params?.limit ?? DEFAULT_PAGE_SIZE,
-  });
+  }) as unknown as Promise<CursorPage<NodeObservation>>;
 }
 
 export function getNodeNeighbors(nodeId: string): Promise<NodeNeighbor[]> {
-  return request(`/nodes/${nodeId}/neighbors`);
+  return rawGetNodesNodeIdNeighbors({ nodeId }) as unknown as Promise<NodeNeighbor[]>;
 }
 
 // stats endpoints
 
 export function getStatsOverview(iatas?: string[]): Promise<StatsOverview> {
-  return request("/stats/overview", { iatas: iatasParam(iatas) });
+  return rawGetStatsOverview({ iatas: iatasParam(iatas) }) as unknown as Promise<StatsOverview>;
 }
 
 export function getStatsObservations(iatas?: string[], since?: number): Promise<ObservationPoint[]> {
-  return request("/stats/observations", { iatas: iatasParam(iatas), since });
+  return rawGetStatsObservations({ iatas: iatasParam(iatas), since }) as unknown as Promise<ObservationPoint[]>;
 }
 
 export function getPayloadBreakdown(iatas?: string[], since?: number): Promise<PayloadBreakdownItem[]> {
-  return request("/stats/payload-breakdown", { iatas: iatasParam(iatas), since });
+  return rawGetStatsPayloadBreakdown({ iatas: iatasParam(iatas), since }) as unknown as Promise<PayloadBreakdownItem[]>;
 }
 
 export function getTopNodes(iatas?: string[], limit = 10): Promise<TopNode[]> {
-  return request("/stats/top-nodes", { iatas: iatasParam(iatas), limit });
+  return rawGetStatsTopNodes({ iatas: iatasParam(iatas), limit }) as unknown as Promise<TopNode[]>;
 }
 
 export function getTopObservers(iatas?: string[], since?: number, limit = 10): Promise<TopObserver[]> {
-  return request("/stats/top-observers", { iatas: iatasParam(iatas), since, limit });
+  return rawGetStatsTopObservers({ iatas: iatasParam(iatas), since, limit }) as unknown as Promise<TopObserver[]>;
 }
 
 export function getTopAdvertisers(iatas?: string[], since?: number, limit = 10): Promise<TopAdvertiser[]> {
-  return request("/stats/top-advertisers", { iatas: iatasParam(iatas), since, limit });
+  return rawGetStatsTopAdvertisers({ iatas: iatasParam(iatas), since, limit }) as unknown as Promise<TopAdvertiser[]>;
 }
 
 export function getTopTalkers(iatas?: string[], since?: number, limit = 10): Promise<TopTalker[]> {
-  return request("/stats/top-talkers", { iatas: iatasParam(iatas), since, limit });
+  return rawGetStatsTopTalkers({ iatas: iatasParam(iatas), since, limit }) as unknown as Promise<TopTalker[]>;
 }
 
 export function getRadioPresets(iatas?: string[]): Promise<RadioPreset[]> {
-  return request("/stats/radio-presets", { iatas: iatasParam(iatas) });
+  return rawGetStatsRadioPresets({ iatas: iatasParam(iatas) }) as unknown as Promise<RadioPreset[]>;
 }
 
 export function getStatsNodeTypes(iatas?: string[]): Promise<NodeTypeCount[]> {
-  return request("/stats/node-types", { iatas: iatasParam(iatas) });
+  return rawGetStatsNodeTypes({ iatas: iatasParam(iatas) }) as unknown as Promise<NodeTypeCount[]>;
 }
 
 // Repeaters/room servers whose clock has drifted past the server threshold, worst-first. Not
 // time-windowed and top-N only (no cursor), so callers pass a generous limit and page client-side.
 export function getClockDrift(iatas?: string[], limit = 100): Promise<ClockDriftEntry[]> {
-  return request("/stats/clock-drift", { iatas: iatasParam(iatas), limit });
+  return rawGetStatsClockDrift({ iatas: iatasParam(iatas), limit }) as unknown as Promise<ClockDriftEntry[]>;
 }
 
 // renamed from getScopes to avoid colliding with the /scopes name list; this is the /stats/scopes
 // aggregate (packet/observer/node counts), reported globally regardless of the active region.
 export function getStatsScopes(): Promise<ScopeStats[]> {
-  return request("/stats/scopes");
+  return rawGetStatsScopes() as unknown as Promise<ScopeStats[]>;
 }
 
 export function getObserverTelemetry(
@@ -359,7 +367,7 @@ export function getObserverTelemetry(
   interval?: string,
   afterId?: number,
 ): Promise<ObserverTelemetry> {
-  return request(`/observers/${observerId}/telemetry`, { range, interval, afterId });
+  return rawGetObserversObserverIdTelemetry({ observerId, range, interval, afterId }) as unknown as Promise<ObserverTelemetry>;
 }
 
 export { ApiError };

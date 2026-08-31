@@ -21,6 +21,9 @@ jobs:
       - name: Install
         run: npm ci
 
+      - name: Generated API drift
+        run: npm run api:check
+
       - name: Build
         run: npm run build
 

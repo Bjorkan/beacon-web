@@ -14,7 +14,9 @@
     "stop": "./scripts/devserver.sh stop",
     "restart": "./scripts/devserver.sh restart",
     "dev:status": "./scripts/devserver.sh status",
-    "dev:stop-all": "./scripts/devserver.sh stop-all"
+    "dev:stop-all": "./scripts/devserver.sh stop-all",
+    "api:generate": "node scripts/generate-api.mjs",
+    "api:check": "node scripts/generate-api.mjs --check"
   },
   "dependencies": {
     "@nazka/map-gl-js-spiderfy": "2.0.0",
