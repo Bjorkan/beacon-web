@@ -201,9 +201,12 @@ export function usePackets(frozen: boolean = false, serverFilter: PacketServerFi
     maxPages: MAX_INFINITE_PAGES,
   });
 
+  // WS summaries contain neither raw payload nor every observation path. During those searches the
+  // REST result is authoritative; mixing the live buffer in would create false positives/negatives.
+  const includeLiveBuffer = !serverFilter?.search || serverFilter.searchField === "hash";
   const allPackets = useMemo(
-    () => dedup([...displayBuffer, ...flattenPages(history)]),
-    [displayBuffer, history],
+    () => dedup([...(includeLiveBuffer ? displayBuffer : []), ...flattenPages(history)]),
+    [displayBuffer, history, includeLiveBuffer],
   );
 
   const observerOptions = useMemo(() => {

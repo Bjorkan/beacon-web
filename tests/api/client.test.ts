@@ -27,13 +27,23 @@ describe("getPackets", () => {
   it("forwards plural filters as comma-separated values (routeType 0 survives, scope is encoded)", async () => {
     const getUrl = mockFetchOnce({ items: [], nextCursor: null, hasMore: false });
 
-    await getPackets(["YOW"], { payloadTypes: [2, 4], routeTypes: [0], scopes: ["#bc", "#west"] });
+    await getPackets(["YOW"], {
+      payloadTypes: [2, 4],
+      routeTypes: [0],
+      observers: ["observer-1", "observer-2"],
+      scopes: ["#bc", "#west"],
+      search: "hello",
+      searchField: "payload",
+    });
 
     const url = new URL(getUrl());
     expect(url.pathname).toContain("/packets");
     expect(url.searchParams.get("payloadTypes")).toBe("2,4");
     expect(url.searchParams.get("routeTypes")).toBe("0"); // single value 0 survives
+    expect(url.searchParams.get("observers")).toBe("observer-1,observer-2");
     expect(url.searchParams.get("scopes")).toBe("#bc,#west");
+    expect(url.searchParams.get("q")).toBe("hello");
+    expect(url.searchParams.get("searchField")).toBe("payload");
   });
 
   it("opts into resolved path enrichment only when requested", async () => {
@@ -52,7 +62,10 @@ describe("getPackets", () => {
     const url = new URL(getUrl());
     expect(url.searchParams.has("payloadTypes")).toBe(false);
     expect(url.searchParams.has("routeTypes")).toBe(false);
+    expect(url.searchParams.has("observers")).toBe(false);
     expect(url.searchParams.has("scopes")).toBe(false);
+    expect(url.searchParams.has("q")).toBe(false);
+    expect(url.searchParams.has("searchField")).toBe(false);
     expect(url.searchParams.get("cursor")).toBe("100");
     expect(url.searchParams.get("limit")).toBe("50");
   });
@@ -160,51 +173,52 @@ describe("getKnownRoutesPage", () => {
     lastSeen: 2,
   };
 
-  it("hits /routes, forwards iata/hopCount/cursor/limit", async () => {
-    const getUrl = mockFetchOnce([route]);
+  it("hits /routes and forwards region, sort and keyset pagination", async () => {
+    const getUrl = mockFetchOnce({ items: [route], nextPageToken: null, hasMore: false });
 
-    await getKnownRoutesPage({ iata: "YYC", hopCount: 1, cursor: 1234, limit: 50 });
+    await getKnownRoutesPage({ iatas: ["YYC", "YVR"], hopCount: 1, pageToken: "next", sort: "hops", direction: "asc", limit: 50 });
 
     const url = getUrl();
     expect(url).toContain("/routes");
-    expect(url).toContain("iata=YYC");
+    expect(url).toContain("iatas=YYC%2CYVR");
     expect(url).toContain("hopCount=1");
-    expect(url).toContain("cursor=1234");
+    expect(url).toContain("pageToken=next");
+    expect(url).toContain("sort=hops");
+    expect(url).toContain("direction=asc");
     expect(url).toContain("limit=50");
   });
 
-  it("omits cursor on the first page and defaults the limit to 50", async () => {
-    const getUrl = mockFetchOnce([]);
+  it("omits pageToken on the first page and defaults the limit to 50", async () => {
+    const getUrl = mockFetchOnce({ items: [], nextPageToken: null, hasMore: false });
 
     await getKnownRoutesPage();
 
     const url = getUrl();
     expect(url).toContain("/routes");
-    expect(url).not.toContain("cursor=");
+    expect(url).not.toContain("pageToken=");
     expect(url).toContain("limit=50");
     expect(url).not.toContain("iata=");
     expect(url).not.toContain("hopCount=");
   });
 
-  it("wraps a full page: nextCursor is the last route's lastSeen", async () => {
-    mockFetchOnce([{ ...route, lastSeen: 9 }]);
+  it("preserves the server's opaque next-page token", async () => {
+    mockFetchOnce({ items: [{ ...route, lastSeen: 9 }], nextPageToken: "opaque", hasMore: true });
 
-    // a page that fills the limit means there may be more — cursor = last (oldest) lastSeen
     const page = await getKnownRoutesPage({ limit: 1 });
 
     expect(page.items).toHaveLength(1);
     expect(page.hasMore).toBe(true);
-    expect(page.nextCursor).toBe(9);
+    expect(page.nextPageToken).toBe("opaque");
   });
 
-  it("wraps a short page: nextCursor null, hasMore false", async () => {
-    mockFetchOnce([route]);
+  it("returns a completed server page unchanged", async () => {
+    mockFetchOnce({ items: [route], nextPageToken: null, hasMore: false });
 
     const page = await getKnownRoutesPage({ limit: 50 });
 
     expect(page.items).toEqual([route]);
     expect(page.hasMore).toBe(false);
-    expect(page.nextCursor).toBeNull();
+    expect(page.nextPageToken).toBeNull();
   });
 });
 

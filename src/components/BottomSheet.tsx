@@ -22,7 +22,7 @@ export function BottomSheet({ onClose, label, role = "dialog", children }: {
 
   return (
     <div
-      className="fixed inset-x-0 top-0 h-dvh z-50 md:hidden flex flex-col justify-end bg-black/50 fade-in"
+      className="fixed inset-x-0 top-0 h-dvh z-50 lg:hidden flex flex-col justify-end bg-black/50 fade-in"
       onClick={onClose}
     >
       <div

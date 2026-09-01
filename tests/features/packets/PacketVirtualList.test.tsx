@@ -261,7 +261,7 @@ describe("PacketVirtualList responsive row", () => {
     setMobile(false); // back to the desktop default so later tests in this file aren't affected
   });
 
-  it("renders the card row below md", () => {
+  it("renders the card row below lg", () => {
     setMobile(true);
     const handlers = makeHandlers();
     const { container } = renderWithClient(
@@ -277,7 +277,7 @@ describe("PacketVirtualList responsive row", () => {
     expect(handlers.onToggleExpand).toHaveBeenCalledWith("AA11");
   });
 
-  it("renders the grid row at md and up", () => {
+  it("renders the grid row at lg and up", () => {
     const { container } = renderWithClient(
       <PacketVirtualList packets={[pkt("AA11")]} expandedHash={null} {...makeHandlers()} />,
     );
@@ -286,7 +286,7 @@ describe("PacketVirtualList responsive row", () => {
     expect(container.querySelector("[aria-pressed]")).toBeNull();
   });
 
-  it("expands the card row below md", () => {
+  it("expands the card row below lg", () => {
     setMobile(true);
     renderWithClient(<PacketVirtualList packets={[pkt("AA11")]} expandedHash="AA11" {...makeHandlers()} />);
 

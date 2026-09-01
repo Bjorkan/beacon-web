@@ -69,8 +69,8 @@ export function FilterBar({
   const activeCount = activeTypes.length + activeRoutes.length + activeObservers.length + activeScopes.length;
   const searchFields: SearchFieldOption[] = [
     { value: "hash", label: t("fields.hash") },
-    { value: "path", label: t("fields.path"), disabled: true },
-    { value: "payload", label: t("fields.payload"), disabled: true },
+    { value: "path", label: t("fields.path") },
+    { value: "payload", label: t("fields.payload") },
   ];
 
   // shared by the desktop inline bar and the mobile filter sheet

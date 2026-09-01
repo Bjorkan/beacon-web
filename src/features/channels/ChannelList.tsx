@@ -106,7 +106,7 @@ export function ChannelList({ wsManager, onAnalyze, viewState, onViewStateChange
       )}
       <div className="flex flex-1 min-h-0">
         {showList && (
-          <div className="flex flex-col min-h-0 w-full md:w-56 md:min-w-56 border-r border-border bg-bg-surface">
+          <div className="flex flex-col min-h-0 w-full lg:w-56 lg:min-w-56 border-r border-border bg-bg-surface">
             {isLoading ? (
               <SkeletonRows rows={8} />
             ) : (

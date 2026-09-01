@@ -436,22 +436,24 @@ export const channelQueries = {
 
 export const routeQueries = {
   all: () => ["routes"] as const,
-  list: (args: { iata: string; hopCount?: number }): PagedOptions<KnownRoute> =>
+  list: (args: { iatas?: string[]; hopCount?: number; sort: string; direction: "asc" | "desc" }): PagedOptions<KnownRoute, string | undefined> =>
     infiniteQueryOptions<
       CursorPage<KnownRoute>,
       Error,
       InfiniteData<CursorPage<KnownRoute>>,
       QueryKey,
-      number | undefined
+      string | undefined
     >({
-      queryKey: ["routes", args.iata, args.hopCount ?? ""] as const,
+      queryKey: ["routes", args.iatas?.slice().sort().join(",") ?? "", args.hopCount ?? "", args.sort, args.direction] as const,
       queryFn: ({ pageParam }) =>
         getKnownRoutesPage({
-          iata: args.iata,
+          iatas: args.iatas,
           hopCount: args.hopCount,
-          cursor: pageParam,
+          pageToken: pageParam,
+          sort: args.sort,
+          direction: args.direction,
         }),
-      getNextPageParam: (last) => last.nextCursor ?? undefined,
+      getNextPageParam: (last) => last.nextPageToken ?? undefined,
       initialPageParam: undefined,
       staleTime: Infinity,
     }),

@@ -69,7 +69,7 @@ function iatasParam(iatas?: string[]): string | undefined {
 
 export function getPackets(
   iatas: string[] | undefined,
-  params?: { cursor?: number; limit?: number; payloadTypes?: number[]; routeTypes?: number[]; scopes?: string[]; includeResolvedPath?: boolean },
+  params?: { cursor?: number; limit?: number; payloadTypes?: number[]; routeTypes?: number[]; observers?: string[]; scopes?: string[]; search?: string; searchField?: "hash" | "path" | "payload"; includeResolvedPath?: boolean },
 ): Promise<CursorPage<PacketSummary>> {
   return rawGetPackets({
     iatas: iatasParam(iatas),
@@ -77,7 +77,10 @@ export function getPackets(
     limit: params?.limit ?? DEFAULT_PAGE_SIZE,
     payloadTypes: params?.payloadTypes?.length ? params.payloadTypes.join(",") : undefined,
     routeTypes: params?.routeTypes?.length ? params.routeTypes.join(",") : undefined,
+    observers: params?.observers?.length ? params.observers.join(",") : undefined,
     scopes: params?.scopes?.length ? params.scopes.join(",") : undefined,
+    q: params?.search,
+    searchField: params?.search ? params.searchField : undefined,
     include: params?.includeResolvedPath ? "resolvedPath" : undefined,
   }) as unknown as Promise<CursorPage<PacketSummary>>;
 }
@@ -155,21 +158,18 @@ function toCursorPage<T>(items: T[], limit: number, cursorOf: (last: T) => numbe
   return { items, nextCursor: hasMore ? cursorOf(items[items.length - 1]!) : null, hasMore };
 }
 
-// Known routes. /routes returns a bare array ordered last_seen DESC; its cursor pages by last_seen (ms),
-// so the last row carries the page's smallest last_seen — the cursor for the next (older) batch. We wrap
-// it into a CursorPage here so RouteTable can stream pages via useInfinitePages. `iata` is a single code
-// ("" = all), unlike the comma-separated `iatas` used elsewhere.
+// Known routes use an opaque keyset cursor bound to the requested backend ordering.
 export async function getKnownRoutesPage(
-  params?: { iata?: string; hopCount?: number; cursor?: number; limit?: number },
+  params?: { iatas?: string[]; hopCount?: number; pageToken?: string; sort?: string; direction?: "asc" | "desc"; limit?: number },
 ): Promise<CursorPage<KnownRoute>> {
-  const limit = params?.limit ?? DEFAULT_PAGE_SIZE;
-  const items = await rawGetRoutes({
-    iata: params?.iata,
+  return rawGetRoutes({
+    iatas: iatasParam(params?.iatas),
     hopCount: params?.hopCount,
-    cursor: params?.cursor,
-    limit,
-  }) as unknown as KnownRoute[];
-  return toCursorPage(items, limit, (r) => r.lastSeen);
+    pageToken: params?.pageToken,
+    sort: params?.sort,
+    direction: params?.direction,
+    limit: params?.limit ?? DEFAULT_PAGE_SIZE,
+  }) as unknown as Promise<CursorPage<KnownRoute>>;
 }
 
 // Search known routes for a path between two node hash prefixes within a single IATA. All three params

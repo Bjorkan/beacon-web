@@ -83,6 +83,7 @@ describe("useIsMobile", () => {
     installMatchMedia(true);
     render(<MobileProbe />);
     expect(screen.getByText("mobile")).toBeInTheDocument();
+    expect(window.matchMedia).toHaveBeenCalledWith("(max-width: 1023px)");
   });
 
   it("is desktop when the viewport is above the breakpoint", () => {

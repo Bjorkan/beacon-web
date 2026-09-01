@@ -1,12 +1,14 @@
 import { useMemo } from "react";
+import type { TFunction } from "i18next";
 import { useTranslation } from "react-i18next";
 import { formatCount } from "../../lib/formatters";
 import { useChartColors, nodeTypeColor } from "./chartTheme";
 import { useStatsOverview, useStatsObservations, usePayloadBreakdown, useTopNodes, useTopObservers, useRadioPresets, useScopes, useNodeTypes } from "./useStats";
 import { observationsAreaOption, leaderboardOption, typeBarOption, donutOption, presetBarsOption } from "./chartOptions";
 import { Card, ChartCard, StatCard } from "./cards";
+import { DataTable, type Column } from "../../components/DataTable";
 import { aggregatePresets, formatPreset } from "./transforms";
-import type { ObservationPoint, StatsRange } from "./types";
+import type { ObservationPoint, ScopeStats, StatsRange } from "./types";
 
 // The observations endpoint returns one row per hour+iata; collapse to one row per hour (a no-op for a
 // single selected region). uniquePackets / activeObservers summed across iatas are approximate.
@@ -25,6 +27,38 @@ function aggregateByHour(points: ObservationPoint[]) {
 interface MeshTabProps {
   range: StatsRange;
   onSelectObserver: (observerId: string) => void;
+}
+
+function scopeColumns(t: TFunction): Column<ScopeStats>[] {
+  return [
+    {
+      header: "Scope",
+      size: 40,
+      cell: (scope) => <span className="text-text-normal">{scope.name}</span>,
+      sortValue: (scope) => scope.name,
+    },
+    {
+      header: "Packets",
+      label: t("stats.packets"),
+      className: (scope) => `text-right tabular-nums ${scope.packetCount === 0 ? "text-text-dim" : "text-text-bright"}`,
+      cell: (scope) => formatCount(scope.packetCount),
+      sortValue: (scope) => scope.packetCount,
+    },
+    {
+      header: "Observers",
+      label: t("stats.observers"),
+      className: (scope) => `text-right tabular-nums ${scope.observerCount === 0 ? "text-text-dim" : "text-text-normal"}`,
+      cell: (scope) => formatCount(scope.observerCount),
+      sortValue: (scope) => scope.observerCount,
+    },
+    {
+      header: "Nodes",
+      label: t("stats.nodes"),
+      className: (scope) => `text-right tabular-nums ${scope.nodeCount === 0 ? "text-text-dim" : "text-text-normal"}`,
+      cell: (scope) => formatCount(scope.nodeCount),
+      sortValue: (scope) => scope.nodeCount,
+    },
+  ];
 }
 
 export function MeshTab({ range, onSelectObserver }: MeshTabProps) {
@@ -108,6 +142,7 @@ export function MeshTab({ range, onSelectObserver }: MeshTabProps) {
     () => [...(scopes.data ?? [])].sort((a, b) => b.packetCount - a.packetCount),
     [scopes.data],
   );
+  const scopeTableColumns = useMemo(() => scopeColumns(t), [t]);
 
   const kpiObs = useMemo(() => aggregateByHour(overviewObs.data ?? []), [overviewObs.data]);
   const obsSpark = useMemo(() => kpiObs.slice(-24).map((p) => p.observationCount), [kpiObs]);
@@ -161,26 +196,15 @@ export function MeshTab({ range, onSelectObserver }: MeshTabProps) {
           ) : scopeRows.length === 0 ? (
             <div className="py-4 text-center font-mono text-[11px] text-text-dim">{t("common.noData")}</div>
           ) : (
-            <table className="w-full font-mono text-[11px]">
-              <thead>
-                <tr className="text-text-muted">
-                  <th className="pb-1.5 text-left font-semibold uppercase tracking-wider">Scope</th>
-                  <th className="pb-1.5 text-right font-semibold uppercase tracking-wider">{t("stats.packets")}</th>
-                  <th className="pb-1.5 text-right font-semibold uppercase tracking-wider">{t("stats.observers")}</th>
-                  <th className="pb-1.5 text-right font-semibold uppercase tracking-wider">{t("stats.nodes")}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {scopeRows.map((s) => (
-                  <tr key={s.name} className="border-t border-border-subtle">
-                    <td className="py-1 text-left text-text-normal">{s.name}</td>
-                    <td className={`py-1 text-right tabular-nums ${s.packetCount === 0 ? "text-text-dim" : "text-text-bright"}`}>{formatCount(s.packetCount)}</td>
-                    <td className={`py-1 text-right tabular-nums ${s.observerCount === 0 ? "text-text-dim" : "text-text-normal"}`}>{formatCount(s.observerCount)}</td>
-                    <td className={`py-1 text-right tabular-nums ${s.nodeCount === 0 ? "text-text-dim" : "text-text-normal"}`}>{formatCount(s.nodeCount)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <DataTable
+              columns={scopeTableColumns}
+              rows={scopeRows}
+              rowKey={(scope) => scope.name}
+              selectedKey={null}
+              onSelect={() => {}}
+              emptyLabel={t("common.noData")}
+              defaultSort={{ header: "Packets", direction: "desc" }}
+            />
           )}
         </Card>
       </div>

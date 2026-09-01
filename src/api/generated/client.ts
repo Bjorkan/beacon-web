@@ -94,8 +94,8 @@ export async function rawGetObserversObserverIdTelemetry(params: { observerId: s
   return request<Models.ObserverTelemetry>(`/observers/${encodeURIComponent(String(params.observerId))}/telemetry`, { "range": params.range, "afterId": params.afterId, "interval": params.interval });
 }
 
-export async function rawGetPackets(params: { payloadType?: number; payloadTypes?: string; payloadTypeName?: string; routeType?: number; routeTypes?: string; iata?: string; iatas?: string; scope?: string; scopes?: string; regionId?: number; region?: string; since?: number; until?: number; cursor?: number; limit?: number; include?: string; }): Promise<Models.PagePacketSummary> {
-  return request<Models.PagePacketSummary>("/packets", { "payloadType": params.payloadType, "payloadTypes": params.payloadTypes, "payloadTypeName": params.payloadTypeName, "routeType": params.routeType, "routeTypes": params.routeTypes, "iata": params.iata, "iatas": params.iatas, "scope": params.scope, "scopes": params.scopes, "regionId": params.regionId, "region": params.region, "since": params.since, "until": params.until, "cursor": params.cursor, "limit": params.limit, "include": params.include });
+export async function rawGetPackets(params: { payloadType?: number; payloadTypes?: string; payloadTypeName?: string; routeType?: number; routeTypes?: string; iata?: string; iatas?: string; scope?: string; scopes?: string; observer?: string; observers?: string; q?: string; searchField?: string; regionId?: number; region?: string; since?: number; until?: number; cursor?: number; limit?: number; include?: string; }): Promise<Models.PagePacketSummary> {
+  return request<Models.PagePacketSummary>("/packets", { "payloadType": params.payloadType, "payloadTypes": params.payloadTypes, "payloadTypeName": params.payloadTypeName, "routeType": params.routeType, "routeTypes": params.routeTypes, "iata": params.iata, "iatas": params.iatas, "scope": params.scope, "scopes": params.scopes, "observer": params.observer, "observers": params.observers, "q": params.q, "searchField": params.searchField, "regionId": params.regionId, "region": params.region, "since": params.since, "until": params.until, "cursor": params.cursor, "limit": params.limit, "include": params.include });
 }
 
 export async function rawGetPacketsBackfill(params: { afterObservationId: number; payloadType?: number; payloadTypeName?: string; routeType?: number; iatas?: string; region?: string; regionId?: number; scope?: string; limit?: number; include?: string; }): Promise<Array<Models.PacketSummary>> {
@@ -114,8 +114,8 @@ export async function rawGetRegionsRegionId(params: { regionId: number; }): Prom
   return request<Models.Region>(`/regions/${encodeURIComponent(String(params.regionId))}`, undefined);
 }
 
-export async function rawGetRoutes(params: { iata?: string; hopCount?: number; cursor?: number; limit?: number; }): Promise<Array<Models.KnownRoute>> {
-  return request<Array<Models.KnownRoute>>("/routes", { "iata": params.iata, "hopCount": params.hopCount, "cursor": params.cursor, "limit": params.limit });
+export async function rawGetRoutes(params: { iata?: string; iatas?: string; hopCount?: number; cursor?: number; pageToken?: string; sort?: string; direction?: string; limit?: number; }): Promise<Models.PageKnownRoute> {
+  return request<Models.PageKnownRoute>("/routes", { "iata": params.iata, "iatas": params.iatas, "hopCount": params.hopCount, "cursor": params.cursor, "pageToken": params.pageToken, "sort": params.sort, "direction": params.direction, "limit": params.limit });
 }
 
 export async function rawGetRoutesCross(params: { fromHash: string; fromIata: string; toHash: string; toIata: string; }): Promise<Array<Models.CrossIATARoute>> {

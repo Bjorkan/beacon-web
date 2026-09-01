@@ -65,6 +65,11 @@ function str(value: unknown): string | undefined {
   return typeof value === "string" && value !== "" ? value : undefined;
 }
 
+function packetSearchField(value: unknown): "hash" | "path" | "payload" | undefined {
+  const field = str(value);
+  return field === "hash" || field === "path" || field === "payload" ? field : undefined;
+}
+
 // Root search is limited to state that is genuinely shared across routes. Packet filters remain here
 // intentionally so they survive tab switches; Map and Analytics own their route-specific search.
 interface RootSearch {
@@ -93,7 +98,7 @@ function validateRootSearch(search: Record<string, unknown>): RootSearch {
     obs: csv(search.obs),
     scope: csv(search.scope),
     q: str(search.q),
-    sf: str(search.sf) === "hash" ? "hash" : undefined,
+    sf: packetSearchField(search.sf),
     hash: str(search.hash),
     analyze: search.analyze === "1" ? "1" : undefined,
     path: str(search.path),

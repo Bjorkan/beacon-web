@@ -15,7 +15,10 @@ export interface PacketFilterState {
 export interface PacketServerFilter {
   payloadTypes?: number[];
   routeTypes?: number[];
+  observers?: string[];
   scopes?: string[];
+  search?: string;
+  searchField?: SearchField;
 }
 
 export const EMPTY_FILTERS: PacketFilterState = {

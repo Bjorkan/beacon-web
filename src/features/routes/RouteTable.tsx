@@ -22,6 +22,14 @@ const inputClass =
 // stable id accessor for the paginator's dedup (module-level so the memo isn't rebuilt each render)
 const routeId = (r: KnownRoute) => String(r.id);
 
+const ROUTE_SORT_KEYS: Record<string, string> = {
+  IATA: "iata",
+  Hops: "hops",
+  Obs: "observations",
+  "First seen": "first_seen",
+  "Last seen": "last_seen",
+};
+
 const nodeLabel = (n: ResolvedNode) => n.name ?? formatHex(n.publicKey);
 
 // A run of route hops as a hash chain (reusing the packet path renderer); hops are high-confidence.
@@ -166,22 +174,17 @@ export function RouteTable() {
   const [search, setSearch] = useState<SearchParams | null>(null);
   const isCross = search != null && search.iatas.length >= 2;
 
-  // /routes filters by a single IATA only, so when the region resolves to exactly one IATA push the
-  // filter to the server for true server-side paging; otherwise page unfiltered and filter the region
-  // client-side below (a region can span several IATAs, which the endpoint can't express).
-  const serverIata = iatas && iatas.length === 1 ? iatas[0] : undefined;
-
-  // Page the route set on demand (50 at a time, cursor = last route's lastSeen ms) — the DataTable
-  // pulls the next page via loadMore() as you scroll, instead of eagerly loading the whole set.
-  const serverOrdered = sort.header === "Last seen" && sort.direction === "desc";
-  const { items: listRoutes, loadedCount, isPaging, isError, isLoading: listLoading, loadMore, hasMore, isComplete } =
-    useInfinitePages<KnownRoute>({
-      options: routeQueries.list({ iata: serverIata ?? "" }),
+  // Region filtering and every sortable column are handled by the keyset-paginated endpoint. A sort
+  // change creates a new query key and starts at the first correctly ordered page.
+  const { items: listRoutes, loadedCount, isPaging, isError, isLoading: listLoading, loadMore } =
+    useInfinitePages<KnownRoute, string | undefined>({
+      options: routeQueries.list({
+        iatas,
+        sort: ROUTE_SORT_KEYS[sort.header] ?? "last_seen",
+        direction: sort.direction,
+      }),
       getId: routeId,
-      keepPrevious: true,
-      // The API already pages newest-first, so that default sort is globally correct without loading
-      // everything. Any other requested sort completes the cursor chain before DataTable applies it.
-      auto: !search && !serverOrdered,
+      auto: false,
     });
 
   const { data: searchRoutes, isLoading: searchLoading } = useQuery({
@@ -203,29 +206,15 @@ export function RouteTable() {
     [iataCodes],
   );
 
-  // searching shows the server's matches as-is; otherwise show the region-filtered full list (empty
-  // region = all). Filtering by IATA stays client-side, consistent with the other tabs.
-  const rows = useMemo(() => {
-    if (search) return isCross ? [] : searchRoutes;
-    if (!iatas || iatas.length === 0) return listRoutes;
-    const set = new Set(iatas);
-    return listRoutes.filter((r) => set.has(r.iata));
-  }, [search, isCross, searchRoutes, listRoutes, iatas]);
+  const rows = useMemo(
+    () => (search ? (isCross ? [] : searchRoutes) : listRoutes),
+    [search, isCross, searchRoutes, listRoutes],
+  );
 
   const selectedRoute = useMemo(
     () => rows?.find((r) => String(r.id) === selectedKey),
     [rows, selectedKey],
   );
-
-  // A multi-IATA region filters globally-paged rows client-side, so the filtered list can be too
-  // short to ever trigger scroll paging — or empty, with the region's routes deeper in the cursor
-  // stream. Keep pulling pages until there's a screenful or the cap says the region is just sparse.
-  useEffect(() => {
-    if (search || serverIata || !iatas?.length) return;
-    if (!hasMore || isPaging) return;
-    if ((rows?.length ?? 0) >= 50 || loadedCount >= 1000) return;
-    loadMore();
-  }, [search, serverIata, iatas, hasMore, isPaging, rows, loadedCount, loadMore]);
 
   const canSearch = !!(from.trim() && to.trim() && searchIatas.length >= 1);
   // clear any selection when the visible list changes out from under it (search submit/clear)
@@ -245,12 +234,12 @@ export function RouteTable() {
 
   return (
     <div className="flex flex-col flex-1 min-h-0 min-w-0 w-full">
-      {/* stacks into two rows on mobile (the inputs would otherwise wrap around the arrow); one row at md+ */}
-      <div className="flex flex-col md:flex-row md:flex-wrap md:items-center gap-1.5 gap-y-1.5 px-4 py-2 border-b border-border-subtle bg-bg-base shrink-0">
+      {/* stacks in compact mode; the inputs would otherwise wrap around the arrow */}
+      <div className="flex flex-col lg:flex-row lg:flex-wrap lg:items-center gap-1.5 gap-y-1.5 px-4 py-2 border-b border-border-subtle bg-bg-base shrink-0">
         <div className="flex items-center gap-1.5">
           <span className="text-text-muted text-[11px] uppercase tracking-wider mr-1 shrink-0">{t("routes.findPath")}</span>
           <input
-            className={`${inputClass} flex-1 min-w-0 md:flex-none md:w-24`}
+            className={`${inputClass} flex-1 min-w-0 lg:flex-none lg:w-24`}
             placeholder={t("routes.fromHash")}
             value={from}
             onChange={(e) => setFrom(e.target.value)}
@@ -258,7 +247,7 @@ export function RouteTable() {
           />
           <span className="text-text-dim text-xs shrink-0" aria-hidden>→</span>
           <input
-            className={`${inputClass} flex-1 min-w-0 md:flex-none md:w-24`}
+            className={`${inputClass} flex-1 min-w-0 lg:flex-none lg:w-24`}
             placeholder={t("routes.toHash")}
             value={to}
             onChange={(e) => setTo(e.target.value)}
@@ -316,7 +305,7 @@ export function RouteTable() {
               emptyLabel={t(search ? "routes.noMatching" : "routes.none")}
               sort={sort}
               onSortChange={setSort}
-              sortReady={!!search || serverOrdered || isComplete}
+              sortMode={search ? "client" : "server"}
               onEndReached={search ? undefined : loadMore}
               renderCard={(route) => renderRouteCard(route, t)}
             />

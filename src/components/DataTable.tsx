@@ -1,15 +1,26 @@
 import { useMemo, useRef, useState, type ReactNode } from "react";
+import {
+  flexRender,
+  getCoreRowModel,
+  getSortedRowModel,
+  useReactTable,
+  type ColumnDef,
+  type SortingState,
+} from "@tanstack/react-table";
 import { useVirtualizer } from "@tanstack/react-virtual";
+import { useTranslation } from "react-i18next";
 import { EmptyState } from "./EmptyState";
 import { SkeletonRows } from "./SkeletonRows";
 import { useIsMobile } from "../hooks/useMediaQuery";
 
 export interface Column<T> {
-  header: string; // stable sort/key identity; may be an untranslated technical identifier
-  label?: string; // localized visible heading
+  header: string;
+  label?: string;
   cell: (row: T) => ReactNode;
-  className?: string; // extra classes applied to the <td>
-  sortValue?: (row: T) => string | number | null | undefined; // column is sortable when present
+  className?: string | ((row: T) => string);
+  sortValue?: (row: T) => string | number | null | undefined;
+  // Percentage of the available desktop width. Unspecified columns share the remainder.
+  size?: number;
 }
 
 export type SortDirection = "asc" | "desc";
@@ -24,37 +35,30 @@ interface DataTableProps<T> {
   rowKey: (row: T) => string;
   selectedKey: string | null;
   onSelect: (key: string | null) => void;
-  // Optional route/data preload signal. Fired only on explicit user intent (hover/focus/touch), never
-  // merely because a virtual row enters the viewport.
   onRowIntent?: (key: string) => void;
   isLoading?: boolean;
   emptyLabel: string;
   defaultSort?: { header: string; direction?: SortDirection };
-  // Optional controlled sort. Server-paged entity tables bind this to their query key; smaller
-  // client-side tables can keep the simpler internal sort state.
   sort?: SortState;
   onSortChange?: (sort: SortState) => void;
-  // Server mode keeps row order exactly as returned by the API while retaining the same sortable
-  // header UI. Client mode (default) applies sortValue locally.
+  // Server mode keeps API order while TanStack retains the sortable header state.
   sortMode?: "client" | "server";
-  // false means a requested client-side global sort is waiting for the complete result set. Keep the
-  // current page order until every page is present, then apply the sort once instead of reshuffling
-  // the viewport as each page arrives. Ignored in server mode.
+  // A paged client table does not sort until all pages are ready.
   sortReady?: boolean;
-  // called when the scroll position nears the bottom, for on-demand paging (omit = no infinite scroll)
   onEndReached?: () => void;
-  // Large entity datasets opt in; small analytics/routes tables keep the simpler full rendering.
   virtualize?: boolean;
-  // when set, rows render as stacked cards below the md breakpoint instead of a table; sort UI lives
-  // in <thead>, so cards keep whichever sort state the caller supplied
+  // Without a custom card, the TanStack cells become a labelled responsive card automatically.
   renderCard?: (row: T) => ReactNode;
 }
 
-// fire onEndReached once the viewport is within this many px of the list's end
 const END_REACHED_THRESHOLD_PX = 200;
 
-// selectable, sticky-header list table shared by the entity tabs (observers, nodes, …)
+function sortStateToTanStack(sort: SortState): SortingState {
+  return sort.header ? [{ id: sort.header, desc: sort.direction === "desc" }] : [];
+}
 
+// TanStack owns the column, row and sorting models. Desktop and mobile are two presentations of the
+// same model, avoiding a second hand-written list implementation that can drift out of sync.
 export function DataTable<T>({
   columns,
   rows,
@@ -73,51 +77,59 @@ export function DataTable<T>({
   virtualize = false,
   renderCard,
 }: DataTableProps<T>) {
-  const asCards = useIsMobile() && !!renderCard;
+  const { t } = useTranslation();
+  const isMobile = useIsMobile();
   const scrollRef = useRef<HTMLDivElement>(null);
   const [internalSort, setInternalSort] = useState<SortState>(() => ({
     header: defaultSort?.header ?? "",
     direction: defaultSort?.direction ?? "asc",
   }));
   const sort = controlledSort ?? internalSort;
+  const sorting = useMemo(() => sortStateToTanStack(sort), [sort]);
 
-  function toggleSort(header: string) {
-    const next: SortState =
-      sort.header === header
-        ? { header, direction: sort.direction === "asc" ? "desc" : "asc" }
-        : { header, direction: "asc" };
-    if (onSortChange) onSortChange(next);
-    else setInternalSort(next);
-  }
+  const tableColumns = useMemo<ColumnDef<T>[]>(
+    () => columns.map((column) => ({
+      id: column.header,
+      header: column.label ?? column.header,
+      accessorFn: column.sortValue,
+      cell: (context) => column.cell(context.row.original),
+      enableSorting: !!column.sortValue,
+      sortDescFirst: false,
+      sortUndefined: "last",
+      meta: { className: column.className },
+    })),
+    [columns],
+  );
 
-  const sortedRows = useMemo(() => {
-    if (!rows || sortMode === "server" || !sortReady) return rows;
-    const col = columns.find((c) => c.header === sort.header && c.sortValue);
-    if (!col?.sortValue) return rows;
-    const getValue = col.sortValue;
-    const dir = sort.direction === "asc" ? 1 : -1;
-    return [...rows].sort((a, b) => {
-      const av = getValue(a);
-      const bv = getValue(b);
-      const aEmpty = av == null || av === "";
-      const bEmpty = bv == null || bv === "";
-      if (aEmpty || bEmpty) return aEmpty === bEmpty ? 0 : aEmpty ? 1 : -1; // empties sink to the bottom
-      if (typeof av === "number" && typeof bv === "number") return (av - bv) * dir;
-      return String(av).localeCompare(String(bv), undefined, { numeric: true }) * dir;
-    });
-  }, [rows, columns, sort, sortMode, sortReady]);
-
-  // React Compiler deliberately skips components using TanStack Virtual's imperative API.
+  // React Compiler deliberately skips components using TanStack Table's imperative API.
   // eslint-disable-next-line react-hooks/incompatible-library
-  const virtualizer = useVirtualizer({
-    count: virtualize ? (sortedRows?.length ?? 0) : 0,
-    getScrollElement: () => scrollRef.current,
-    estimateSize: () => (asCards ? 76 : 39),
-    overscan: 8,
-    getItemKey: (index) => {
-      const row = sortedRows?.[index];
-      return row ? rowKey(row) : index;
+  const table = useReactTable({
+    data: rows ?? [],
+    columns: tableColumns,
+    state: { sorting },
+    getRowId: (row) => rowKey(row),
+    getCoreRowModel: getCoreRowModel(),
+    getSortedRowModel: getSortedRowModel(),
+    manualSorting: sortMode === "server" || !sortReady,
+    enableSortingRemoval: false,
+    onSortingChange: (updater) => {
+      const next = typeof updater === "function" ? updater(sorting) : updater;
+      const nextSort: SortState = next[0]
+        ? { header: next[0].id, direction: next[0].desc ? "desc" : "asc" }
+        : sort;
+      if (onSortChange) onSortChange(nextSort);
+      else setInternalSort(nextSort);
     },
+  });
+
+  const modelRows = table.getRowModel().rows;
+
+  const virtualizer = useVirtualizer({
+    count: virtualize ? modelRows.length : 0,
+    getScrollElement: () => scrollRef.current,
+    estimateSize: () => (isMobile ? 84 : 42),
+    overscan: 8,
+    getItemKey: (index) => modelRows[index]?.id ?? index,
   });
 
   function handleScroll(e: React.UIEvent<HTMLDivElement>) {
@@ -134,43 +146,94 @@ export function DataTable<T>({
     );
   }
 
-  if (asCards) {
+  const sortableHeaders = table.getFlatHeaders().filter((header) => header.column.getCanSort());
+
+  if (isMobile) {
     const virtualItems = virtualizer.getVirtualItems();
+    const renderedRows = virtualize
+      ? virtualItems.map((item) => ({ row: modelRows[item.index]!, item }))
+      : modelRows.map((row) => ({ row, item: null }));
+
     return (
-      <div ref={scrollRef} className="flex-1 overflow-y-auto" onScroll={handleScroll} data-virtualized={virtualize || undefined}>
-        {sortedRows && sortedRows.length > 0 ? (
-          <div
-            className={virtualize ? "relative" : "flex flex-col divide-y divide-border/40"}
-            style={virtualize ? { height: virtualizer.getTotalSize() } : undefined}
-          >
-            {(virtualize ? virtualItems.map((item) => ({ row: sortedRows[item.index]!, item })) : sortedRows.map((row) => ({ row, item: null }))).map(({ row, item }) => {
-              const key = rowKey(row);
-              const isSelected = key === selectedKey;
+      <div className="flex min-h-0 flex-1 flex-col bg-bg-base">
+        {sortableHeaders.length > 0 && (
+          <div className="flex shrink-0 items-center gap-1.5 overflow-x-auto border-b border-border bg-bg-surface px-3 py-2 font-mono text-[10px] uppercase tracking-wider" aria-label={t("common.sort")}>
+            {sortableHeaders.map((header) => {
+              const direction = header.column.getIsSorted();
               return (
                 <button
-                  key={key}
-                  ref={item ? virtualizer.measureElement : undefined}
-                  data-index={item?.index}
+                  key={header.id}
                   type="button"
-                  className={`w-full text-left px-3 py-2.5 border-l-2 cursor-pointer transition-colors ${virtualize ? "border-b border-b-border/40" : ""} ${
-                    isSelected
-                      ? "bg-primary/10 border-l-primary"
-                      : "border-l-transparent hover:bg-primary/5 hover:border-l-primary/50"
+                  onClick={header.column.getToggleSortingHandler()}
+                  aria-busy={sortMode === "client" && direction !== false && !sortReady ? true : undefined}
+                  className={`flex shrink-0 items-center gap-1 rounded-sm border px-2 py-1 transition-colors ${
+                    direction
+                      ? "border-primary-dim bg-primary/10 text-text-normal"
+                      : "border-border text-text-muted hover:border-primary-dim hover:text-text-normal"
                   }`}
-                  style={item ? { position: "absolute", top: 0, left: 0, transform: `translateY(${item.start}px)` } : undefined}
-                  onMouseEnter={() => onRowIntent?.(key)}
-                  onFocus={() => onRowIntent?.(key)}
-                  onTouchStart={() => onRowIntent?.(key)}
-                  onClick={() => onSelect(isSelected ? null : key)}
                 >
-                  {renderCard!(row)}
+                  {flexRender(header.column.columnDef.header, header.getContext())}
+                  <span aria-hidden className={direction ? "text-primary" : "text-text-dim/50"}>
+                    {direction === "desc" ? "▼" : "▲"}
+                  </span>
                 </button>
               );
             })}
           </div>
-        ) : (
-          <EmptyState title={emptyLabel} />
         )}
+
+        <div ref={scrollRef} className="min-h-0 flex-1 overflow-y-auto" onScroll={handleScroll} data-virtualized={virtualize || undefined}>
+          {modelRows.length > 0 ? (
+            <div
+              className={virtualize ? "relative" : "flex flex-col divide-y divide-border/50"}
+              style={virtualize ? { height: virtualizer.getTotalSize() } : undefined}
+            >
+              {renderedRows.map(({ row, item }) => {
+                const isSelected = row.id === selectedKey;
+                return (
+                  <button
+                    key={row.id}
+                    ref={item ? virtualizer.measureElement : undefined}
+                    data-index={item?.index}
+                    type="button"
+                    className={`w-full cursor-pointer border-l-2 px-3 py-3 text-left transition-colors ${virtualize ? "border-b border-b-border/50" : ""} ${
+                      isSelected
+                        ? "border-l-primary bg-primary/10"
+                        : "border-l-transparent hover:border-l-primary/50 hover:bg-primary/5"
+                    }`}
+                    style={item ? { position: "absolute", top: 0, left: 0, transform: `translateY(${item.start}px)` } : undefined}
+                    onMouseEnter={() => onRowIntent?.(row.id)}
+                    onFocus={() => onRowIntent?.(row.id)}
+                    onTouchStart={() => onRowIntent?.(row.id)}
+                    onClick={() => onSelect(isSelected ? null : row.id)}
+                  >
+                    {renderCard ? renderCard(row.original) : (
+                      <dl className="grid grid-cols-2 gap-x-4 gap-y-2 font-mono text-xs">
+                        {row.getVisibleCells().map((cell, index) => {
+                          const header = table.getFlatHeaders().find((candidate) => candidate.column.id === cell.column.id);
+                          return (
+                            <div key={cell.id} className={index === 0 ? "col-span-2 min-w-0" : "min-w-0"}>
+                              <dt className="mb-0.5 text-[9px] uppercase tracking-wider text-text-dim">
+                                {header ? flexRender(cell.column.columnDef.header, header.getContext()) : cell.column.id}
+                              </dt>
+                              <dd className={`min-w-0 ${typeof cell.column.columnDef.meta?.className === "function"
+                                ? cell.column.columnDef.meta.className(row.original)
+                                : (cell.column.columnDef.meta?.className ?? "")}`}>
+                                {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                              </dd>
+                            </div>
+                          );
+                        })}
+                      </dl>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          ) : (
+            <EmptyState title={emptyLabel} />
+          )}
+        </div>
       </div>
     );
   }
@@ -180,72 +243,85 @@ export function DataTable<T>({
   const bottomPadding = virtualItems.length > 0
     ? virtualizer.getTotalSize() - virtualItems[virtualItems.length - 1]!.end
     : 0;
-  const tableRows = virtualize
-    ? virtualItems.map((item) => ({ row: sortedRows![item.index]!, item }))
-    : (sortedRows ?? []).map((row) => ({ row, item: null }));
+  const renderedRows = virtualize
+    ? virtualItems.map((item) => ({ row: modelRows[item.index]!, item }))
+    : modelRows.map((row) => ({ row, item: null }));
 
   return (
-    <div ref={scrollRef} className="flex-1 overflow-y-auto overflow-x-auto" onScroll={handleScroll} data-virtualized={virtualize || undefined}>
-      {sortedRows && sortedRows.length > 0 ? (
-        <table className="w-full text-xs font-mono">
-          <thead className="sticky top-0 bg-bg-surface z-10">
-            <tr className="text-text-muted text-[11px] uppercase tracking-wider border-b border-border">
-              {columns.map((col) => {
-                if (!col.sortValue) {
-                  return <th key={col.header} className="text-left px-4 py-2 font-medium">{col.label ?? col.header}</th>;
-                }
-                const active = sort.header === col.header;
-                return (
-                  <th key={col.header} className="text-left px-4 py-2 font-medium">
-                    <button
-                      type="button"
-                      onClick={() => toggleSort(col.header)}
-                      className="flex items-center gap-1 cursor-pointer hover:text-text-normal transition-colors"
-                      aria-busy={sortMode === "client" && active && !sortReady ? true : undefined}
+    <div ref={scrollRef} className="min-h-0 flex-1 overflow-x-auto overflow-y-auto" onScroll={handleScroll} data-virtualized={virtualize || undefined}>
+      {modelRows.length > 0 ? (
+        <table className="h-fit w-full border-collapse font-mono text-xs">
+          <thead className="sticky top-0 z-10 bg-bg-surface">
+            {table.getHeaderGroups().map((headerGroup) => (
+              <tr key={headerGroup.id} className="h-9 border-b border-border text-[11px] uppercase tracking-wider text-text-muted">
+                {headerGroup.headers.map((header, index) => {
+                  const direction = header.column.getIsSorted();
+                  const sourceColumn = columns[index];
+                  return (
+                    <th
+                      key={header.id}
+                      className="whitespace-nowrap px-4 py-2 text-left font-medium"
+                      style={sourceColumn?.size ? { width: `${sourceColumn.size}%` } : undefined}
                     >
-                      {col.label ?? col.header}
-                      <span className={active ? "text-text-normal" : "text-text-dim/40"}>
-                        {active ? (sort.direction === "asc" ? "▲" : "▼") : "▲"}
-                      </span>
-                    </button>
-                  </th>
-                );
-              })}
-            </tr>
+                      {header.isPlaceholder ? null : header.column.getCanSort() ? (
+                        <button
+                          type="button"
+                          onClick={header.column.getToggleSortingHandler()}
+                          className="flex cursor-pointer items-center gap-1 transition-colors hover:text-text-normal"
+                          aria-busy={sortMode === "client" && direction !== false && !sortReady ? true : undefined}
+                        >
+                          {flexRender(header.column.columnDef.header, header.getContext())}
+                          <span className={direction ? "text-primary" : "text-text-dim/40"} aria-hidden>
+                            {direction === "desc" ? "▼" : "▲"}
+                          </span>
+                        </button>
+                      ) : (
+                        flexRender(header.column.columnDef.header, header.getContext())
+                      )}
+                    </th>
+                  );
+                })}
+              </tr>
+            ))}
           </thead>
           <tbody>
             {virtualize && topPadding > 0 && (
               <tr aria-hidden><td colSpan={columns.length} style={{ height: topPadding, padding: 0, border: 0 }} /></tr>
             )}
-            {tableRows.map(({ row, item }) => {
-              const key = rowKey(row);
-              const isSelected = key === selectedKey;
+            {renderedRows.map(({ row, item }) => {
+              const isSelected = row.id === selectedKey;
               return (
                 <tr
-                  key={key}
+                  key={row.id}
                   ref={item ? virtualizer.measureElement : undefined}
                   data-index={item?.index}
-                  className={`border-b border-border/40 border-l-2 cursor-pointer transition-colors ${
+                  className={`h-10 cursor-pointer border-b border-l-2 border-b-border/50 transition-colors ${
                     isSelected
-                      ? "bg-primary/10 border-l-primary"
-                      : "border-l-transparent hover:bg-primary/5 hover:border-l-primary/50"
+                      ? "border-l-primary bg-primary/10"
+                      : "border-l-transparent hover:border-l-primary/50 hover:bg-primary/5"
                   }`}
-                  role="button"
                   tabIndex={0}
-                  onMouseEnter={() => onRowIntent?.(key)}
-                  onFocus={() => onRowIntent?.(key)}
-                  onTouchStart={() => onRowIntent?.(key)}
+                  aria-selected={isSelected}
+                  onMouseEnter={() => onRowIntent?.(row.id)}
+                  onFocus={() => onRowIntent?.(row.id)}
+                  onTouchStart={() => onRowIntent?.(row.id)}
                   onKeyDown={(event) => {
                     if (event.key === "Enter" || event.key === " ") {
                       event.preventDefault();
-                      onSelect(isSelected ? null : key);
+                      onSelect(isSelected ? null : row.id);
                     }
                   }}
-                  onClick={() => onSelect(isSelected ? null : key)}
+                  onClick={() => onSelect(isSelected ? null : row.id)}
                 >
-                  {columns.map((col) => (
-                    <td key={col.header} className={`px-4 py-2 ${col.className ?? ""}`}>{col.cell(row)}</td>
-                  ))}
+                  {row.getVisibleCells().map((cell) => {
+                    const metaClass = cell.column.columnDef.meta?.className;
+                    const cellClass = typeof metaClass === "function" ? metaClass(row.original) : (metaClass ?? "");
+                    return (
+                      <td key={cell.id} className={`px-4 py-2 align-middle ${cellClass}`}>
+                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                      </td>
+                    );
+                  })}
                 </tr>
               );
             })}
@@ -259,4 +335,11 @@ export function DataTable<T>({
       )}
     </div>
   );
+}
+
+declare module "@tanstack/react-table" {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  interface ColumnMeta<TData, TValue> {
+    className?: string | ((row: TData) => string);
+  }
 }

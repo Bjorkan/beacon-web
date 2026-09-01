@@ -24,7 +24,8 @@ export function usePacketFilters() {
     observers: search.obs ?? [],
     scopes: search.scope ?? [],
     search: search.q ?? "",
-    searchField: "hash",
+    searchField:
+      search.sf === "path" || search.sf === "payload" ? search.sf : "hash",
   };
 
   const patch = useCallback(
@@ -103,9 +104,8 @@ export function usePacketFilters() {
   return { filters, setFilter, setSearch, setSearchField, clearFilters };
 }
 
-// The /packets endpoint accepts comma-separated payloadTypes/routeTypes/scopes, so any selected
-// dimension goes server-side and pagination pulls the correctly-filtered set from the full history.
-// (observers has no server param, so it stays client-side in matchesFilters, as does the live buffer.)
+// Every packet filter is sent to /packets so pagination always traverses the matching history instead
+// of filtering a partial client-side page. The predicate below is retained for live WS summaries.
 export function toServerFilter(
   filters: PacketFilterState,
 ): PacketServerFilter | null {
@@ -114,7 +114,14 @@ export function toServerFilter(
     serverFilter.payloadTypes = filters.payloadTypes;
   if (filters.routeTypes.length > 0)
     serverFilter.routeTypes = filters.routeTypes;
+  if (filters.observers.length > 0)
+    serverFilter.observers = filters.observers;
   if (filters.scopes.length > 0) serverFilter.scopes = filters.scopes;
+  const search = filters.search.trim();
+  if (search) {
+    serverFilter.search = search;
+    serverFilter.searchField = filters.searchField;
+  }
   return Object.keys(serverFilter).length > 0 ? serverFilter : null;
 }
 
@@ -153,7 +160,7 @@ export function matchesFilters(
     return false;
   }
   if (filters.search && filters.searchField === "hash") {
-    const q = filters.search.toLowerCase();
+    const q = filters.search.toLowerCase().replace(/[\s:-]/g, "");
     if (!packet.packetHash.toLowerCase().includes(q)) {
       return false;
     }

@@ -110,23 +110,32 @@ describe("RouteTable search", () => {
     expect(screen.getAllByText("Dst Node").length).toBeGreaterThan(0);
   });
 
-  it("keeps paging for a multi-IATA region until its routes surface", async () => {
-    const foreign: KnownRoute = { id: 1, iata: "CCC", hopCount: 1, hops: [], firstSeen: 1, lastSeen: 5, observationCount: 9 };
+  it("sends every selected region IATA to the backend", async () => {
     const wanted: KnownRoute = { id: 2, iata: "AAA", hopCount: 2, hops: [], firstSeen: 1, lastSeen: 3, observationCount: 17 };
-    // first global page has nothing from the region; the region's route sits on page two
-    mockGetKnownRoutesPage.mockImplementation(({ cursor } = {}) =>
-      Promise.resolve(
-        cursor === undefined
-          ? { items: [foreign], nextCursor: 5, hasMore: true }
-          : { items: [wanted], nextCursor: null, hasMore: false },
-      ),
-    );
+    mockGetKnownRoutesPage.mockResolvedValue({ items: [wanted], nextPageToken: null, nextCursor: null, hasMore: false });
 
     renderTable({ regions: [], iatas: ["AAA", "BBB"] });
 
-    // without fill-paging the table dead-ends on "No routes" — scroll can never fire on an empty list
     expect(await screen.findByText("17")).toBeInTheDocument();
-    expect(mockGetKnownRoutesPage.mock.calls.length).toBeGreaterThanOrEqual(2);
+    expect(mockGetKnownRoutesPage).toHaveBeenCalledWith(expect.objectContaining({
+      iatas: ["AAA", "BBB"],
+      sort: "last_seen",
+      direction: "desc",
+    }));
+  });
+
+  it("requests a newly sorted page instead of sorting loaded rows locally", async () => {
+    const route: KnownRoute = { id: 3, iata: "AAA", hopCount: 3, hops: [], firstSeen: 1, lastSeen: 2, observationCount: 8 };
+    mockGetKnownRoutesPage.mockResolvedValue({ items: [route], nextPageToken: null, nextCursor: null, hasMore: false });
+    renderTable();
+    await screen.findByText("8");
+
+    fireEvent.click(screen.getByRole("button", { name: /Hops/ }));
+
+    await waitFor(() => expect(mockGetKnownRoutesPage).toHaveBeenLastCalledWith(expect.objectContaining({
+      sort: "hops",
+      direction: "asc",
+    })));
   });
 
   it("shows a route's observation count in the list", async () => {

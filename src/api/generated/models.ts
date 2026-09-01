@@ -63,6 +63,8 @@ export type PageAdvertObservation = { hasMore?: boolean; items?: Array<AdvertObs
 
 export type PageChannelSummary = { hasMore?: boolean; items?: Array<ChannelSummary>; nextCursor?: number; nextPageToken?: string; };
 
+export type PageKnownRoute = { hasMore?: boolean; items?: Array<KnownRoute>; nextCursor?: number; nextPageToken?: string; };
+
 export type PageNodeSummary = { hasMore?: boolean; items?: Array<NodeSummary>; nextCursor?: number; nextPageToken?: string; };
 
 export type PageObserverSummary = { hasMore?: boolean; items?: Array<ObserverSummary>; nextCursor?: number; nextPageToken?: string; };

@@ -13,11 +13,11 @@ describe("PacketTableHeader", () => {
     expect(screen.queryByText("Hash Size")).not.toBeInTheDocument();
   });
 
-  it("is hidden below md and shares the exact grid with rows", () => {
+  it("is hidden below lg and shares the exact grid with rows", () => {
     const { container } = render(<PacketTableHeader />);
     const el = container.firstElementChild as HTMLElement;
     expect(el.className).toContain("hidden");
-    expect(el.className).toContain("md:grid");
+    expect(el.className).toContain("lg:grid");
     expect(el.style.gridTemplateColumns).toBe(GRID_TEMPLATE);
     expect(el.children).toHaveLength(9);
   });

@@ -78,10 +78,10 @@ describe("AppShell", () => {
     );
     expect(screen.getByRole("status", { name: "Live" }).parentElement).toHaveClass(
       "hidden",
-      "sm:block",
+      "lg:block",
       "shrink-0",
     );
-    expect(screen.getByRole("link", { name: "GitHub" })).toHaveClass("hidden", "sm:inline-flex", "shrink-0");
+    expect(screen.getByRole("link", { name: "GitHub" })).toHaveClass("hidden", "lg:inline-flex", "shrink-0");
     expect(container.querySelector("main")).toHaveClass("min-w-0");
   });
 });

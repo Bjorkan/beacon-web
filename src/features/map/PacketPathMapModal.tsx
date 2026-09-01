@@ -55,7 +55,7 @@ export function PacketPathMapModal({ detail, onClose, initialSelectedKey }: {
 
   return (
     <ModalOverlay label={t("map.packetPathLabel")} onClose={onClose}>
-      <div className="h-full w-full md:w-[860px] md:max-w-[92vw] bg-bg-surface flex flex-col">
+      <div className="h-full w-full lg:w-[860px] lg:max-w-[92vw] bg-bg-surface flex flex-col">
         <div className="flex items-center justify-between px-3 py-2 border-b border-border-subtle shrink-0">
           <span className="text-[13px] font-mono font-medium text-text-dim uppercase tracking-wider">{t("map.packetPath")}</span>
           <div className="flex items-center gap-1.5">
@@ -68,11 +68,11 @@ export function PacketPathMapModal({ detail, onClose, initialSelectedKey }: {
           </div>
         </div>
 
-        <div className="flex-1 min-h-0 flex flex-col md:flex-row">
-          <div className="h-[55vh] max-md:shrink-0 md:h-auto md:flex-1 min-h-0 bg-bg-base">
+        <div className="flex-1 min-h-0 flex flex-col lg:flex-row">
+          <div className="h-[55vh] max-lg:shrink-0 lg:h-auto lg:flex-1 min-h-0 bg-bg-base">
             <PacketPathMap paths={paths} selectedKey={selectedKey} styleId={styleId} />
           </div>
-          <div className="md:w-[220px] md:border-l border-t md:border-t-0 border-border flex flex-col min-h-0 overflow-y-auto">
+          <div className="lg:w-[220px] lg:border-l border-t lg:border-t-0 border-border flex flex-col min-h-0 overflow-y-auto">
             <div className="sticky top-0 bg-bg-surface z-10 border-b border-border-subtle">
               <Row active={selectedKey === null} label={t("map.allPaths")} onClick={() => setSelectedKey(null)} />
             </div>

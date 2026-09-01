@@ -4,7 +4,7 @@ import "../i18n";
 import { BottomSheet } from "./BottomSheet";
 import { ENABLED_TABS } from "../lib/constants";
 
-// Mobile-only tab bar (hidden at md+); overflow tabs live behind "More" in a bottom sheet.
+// Compact-shell tab bar (hidden at lg+); overflow tabs live behind "More" in a bottom sheet.
 const PRIMARY_TABS = ["Packets", "Channels", "Map", "Nodes"] as const;
 const OVERFLOW_TABS = ["Observers", "Routes", "Traces", "Analytics"] as const;
 
@@ -119,7 +119,7 @@ export function BottomNav({ activeTab, onTabChange }: { activeTab: string; onTab
 
   return (
     <>
-      <nav className="flex md:hidden shrink-0 bg-bg-surface border-t border-border" role="tablist" aria-label={t("navigation.primary")}>
+      <nav className="flex lg:hidden shrink-0 bg-bg-surface border-t border-border" role="tablist" aria-label={t("navigation.primary")}>
         {primary.map((tab) => (
           <NavButton
             key={tab}

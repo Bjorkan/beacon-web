@@ -79,9 +79,12 @@ describe("toServerFilter", () => {
     expect(toServerFilter(filters)).toEqual({ payloadTypes: [4], routeTypes: [1, 2], scopes: ["#bc"] });
   });
 
-  it("ignores client-only filters (observers, search)", () => {
-    expect(toServerFilter({ ...EMPTY_FILTERS, observers: ["o1"] })).toBeNull();
-    expect(toServerFilter({ ...EMPTY_FILTERS, search: "ab" })).toBeNull();
+  it("pushes observers and the selected search field server-side", () => {
+    expect(toServerFilter({ ...EMPTY_FILTERS, observers: ["o1"] })).toEqual({ observers: ["o1"] });
+    expect(toServerFilter({ ...EMPTY_FILTERS, search: " ab ", searchField: "payload" })).toEqual({
+      search: "ab",
+      searchField: "payload",
+    });
   });
 });
 
@@ -96,11 +99,12 @@ describe("usePacketFilters — sf param", () => {
     await waitFor(() => expect(result.current?.filters.searchField).toBe("hash"));
   });
 
-  it("falls back to hash for unimplemented sf values", async () => {
-    // path/payload search isn't implemented — accepting them would silently match everything
-    for (const sf of ["path", "payload", "bogus"]) {
+  it("accepts path and payload, but falls back to hash for unknown fields", async () => {
+    for (const sf of ["path", "payload"] as const) {
       const { result } = renderHook(() => usePacketFilters(), { wrapper: routerAt(`/?sf=${sf}&q=ab`) });
-      await waitFor(() => expect(result.current?.filters.searchField).toBe("hash"));
+      await waitFor(() => expect(result.current?.filters.searchField).toBe(sf));
     }
+    const { result } = renderHook(() => usePacketFilters(), { wrapper: routerAt("/?sf=bogus&q=ab") });
+    await waitFor(() => expect(result.current?.filters.searchField).toBe("hash"));
   });
 });

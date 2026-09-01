@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, afterEach } from "vitest";
-import { render, fireEvent, screen } from "@testing-library/react";
+import { render, fireEvent, screen, within } from "@testing-library/react";
 import { DataTable, type Column } from "../../src/components/DataTable";
 
 interface Row {
@@ -67,6 +67,23 @@ describe("DataTable onEndReached", () => {
 });
 
 describe("DataTable card mode", () => {
+  it("automatically renders labelled cards for a wide table on mobile", () => {
+    setMobile(true);
+    const { container } = render(
+      <DataTable
+        columns={columns}
+        rows={rows}
+        rowKey={(r) => r.id}
+        selectedKey={null}
+        onSelect={() => {}}
+        emptyLabel="none"
+      />,
+    );
+    expect(container.querySelector("table")).toBeNull();
+    expect(screen.getAllByText("ID")).toHaveLength(2);
+    expect(screen.getByText("a")).toBeInTheDocument();
+  });
+
   it("renders cards instead of a table when mobile and renderCard is provided", () => {
     setMobile(true);
     const { container } = render(
@@ -139,6 +156,25 @@ describe("DataTable card mode", () => {
     setScroll(scroller, { scrollTop: 400, clientHeight: 500, scrollHeight: 1000 });
     fireEvent.scroll(scroller);
     expect(onEndReached).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps TanStack sorting available above the mobile cards", () => {
+    setMobile(true);
+    const unsorted: Row[] = [{ id: "b" }, { id: "a" }];
+    const { container } = render(
+      <DataTable
+        columns={[{ header: "ID", cell: (r: Row) => r.id, sortValue: (r: Row) => r.id }]}
+        rows={unsorted}
+        rowKey={(r) => r.id}
+        selectedKey={null}
+        onSelect={() => {}}
+        emptyLabel="none"
+      />,
+    );
+
+    expect([...container.querySelectorAll("dd")].map((cell) => cell.textContent)).toEqual(["b", "a"]);
+    fireEvent.click(within(screen.getByLabelText(/Sort/)).getByRole("button", { name: /ID/ }));
+    expect([...container.querySelectorAll("dd")].map((cell) => cell.textContent)).toEqual(["a", "b"]);
   });
 });
 

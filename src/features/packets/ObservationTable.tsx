@@ -1,6 +1,9 @@
-import type { Observation } from "../../types/api";
+import { useMemo } from "react";
+import type { TFunction } from "i18next";
 import { useTranslation } from "react-i18next";
+import type { Observation } from "../../types/api";
 import { formatSnr, formatPropagation, snrLevel, SIGNAL_LEVEL_CLASSES } from "../../lib/formatters";
+import { DataTable, type Column } from "../../components/DataTable";
 import { Timestamp } from "../../components/Timestamp";
 import { PathData } from "./PathData";
 
@@ -10,53 +13,85 @@ interface Props {
   onSelect: (id: number) => void;
 }
 
-// Per-observer readings vary by distance; presentational component owned by caller.
+function observationColumns(t: TFunction): Column<Observation>[] {
+  return [
+    {
+      header: "Observer",
+      label: t("entities.observer"),
+      size: 19,
+      cell: (observation) => observation.observerName ?? observation.observerId.slice(0, 8),
+    },
+    {
+      header: "IATA",
+      size: 8,
+      className: "font-mono font-bold text-primary tracking-wider",
+      cell: (observation) => observation.iata,
+    },
+    {
+      header: "Heard",
+      label: t("packets.heard"),
+      size: 14,
+      className: "text-text-muted",
+      cell: (observation) => <Timestamp value={observation.heardAt} />,
+    },
+    {
+      header: "SNR",
+      size: 8,
+      className: (observation) => {
+        const level = snrLevel(observation.snr);
+        return `font-mono ${level ? SIGNAL_LEVEL_CLASSES[level] : "text-text-dim"}`;
+      },
+      cell: (observation) => formatSnr(observation.snr),
+    },
+    {
+      header: "RSSI",
+      size: 8,
+      className: "font-mono text-text-muted",
+      cell: (observation) => observation.rssi ?? "—",
+    },
+    {
+      header: "Prop",
+      size: 10,
+      className: "font-mono text-text-muted",
+      cell: (observation) => formatPropagation(observation.propagationTimeMs),
+    },
+    {
+      header: "Hops",
+      label: t("packets.hops"),
+      size: 8,
+      className: "font-mono text-text-muted",
+      cell: (observation) => observation.pathLength.hopCount,
+    },
+    {
+      header: "Path",
+      label: t("fields.path"),
+      cell: (observation) => observation.pathBytes ? (
+        <PathData
+          pathBytes={observation.pathBytes}
+          hashSize={observation.pathLength.hashSize}
+          resolvedPath={observation.resolvedPath}
+          size="sm"
+        />
+      ) : (
+        <span className="text-text-dim">—</span>
+      ),
+    },
+  ];
+}
+
+// The compact observation list now uses the same TanStack row/column pipeline as every other table.
 export function ObservationTable({ observations, selectedId, onSelect }: Props) {
   const { t } = useTranslation();
+  const columns = useMemo(() => observationColumns(t), [t]);
+
   return (
-    <table className="w-full text-[10px] border-collapse">
-      <thead>
-        <tr className="text-text-dim uppercase tracking-wider text-[9px]">
-          <th className="text-left font-medium py-1 px-1.5">{t("entities.observer")}</th>
-          <th className="text-left font-medium py-1 px-1.5">IATA</th>
-          <th className="text-left font-medium py-1 px-1.5">{t("packets.heard")}</th>
-          <th className="text-left font-medium py-1 px-1.5">SNR</th>
-          <th className="text-left font-medium py-1 px-1.5">RSSI</th>
-          <th className="text-left font-medium py-1 px-1.5">Prop</th>
-          <th className="text-left font-medium py-1 px-1.5">{t("packets.hops")}</th>
-          <th className="text-left font-medium py-1 px-1.5">{t("fields.path")}</th>
-        </tr>
-      </thead>
-      <tbody>
-        {observations.map((o) => {
-          const level = snrLevel(o.snr);
-          return (
-            <tr
-              key={o.id}
-              aria-selected={o.id === selectedId}
-              onClick={() => onSelect(o.id)}
-              className={`cursor-pointer border-t border-border-subtle ${o.id === selectedId ? "bg-primary/8" : "hover:bg-bg-raised/40"}`}
-            >
-              <td className="py-1 px-1.5 text-text-normal">{o.observerName ?? o.observerId.slice(0, 8)}</td>
-              <td className="py-1 px-1.5 font-mono font-bold text-primary tracking-wider">{o.iata}</td>
-              <td className="py-1 px-1.5 text-text-muted"><Timestamp value={o.heardAt} /></td>
-              <td className={`py-1 px-1.5 font-mono ${level ? SIGNAL_LEVEL_CLASSES[level] : "text-text-dim"}`}>
-                {formatSnr(o.snr)}
-              </td>
-              <td className="py-1 px-1.5 font-mono text-text-muted">{o.rssi ?? "—"}</td>
-              <td className="py-1 px-1.5 font-mono text-text-muted">{formatPropagation(o.propagationTimeMs)}</td>
-              <td className="py-1 px-1.5 font-mono text-text-muted">{o.pathLength.hopCount}</td>
-              <td className="py-1 px-1.5">
-                {o.pathBytes ? (
-                  <PathData pathBytes={o.pathBytes} hashSize={o.pathLength.hashSize} resolvedPath={o.resolvedPath} size="sm" />
-                ) : (
-                  <span className="text-text-dim">—</span>
-                )}
-              </td>
-            </tr>
-          );
-        })}
-      </tbody>
-    </table>
+    <DataTable
+      columns={columns}
+      rows={observations}
+      rowKey={(observation) => String(observation.id)}
+      selectedKey={selectedId == null ? null : String(selectedId)}
+      onSelect={(key) => { if (key !== null) onSelect(Number(key)); }}
+      emptyLabel={t("common.noData")}
+    />
   );
 }

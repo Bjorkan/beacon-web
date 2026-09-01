@@ -169,7 +169,7 @@ describe("Packets deep links", () => {
 });
 
 describe("leaving the Packets tab", () => {
-  // The drawer is full-screen below md, and it renders on Channels too — so a mobile tab change has
+  // The drawer is full-screen below lg, and it renders on Channels too — so a mobile tab change has
   // to drop ?analyze or the analyzer covers the tab the user just asked for.
   it("closes the analyzer on mobile", async () => {
     setMobile(true);
