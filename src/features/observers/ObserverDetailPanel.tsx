@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import type { Observer, AdvertObservation } from "./types";
 import { useQuery } from "@tanstack/react-query";
 import { getObserver, getObserverAdverts } from "../../api/client";
@@ -15,33 +16,35 @@ import { ScopeTag } from "../../components/ScopeTag";
 
 function AdvertRow({ advert, onClick }: { advert: AdvertObservation; onClick?: () => void }) {
   const level = snrLevel(advert.snr);
+  const Tag = onClick ? "button" : "div";
   return (
-    <div
-      className={`bg-bg-base border border-border rounded px-3 py-2 border-l-2 border-l-primary ${onClick ? "cursor-pointer hover:bg-text-normal/3" : ""}`}
+    <Tag
+      type={onClick ? "button" : undefined}
+      className={`w-full text-left bg-bg-base border border-border rounded px-3 py-2 border-l-2 border-l-primary ${onClick ? "cursor-pointer hover:bg-text-normal/3" : ""}`}
       onClick={onClick}
     >
-      <div className="flex items-center gap-2 text-[11px] mb-1.5">
+      <span className="flex items-center gap-2 text-[11px] mb-1.5">
         <span className={`font-mono font-semibold tracking-wider truncate ${advert.nodeName ? "text-primary" : "text-text-dim italic"}`}>
           {advert.nodeName ?? (advert.nodePublicKey ? formatHex(advert.nodePublicKey) : "unknown")}
         </span>
         <IataChip>{advert.iata}</IataChip>
         <Timestamp value={advert.heardAt} className="text-text-dim ml-auto font-mono text-[11px]" />
-      </div>
-      <div className="flex gap-5 font-mono text-xs">
-        <div className="flex flex-col">
+      </span>
+      <span className="flex gap-5 font-mono text-xs">
+        <span className="flex flex-col">
           <span className="text-text-dim text-[10px] font-medium uppercase tracking-wider">SNR</span>
           <span className={`font-medium ${level ? SIGNAL_LEVEL_CLASSES[level] : "text-text-normal"}`}>{formatSnr(advert.snr)}</span>
-        </div>
-        <div className="flex flex-col">
+        </span>
+        <span className="flex flex-col">
           <span className="text-text-dim text-[10px] font-medium uppercase tracking-wider">RSSI</span>
           <span className={`font-medium ${level ? SIGNAL_LEVEL_CLASSES[level] : "text-text-normal"}`}>{advert.rssi ?? "—"}</span>
-        </div>
-        <div className="flex flex-col">
+        </span>
+        <span className="flex flex-col">
           <span className="text-text-dim text-[10px] font-medium uppercase tracking-wider">Hops</span>
           <span className="font-medium text-text-normal">{advert.hopCount ?? "—"}</span>
-        </div>
-      </div>
-    </div>
+        </span>
+      </span>
+    </Tag>
   );
 }
 
@@ -101,11 +104,12 @@ function RadioSection({ observer, noiseFloor }: { observer: Observer; noiseFloor
 interface ObserverDetailPanelProps {
   observerId: string;
   onClose: () => void;
-  onAnalyzePacket?: (hash: string) => void;
+  onAnalyzePacket?: (hash: string, observationId: number) => void;
   onViewStats?: (observerId: string) => void;
 }
 
 export function ObserverDetailPanel({ observerId, onClose, onAnalyzePacket, onViewStats }: ObserverDetailPanelProps) {
+  const { t } = useTranslation();
   const { data: observer, isLoading } = useQuery({
     queryKey: ["observer", observerId],
     queryFn: () => getObserver(observerId),
@@ -126,6 +130,7 @@ export function ObserverDetailPanel({ observerId, onClose, onAnalyzePacket, onVi
     <DetailPanel
       title="Observer Detail"
       onClose={onClose}
+      closeLabel={t("investigation.closeObserver")}
       headerAction={<CopyLinkButton params={{ tab: "Observers", observer: observerId }} ariaLabel="Copy observer link" />}
       isLoading={isLoading}
       notFound={!observer}
@@ -155,7 +160,7 @@ export function ObserverDetailPanel({ observerId, onClose, onAnalyzePacket, onVi
                 <CopyButton value={observer.publicKey} ariaLabel="Copy public key" className="shrink-0" />
               </div>
               <div className="flex items-center gap-3 font-mono text-[13px]">
-                <Field label="Observations" value={observer.observationCount.toLocaleString()} />
+                <Field label={t("observerPage.legacy")} value={observer.observationCount.toLocaleString()} />
               </div>
               <div className="flex flex-wrap items-center gap-2 mt-1.5">
                 {observer.observerType && <Badge variant="default">{observer.observerType}</Badge>}
@@ -173,7 +178,7 @@ export function ObserverDetailPanel({ observerId, onClose, onAnalyzePacket, onVi
                   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden>
                     <path d="M4 20V4M4 20h16M8 16v-4M13 16V8M18 16v-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
                   </svg>
-                  Statistics
+                  {t("observerPage.open")}
                 </button>
               )}
             </Section>
@@ -246,7 +251,7 @@ export function ObserverDetailPanel({ observerId, onClose, onAnalyzePacket, onVi
                     <AdvertRow
                       key={a.id}
                       advert={a}
-                      onClick={onAnalyzePacket ? () => onAnalyzePacket(a.packetHash) : undefined}
+                      onClick={onAnalyzePacket ? () => onAnalyzePacket(a.packetHash, a.id) : undefined}
                     />
                   ))}
                 </div>

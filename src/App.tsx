@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef, lazy, Suspense } from "react";
-import { BrowserRouter, useSearchParams } from "react-router-dom";
+import { BrowserRouter, Routes, Route, useLocation, useNavigate, useSearchParams, type Location } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { RegionProvider, useRegion, useRegionSelection } from "./hooks/useRegion";
@@ -18,12 +18,11 @@ import { AppShell } from "./components/AppShell";
 import { SplashScreen } from "./components/SplashScreen";
 import { PacketList } from "./features/packets/PacketList";
 import { PacketAnalyzerDrawer } from "./features/packets/PacketAnalyzerDrawer";
-import { PacketAnalyzerOverlay } from "./features/packets/PacketAnalyzerOverlay";
-import { PacketPathMapModal } from "./features/map/PacketPathMapModal";
 import { NodeTable } from "./features/nodes/NodeTable";
 import { NodeDetailPanel } from "./features/nodes/NodeDetailPanel";
-import { NodeDetailOverlay } from "./features/nodes/NodeDetailOverlay";
-import { ObserverTable } from "./features/observers/ObserverTable";
+import { InvestigationPanel, type Investigation, type InvestigationTarget } from "./features/InvestigationPanels";
+import { ObserverPage } from "./features/observers/ObserverPage";
+import { observerDestination } from "./features/observers/observer-navigation";
 import { RouteTable } from "./features/routes/RouteTable";
 import { TraceList } from "./features/traces/TraceList";
 import { ChannelList } from "./features/channels/ChannelList";
@@ -89,13 +88,14 @@ function RegionWatcher({ wsManager: mgr }: { wsManager: WsManager }) {
 // history.
 function RegionUrlSync() {
   const { selection } = useRegionSelection();
+  const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
 
   useEffect(() => {
     const next = selectionToParams(selection, searchParams);
     if (next.toString() === searchParams.toString()) return;
-    setSearchParams(next, { replace: true });
-  }, [selection, searchParams, setSearchParams]);
+    setSearchParams(next, { replace: true, state: location.state });
+  }, [selection, searchParams, setSearchParams, location.state]);
 
   return null;
 }
@@ -114,11 +114,11 @@ export function PathLinkRestore({ initialPath, hash, analyzerDetail, onRestore }
   const handledRef = useRef(false);
 
   useEffect(() => {
-    const detail = analyzerDetail ?? pathLinkDetail;
+    const detail = analyzerDetail?.packetHash.toLowerCase() === hash?.toLowerCase() ? analyzerDetail : pathLinkDetail;
     if (!initialPath || !detail || handledRef.current) return;
     handledRef.current = true;
     onRestore(detail, initialPath);
-  }, [initialPath, analyzerDetail, pathLinkDetail, onRestore]);
+  }, [initialPath, hash, analyzerDetail, pathLinkDetail, onRestore]);
 
   return null;
 }
@@ -148,14 +148,20 @@ function TabLoading({ tab }: { tab: string }) {
   return <EmptyState title={t(`tabs.${tab}`, { defaultValue: tab })} subtitle={t("common.loading")} />;
 }
 
-function AppInner() {
+function AppInner({ observerVisit, onObserverDashboard, onReturn, onExitVisit }: {
+  observerVisit?: Location; onObserverDashboard: (id: string) => void;
+  onReturn: () => void; onExitVisit: () => void;
+}) {
+  const { t } = useTranslation();
   const [searchParams, setSearchParams] = useSearchParams();
   const isMobile = useIsMobile();
+  const location = useLocation();
   // The URL is the single source of truth for the active tab — back/forward just work, and an
   // unknown ?tab value falls back to Packets instead of rendering a blank pane.
   // "Stats" was renamed to "Analytics"; keep old ?tab=Stats links working.
   const tabParam = searchParams.get("tab") === "Stats" ? "Analytics" : searchParams.get("tab");
-  const activeTab = ENABLED_TABS.includes(tabParam ?? "") ? (tabParam as string) : (ENABLED_TABS[0] ?? "Packets");
+  const legacyObserver = tabParam === "Analytics" && searchParams.get("statsTab") === "observer";
+  const activeTab = legacyObserver ? "Observers" : ENABLED_TABS.includes(tabParam ?? "") ? (tabParam as string) : (ENABLED_TABS.includes("Packets") ? "Packets" : ENABLED_TABS[0] ?? "Packets");
   // Resolve the starting selection once from URL → storage → legacy key (see computeInitialSelection).
   const [initialSelection] = useState(() => computeInitialSelection(searchParams));
 
@@ -164,61 +170,78 @@ function AppInner() {
   const analyzerHash = searchParams.get("analyze") === "1" ? searchParams.get("hash") : null;
   const [selectedObservationId, setSelectedObservationId] = useState<number | null>(null);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(() => searchParams.get("node"));
-  // lifted (like selectedNodeId) so a node's "View observer" link can select it before the tab mounts
-  const [selectedObserverId, setSelectedObserverId] = useState<string | null>(() => searchParams.get("observer"));
-  // node detail shown as a modal over the packet analyzer (e.g. clicking a resolved path hop)
-  const [overlayNodeId, setOverlayNodeId] = useState<string | null>(null);
-  // packet analyzer shown as a modal over the node panel (clicking a node's observation row)
-  const [overlayPacketHash, setOverlayPacketHash] = useState<string | null>(null);
-  // packet path popup shown as a modal over the analyzer drawer/overlay ("View path on map")
-  const [pathMapDetail, setPathMapDetail] = useState<PacketDetail | null>(null);
-  // Frozen together: the restore must fetch the hash the link asked for, even if the user clicks a
-  // different row before it resolves.
+  useEffect(() => {
+    if (legacyObserver) setSearchParams(observerDestination(searchParams, searchParams.get("observerId")), { replace: true });
+  }, [legacyObserver, searchParams, setSearchParams]);
+  const [panels, setPanels] = useState<Investigation[]>([]);
+  const scene = JSON.stringify([activeTab, searchParams.get("route"), searchParams.get("hash"), searchParams.get("node"), searchParams.get("observer"), searchParams.get("analyze")]);
+  const [panelScene, setPanelScene] = useState(scene);
+  // Browser Back to another entity ends its panels; dashboard visits freeze this location instead.
+  if (panelScene !== scene) { setPanelScene(scene); setPanels([]); }
+  const dashboardFocus = useRef<HTMLElement | null>(null);
+  const openPanel = useCallback((target: InvestigationTarget) => {
+    const key = target.kind === "packet" ? `packet:${target.hash.toLowerCase()}:${target.observationId ?? ""}` : target.kind === "path" ? `path:${target.detail.packetHash.toLowerCase()}:${target.selectedKey ?? "all"}` : `${target.kind}:${target.id}`;
+    setPanels(previous => {
+      const existing = previous.findIndex(panel => panel.key === key);
+      return existing < 0 ? [...previous, { key, target }] : previous.slice(0, existing + 1);
+    });
+  }, [setPanels]);
+  const viewNode = useCallback((id: string) => openPanel({ kind: "node", id }), [openPanel]);
+  const viewObserver = useCallback((id: string) => openPanel({ kind: "observer", id }), [openPanel]);
+  const viewPacket = useCallback((hash: string, observationId?: number) => openPanel({ kind: "packet", hash, observationId }), [openPanel]);
+  const handleViewPath = useCallback((detail: PacketDetail, key?: string) => openPanel({ kind: "path", detail, selectedKey: key }), [openPanel]);
   const [pathLink] = useState(() => ({ path: searchParams.get("path"), hash: searchParams.get("hash") }));
-  const [pathMapInitialKey, setPathMapInitialKey] = useState<string | null>(null);
-
   const { data: analyzerDetail, isLoading: analyzerLoading } = usePacketDetail(analyzerHash);
-  const { data: overlayPacketDetail, isLoading: overlayPacketLoading } = usePacketDetail(overlayPacketHash);
 
-  const handlePathLinkRestore = useCallback((detail: PacketDetail, key: string) => {
-    setPathMapDetail(detail);
-    setPathMapInitialKey(key);
-  }, []);
+  useEffect(() => {
+    if (!observerVisit && dashboardFocus.current?.isConnected) dashboardFocus.current.focus();
+  }, [observerVisit]);
 
-  // "View path on map" from anywhere that already holds a detail — no key, so the modal picks its own
-  const handleViewPath = useCallback((detail: PacketDetail) => {
-    setPathMapDetail(detail);
-    setPathMapInitialKey(null);
-  }, []);
+  const closePanel = (index: number) => {
+    setPanels(previous => previous.slice(0, index));
+    if (panels[index]?.target.kind === "path" && searchParams.has("path")) setSearchParams(previous => {
+      const next = new URLSearchParams(previous); next.delete("path"); return next;
+    }, { replace: true });
+  };
 
-  const handleAnalyze = useCallback((hash: string | null) => {
+  const selectObservation = useCallback((id: number | null) => {
+    setSelectedObservationId(id);
+    setSearchParams(previous => {
+      const next = new URLSearchParams(previous);
+      if (id == null) next.delete("observation"); else next.set("observation", String(id));
+      return next;
+    }, { replace: true });
+  }, [setSearchParams, setSelectedObservationId]);
+
+  const handleAnalyze = useCallback((hash: string | null, observationId?: number) => {
     // No reset: observation ids are globally unique, so a pick inside an expanded row survives into the drawer.
     setSearchParams((p) => {
       const n = new URLSearchParams(p);
-      if (hash) { n.set("hash", hash); n.set("analyze", "1"); n.delete("path"); }
+      if (hash) { if (n.get("hash") !== hash) n.delete("observation"); n.set("hash", hash); n.set("analyze", "1"); n.delete("path"); if (observationId != null) n.set("observation", String(observationId)); }
       else n.delete("analyze");
       return n;
     }, { replace: true });
   }, [setSearchParams]);
 
   const handleTabChange = (tab: string) => {
-    setOverlayNodeId(null);
-    setOverlayPacketHash(null);
-    setPathMapDetail(null);
+    setPanels([]);
+    dashboardFocus.current = null;
+    onExitVisit();
     // On mobile a detail panel (and the analyzer) fills the screen, so leaving its tab must close it;
     // desktop side panels persist across tabs. Cross-nav (onViewObserver) re-sets its selection after this.
     if (isMobile) {
       setSelectedObservationId(null);
       setSelectedNodeId(null);
-      setSelectedObserverId(null);
     }
     setSearchParams((prev) => {
       const next = new URLSearchParams(prev);
       next.set("tab", tab);
+      if (tab !== "Routes") for (const key of ["route", "routeIata", "routeRange", "routeSince", "routeUntil"]) next.delete(key);
       // the analyzer is URL-backed, so its mobile close lives here rather than above
       if (isMobile) next.delete("analyze");
+      if (tab !== "Observers") next.delete("observer");
       // stats sub-state shouldn't haunt the URL on other tabs
-      if (tab !== "Analytics") {
+      if (tab !== "Analytics" && tab !== "Observers") {
         next.delete("statsTab");
         next.delete("observerId");
         next.delete("range");
@@ -229,16 +252,15 @@ function AppInner() {
 
   const clearSelection = useCallback(() => {
     setSelectedNodeId(null);
-    setOverlayNodeId(null);
-    setOverlayPacketHash(null);
-    setSelectedObserverId(null);
-    setPathMapDetail(null);
-  }, []);
+    setPanels([]);
+    dashboardFocus.current = null;
+    onExitVisit();
+  }, [onExitVisit, setSelectedNodeId, setPanels]);
 
   // Closing a detail panel drops its deep-link param so a reload can't reopen it (mirrors the packet
   // analyzer's ?analyze cleanup). Selecting a different node/observer doesn't touch the URL — the panel's
   // Copy Link button rebuilds a fresh link on demand.
-  const dropSelectionParam = useCallback((key: "node" | "observer") => {
+  const dropSelectionParam = useCallback((key: "node") => {
     setSearchParams((prev) => {
       const next = new URLSearchParams(prev);
       next.delete(key);
@@ -249,28 +271,12 @@ function AppInner() {
   const handleCloseNode = useCallback(() => {
     setSelectedNodeId(null);
     dropSelectionParam("node");
-  }, [dropSelectionParam]);
+  }, [dropSelectionParam, setSelectedNodeId]);
 
-  const handleSelectObserver = useCallback((id: string | null) => {
-    setSelectedObserverId(id);
-    if (id === null) dropSelectionParam("observer");
-  }, [dropSelectionParam]);
-
-  // Jump from an observer's detail panel to its telemetry on the Stats tab (Stats → Observer, preselected).
-  const handleViewObserverStats = useCallback(
-    (id: string) => {
-      setOverlayNodeId(null);
-      setOverlayPacketHash(null);
-      setSearchParams((prev) => {
-        const next = new URLSearchParams(prev);
-        next.set("tab", "Analytics");
-        next.set("statsTab", "observer");
-        next.set("observerId", id);
-        return next;
-      });
-    },
-    [setSearchParams],
-  );
+  const handleViewObserverStats = useCallback((id: string) => {
+    dashboardFocus.current = document.activeElement !== document.body ? document.activeElement as HTMLElement | null : null;
+    onObserverDashboard(id);
+  }, [onObserverDashboard]);
 
   useEffect(() => {
     // Region slugs can't be expanded yet (region details load async) — connect with the directly
@@ -291,29 +297,31 @@ function AppInner() {
       />
     ),
     Nodes: <NodeTable wsManager={wsManager} selectedNodeId={selectedNodeId} onSelectNode={setSelectedNodeId} />,
-    Observers: <ObserverTable wsManager={wsManager} selectedObserverId={selectedObserverId} onSelectObserver={handleSelectObserver} onAnalyzePacket={setOverlayPacketHash} onViewStats={handleViewObserverStats} />,
-    Routes: <RouteTable />,
+    Observers: <ObserverPage wsManager={wsManager} />,
+    Routes: <RouteTable onAnalyzePacket={viewPacket} onViewObserver={viewObserver} onViewNode={viewNode} />,
     // analyze opens the packet overlay (modal) rather than the side drawer, which suits the
     // master/detail layout and renders on any tab — same path NodeDetailPanel's onAnalyzePacket uses
-    Traces: <TraceList onAnalyze={setOverlayPacketHash} onViewNode={setOverlayNodeId} />,
+    Traces: <TraceList onAnalyze={hash => { if (hash) viewPacket(hash); }} onViewNode={viewNode} />,
     Channels: <ChannelList wsManager={wsManager} onAnalyze={handleAnalyze} />,
-    Analytics: <StatsOverview wsManager={wsManager} />,
+    Analytics: <StatsOverview wsManager={wsManager} onObserverDashboard={handleViewObserverStats} />,
     Map: <MapView wsManager={wsManager} selectedNodeId={selectedNodeId} onSelectNode={setSelectedNodeId} />,
   };
 
   return (
     <RegionProvider defaultSelection={initialSelection}>
       <RegionWatcher wsManager={wsManager} />
-      <RegionUrlSync />
+      <Routes location={observerVisit ?? location}><Route path="*" element={<RegionUrlSync />} /></Routes>
       <SelectionResetOnRegion onRegionChange={clearSelection} />
       <PathLinkRestore
         initialPath={pathLink.path}
         hash={pathLink.hash}
         analyzerDetail={analyzerDetail}
-        onRestore={handlePathLinkRestore}
+        onRestore={handleViewPath}
       />
-      <AppShell activeTab={activeTab} onTabChange={handleTabChange} wsManager={wsManager}>
-        <div className="relative flex flex-1 min-h-0">
+      <AppShell activeTab={observerVisit ? "Observers" : activeTab} onTabChange={handleTabChange} wsManager={wsManager}>
+        <div className="relative flex flex-1 min-h-0 min-w-0">
+        {/* Preserve measurable geometry: display:none makes virtualized lists lose their offset. */}
+        <div aria-hidden={observerVisit ? true : undefined} inert={!!observerVisit} className={`${observerVisit ? "invisible absolute inset-0 pointer-events-none" : "relative"} flex flex-1 min-h-0 min-w-0`}>
           <div key={activeTab} className="flex flex-1 min-h-0 min-w-0 fade-in">
             <Suspense fallback={<TabLoading tab={activeTab} />}>
               {tabContent[activeTab]}
@@ -324,62 +332,45 @@ function AppInner() {
               detail={analyzerDetail}
               loading={analyzerLoading}
               selectedObservationId={selectedObservationId}
-              onSelectObservation={setSelectedObservationId}
+              onSelectObservation={selectObservation}
               onClose={() => handleAnalyze(null)}
-              onViewNode={setOverlayNodeId}
-              onViewPath={() => { if (analyzerDetail) handleViewPath(analyzerDetail); }}
+              onViewNode={viewNode}
+              onViewObserver={viewObserver}
+              onViewPath={(key) => { if (analyzerDetail) handleViewPath(analyzerDetail, key); }}
             />
           )}
           {(activeTab === "Map" || activeTab === "Nodes") && selectedNodeId && (
             <NodeDetailPanel
               nodeId={selectedNodeId}
               onClose={handleCloseNode}
-              onViewObserver={(observerId) => {
-                handleTabChange("Observers");
-                setSelectedObserverId(observerId);
-              }}
+              onViewObserver={viewObserver}
               onViewNode={setSelectedNodeId}
-              onAnalyzePacket={setOverlayPacketHash}
+              onAnalyzePacket={viewPacket}
             />
           )}
-          {overlayNodeId && (
-            <NodeDetailOverlay
-              nodeId={overlayNodeId}
-              onClose={() => setOverlayNodeId(null)}
-              onViewObserver={(observerId) => {
-                handleTabChange("Observers");
-                setSelectedObserverId(observerId);
-              }}
-              onViewNode={setOverlayNodeId}
-            />
-          )}
-          {overlayPacketHash && (
-            <PacketAnalyzerOverlay
-              detail={overlayPacketDetail}
-              loading={overlayPacketLoading}
-              onClose={() => setOverlayPacketHash(null)}
-              onViewObserver={(observerId) => {
-                handleTabChange("Observers");
-                setSelectedObserverId(observerId);
-              }}
-              onViewPath={() => { if (overlayPacketDetail) handleViewPath(overlayPacketDetail); }}
-              inactive={!!pathMapDetail}
-            />
-          )}
-          {pathMapDetail && (
-            <PacketPathMapModal
-              detail={pathMapDetail}
-              initialSelectedKey={pathMapInitialKey}
-              onClose={() => {
-                setPathMapDetail(null);
-                setSearchParams((prev) => { const n = new URLSearchParams(prev); n.delete("path"); return n; }, { replace: true });
-              }}
-            />
-          )}
+          {panels.map((panel, index) => <InvestigationPanel key={panel.key} target={panel.target} inactive={index !== panels.length - 1} onClose={() => closePanel(index)} onOpen={openPanel} onObserverDashboard={handleViewObserverStats} />)}
+        </div>
+        {observerVisit && <Routes location={observerVisit}><Route path="*" element={<ObserverPage wsManager={wsManager} onReturn={onReturn} returnLabel={t(`tabs.${activeTab}`)} />} /></Routes>}
         </div>
       </AppShell>
     </RegionProvider>
   );
+}
+
+// A dashboard visit keeps one originating screen under its original location context. A reload has
+// no in-memory origin, so copied/canonical dashboard URLs remain standalone destinations.
+function AppNavigation() {
+  const location = useLocation();
+  const navigate = useNavigate();
+  const [origin, setOrigin] = useState<Location | null>(null);
+  const visiting = origin != null && location.state?.beaconObserverReturnKey === origin.key && new URLSearchParams(location.search).get("tab") === "Observers";
+  if (origin && !visiting && location.key !== origin.key) setOrigin(null);
+  const exitVisit = useCallback(() => setOrigin(null), []);
+  const openDashboard = (id: string) => {
+    setOrigin(location);
+    navigate({ search: "?" + observerDestination(new URLSearchParams(location.search), id).toString() }, { state: { beaconObserverReturnKey: location.key } });
+  };
+  return <Routes location={visiting ? origin : location}><Route path="*" element={<AppInner observerVisit={visiting ? location : undefined} onObserverDashboard={openDashboard} onReturn={() => navigate(-1)} onExitVisit={exitVisit} />} /></Routes>;
 }
 
 export function App() {
@@ -388,7 +379,7 @@ export function App() {
       <QueryClientProvider client={queryClient}>
         <ThemeProvider>
           <SplashScreen />
-          <AppInner />
+          <AppNavigation />
         </ThemeProvider>
       </QueryClientProvider>
     </BrowserRouter>

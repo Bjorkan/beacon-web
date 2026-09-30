@@ -1,9 +1,10 @@
+import { useTranslation } from "react-i18next";
 import { useMemo } from "react";
 import { formatCount } from "../../lib/formatters";
 import { useChartColors, nodeTypeColor } from "./chartTheme";
 import { useStatsOverview, useStatsObservations, usePayloadBreakdown, useTopNodes, useTopObservers, useRadioPresets, useScopes, useNodeTypes } from "./useStats";
 import { observationsAreaOption, leaderboardOption, typeBarOption, donutOption, presetBarsOption } from "./chartOptions";
-import { Card, ChartCard, StatCard } from "./cards";
+import { ChartCard, StatCard } from "./cards";
 import { useLiveOverview } from "./useLiveStats";
 import { aggregatePresets, formatPreset, payloadBarItems } from "./transforms";
 import type { WsManager } from "../../api/ws-manager";
@@ -35,6 +36,7 @@ interface MeshTabProps {
 }
 
 export function MeshTab({ range, onSelectObserver, wsManager }: MeshTabProps) {
+  const { t } = useTranslation();
   const colors = useChartColors();
   useLiveOverview(wsManager);
   const overview = useStatsOverview();
@@ -141,7 +143,9 @@ export function MeshTab({ range, onSelectObserver, wsManager }: MeshTabProps) {
 
       <div className="grid grid-cols-1 gap-3.5 lg:grid-cols-2">
         {/* range-driven charts lead the grid; the all-time ones follow below */}
-        <ChartCard title={<>Top observers · {range}</>} height={208} option={observersOption} isLoading={topObservers.isPending || topObservers.isPlaceholderData} isError={topObservers.isError} isEmpty={observerRows.length === 0} onEvents={observerEvents} />
+        <div className="min-w-0">
+          <ChartCard title={<>Top observers · {range}</>} height={208} option={observersOption} isLoading={topObservers.isPending || topObservers.isPlaceholderData} isError={topObservers.isError} isEmpty={observerRows.length === 0} onEvents={observerEvents} />
+        </div>
         <ChartCard
           title={<>Payload types · {range}</>}
           right={<span className="font-mono text-[10px] text-text-muted">{formatCount(payloadData === undefined ? undefined : payloadTotal)} obs</span>}
@@ -156,7 +160,9 @@ export function MeshTab({ range, onSelectObserver, wsManager }: MeshTabProps) {
         <ChartCard title="Node types · all time" height={208} option={typesOption} isLoading={nodeTypes.isPending || nodeTypes.isPlaceholderData} isError={nodeTypes.isError} isEmpty={typeRows.length === 0} />
         <ChartCard title="Radio presets · all time" height={208} option={presetsOption} isLoading={radioPresets.isPending || radioPresets.isPlaceholderData} isError={radioPresets.isError} isEmpty={presetRows.length === 0} />
 
-        <Card title={<>Scopes · selected region · retained data</>}>
+        <details className="self-start rounded-lg border border-border bg-bg-surface p-4">
+          <summary className="cursor-pointer font-mono text-xs font-semibold uppercase tracking-wide text-text-normal">{t("stats.tabs.scopes")}</summary>
+          <div className="mt-3 max-h-96 overflow-auto">
           {scopes.isError ? (
             <div className="py-4 text-center font-mono text-[11px] text-text-dim">Failed to load</div>
           ) : scopes.isPending || scopes.isLoading || scopes.isPlaceholderData ? (
@@ -185,7 +191,8 @@ export function MeshTab({ range, onSelectObserver, wsManager }: MeshTabProps) {
               </tbody>
             </table>
           )}
-        </Card>
+        </div>
+        </details>
       </div>
     </div>
   );

@@ -1,7 +1,9 @@
 import { useState, useMemo, useCallback, useEffect, useRef, memo } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { useSearchParams } from "react-router-dom";
+import { RouteEvidencePanel, type RouteActions } from "./RouteEvidencePanel";
 import { getKnownRoutesPage, searchKnownRoutes, searchCrossIATARoutes, getIatas } from "../../api/client";
-import { useRegion } from "../../hooks/useRegion";
+import { useRegion, useRegionSelection } from "../../hooks/useRegion";
 import { useInfinitePages } from "../../hooks/useInfinitePages";
 import { Badge } from "../../components/Badge";
 import { Timestamp } from "../../components/Timestamp";
@@ -140,19 +142,27 @@ function directedPairs(iatas: string[]): [string, string][] {
   return pairs;
 }
 
-export function RouteTable() {
-  const { iatas, regionKey } = useRegion();
-
+export function RouteTable(actions: RouteActions) {
+  const { iatas } = useRegion();
+  const { selection } = useRegionSelection();
+  const [params, setParams] = useSearchParams();
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
 
+  const pathKey = params.get("route"), routeIata = params.get("routeIata");
+  const closeRoute = useCallback(() => {
+    setSelectedKey(null);
+    setParams(previous => { const next = new URLSearchParams(previous); for (const key of ["route", "routeIata", "routeRange", "routeSince", "routeUntil"]) next.delete(key); return next; }, { replace: true });
+  }, [setParams]);
+
+
   // drop the selection when the region changes — the selected route may not be in the new region
-  const prevRegion = useRef(regionKey);
+  const prevRegion = useRef(selection);
   useEffect(() => {
-    if (prevRegion.current !== regionKey) {
-      prevRegion.current = regionKey;
-      setSelectedKey(null);
+    if (prevRegion.current !== selection) {
+      prevRegion.current = selection;
+      closeRoute();
     }
-  }, [regionKey]);
+  }, [selection, closeRoute]);
 
   // path search form: source→dest hashes, scoped to a multi-select of IATAs. One IATA → within-IATA
   // /routes/search; two+ → /routes/cross across the directed pairs. Hashes + ≥1 IATA required.
@@ -223,6 +233,18 @@ export function RouteTable() {
     [rows, selectedKey],
   );
 
+  const selectRoute = (id: string | null) => {
+    if (id === null) { closeRoute(); return; }
+    const route = rows?.find(row => String(row.id) === id);
+    if (route?.pathKey) {
+      setSelectedKey(null);
+      setParams(previous => { const next = new URLSearchParams(previous); next.set("route", route.pathKey!); next.set("routeIata", route.iata); next.delete("routeSince"); next.delete("routeUntil"); return next; }, { replace: true });
+    } else {
+      closeRoute();
+      setSelectedKey(id);
+    }
+  };
+
   // A multi-IATA region filters globally-paged rows client-side, so the filtered list can be too
   // short to ever trigger scroll paging — or empty, with the region's routes deeper in the cursor
   // stream. Keep pulling pages until there's a screenful or the cap says the region is just sparse.
@@ -233,26 +255,27 @@ export function RouteTable() {
     loadMore();
   }, [search, serverIata, iatas, hasMore, isPaging, rows, loadedCount, loadMore]);
 
+  const panelOpen = Boolean(pathKey && routeIata || selectedRoute);
   const canSearch = !!(from.trim() && to.trim() && searchIatas.length >= 1);
   // clear any selection when the visible list changes out from under it (search submit/clear)
   const submitSearch = useCallback(() => {
     if (!from.trim() || !to.trim() || searchIatas.length < 1) return;
     setSearch({ from: from.trim(), to: to.trim(), iatas: searchIatas });
-    setSelectedKey(null);
-  }, [from, to, searchIatas]);
+    closeRoute();
+  }, [from, to, searchIatas, closeRoute]);
   const clearSearch = useCallback(() => {
     setSearch(null);
-    setSelectedKey(null);
-  }, []);
+    closeRoute();
+  }, [closeRoute]);
 
   const onKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter") submitSearch();
   };
 
   return (
-    <div className="flex flex-col flex-1 min-h-0">
+    <div className="flex flex-col flex-1 min-h-0 min-w-0">
       {/* stacks into two rows on mobile (the inputs would otherwise wrap around the arrow); one row at md+ */}
-      <div className="flex flex-col md:flex-row md:flex-wrap md:items-center gap-1.5 gap-y-1.5 px-4 py-2 border-b border-border-subtle bg-bg-base shrink-0">
+      <div className={`${panelOpen ? "hidden md:flex" : "flex"} flex-col md:flex-row md:flex-wrap md:items-center gap-1.5 gap-y-1.5 px-4 py-2 border-b border-border-subtle bg-bg-base shrink-0`}>
         <div className="flex items-center gap-1.5">
           <span className="text-text-muted text-[11px] uppercase tracking-wider mr-1 shrink-0">Find path</span>
           <input
@@ -311,13 +334,13 @@ export function RouteTable() {
             )}
           </div>
         ) : (
-          <div className="relative flex-1 min-w-0 flex flex-col min-h-0">
+          <div className={`relative flex-1 min-w-0 ${panelOpen ? "hidden md:flex" : "flex"} flex-col min-h-0`}>
             <DataTable
               columns={COLUMNS}
               rows={rows}
               rowKey={(r) => String(r.id)}
-              selectedKey={selectedKey}
-              onSelect={setSelectedKey}
+              selectedKey={pathKey ? String(rows?.find(row => row.pathKey === pathKey && row.iata === routeIata)?.id ?? "") : selectedKey}
+              onSelect={selectRoute}
               isLoading={search ? searchLoading : listLoading}
               emptyLabel={search ? "No matching routes" : "No routes"}
               defaultSort={{ header: "Last seen", direction: "desc" }}
@@ -329,7 +352,7 @@ export function RouteTable() {
             )}
           </div>
         )}
-        {selectedRoute && (
+        {pathKey && routeIata ? <RouteEvidencePanel key={[routeIata, pathKey, params.get("routeSince"), params.get("routeUntil")].join(":")} iata={routeIata} pathKey={pathKey} onClose={closeRoute} {...actions} /> : selectedRoute && (
           <RouteDetailPanel route={selectedRoute} onClose={() => setSelectedKey(null)} />
         )}
       </div>

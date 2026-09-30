@@ -17,7 +17,7 @@ function nodeLabel(node: ResolvedNode): string {
 }
 
 // Portals to <body> so the drawer's overflow doesn't clip it; a close delay bridges the mouse gap.
-function HopPopover({ hop, onViewNode, showSnr = true, children }: {
+export function HopPopover({ hop, onViewNode, showSnr = true, children }: {
   hop: ResolvedHop | undefined;
   onViewNode?: (nodeId: string) => void;
   showSnr?: boolean;
@@ -94,7 +94,8 @@ function HopPopover({ hop, onViewNode, showSnr = true, children }: {
       onMouseEnter={hasHover ? open : undefined}
       onMouseLeave={hasHover ? scheduleClose : undefined}
       onClick={hasHover ? undefined : toggle}
-      className="inline-flex"
+      title={nodes.map(nodeLabel).join(", ") || "No Path Resolutions Available"}
+      className="inline-flex min-w-0 max-w-full"
     >
       {children}
       {anchor &&

@@ -14,7 +14,7 @@ const node = (name: string): ResolvedHop => ({
   nodes: [{ id: "n-1", name, publicKey: "aabbccdd" }],
 });
 
-// pathLength is what makes buildPathSummary produce endpoints at all, so it is always present here.
+// Physical path metadata is independent of the logical source/destination chips.
 const observer = (
   over: { hopCount?: number; hashSize?: number } & Partial<Pick<LatestObserver, "resolvedSource" | "resolvedDestination">> = {},
 ): LatestObserver => {
@@ -43,7 +43,7 @@ describe("PacketTableRow", () => {
     expect(onToggle).toHaveBeenCalledOnce();
   });
 
-  it("is a single line, so the row height stays constant for the virtualizer", () => {
+  it("keeps packet content inside one row button", () => {
     const { container } = render(<PacketTableRow packet={pkt()} expanded={false} onToggle={() => {}} />);
     expect(container.querySelectorAll("button")).toHaveLength(1);
     expect(screen.queryByText("latest")).not.toBeInTheDocument();
@@ -123,4 +123,12 @@ describe("PacketTableRow", () => {
     render(<PacketTableRow packet={pkt({ routeTypeName: "" })} expanded={false} onToggle={() => {}} />);
     expect(screen.getByText("Unknown")).toBeInTheDocument();
   });
+});
+
+it("keeps long route labels inside their dedicated track beside a scope", () => {
+  render(<PacketTableRow packet={pkt({ routeTypeName: "TRANSPORT_FLOOD", scope: "#ykf" })} expanded={false} onToggle={() => {}} />);
+  const route = screen.getByText("TRANSPORT_FLOOD");
+  expect(route).toHaveClass("truncate");
+  expect(route.parentElement).toHaveClass("min-w-0");
+  expect(screen.getByText("#ykf")).toBeInTheDocument();
 });

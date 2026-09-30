@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, screen, fireEvent, act, within } from "@testing-library/react";
+import { render, screen, fireEvent, act, within, waitFor } from "@testing-library/react";
 import { App } from "../src/App";
 import type { PacketSummary, PacketDetail } from "../src/types/api";
 
@@ -32,6 +32,11 @@ vi.mock("../src/api/client", () => ({
   getChannels: async () => ({ items: [], nextCursor: null, hasMore: false }),
   getChannelMessagesPage: async () => ({ items: [], nextCursor: null, hasMore: false }),
 }));
+
+vi.mock("../src/features/observers/ObserverDetailPanel", () => ({
+  ObserverDetailPanel: ({ observerId, onViewStats }: { observerId: string; onViewStats: (id: string) => void }) => <button onClick={() => onViewStats(observerId)}>Open observer dashboard</button>,
+}));
+vi.mock("../src/features/observers/ObserverPage", () => ({ ObserverPage: () => <h1>Observer dashboard</h1> }));
 
 const packet: PacketSummary = {
   packetHash: "AA11", payloadType: 1, payloadTypeName: "ADVERT",
@@ -136,6 +141,24 @@ afterEach(() => {
 });
 
 describe("Packets deep links", () => {
+  it("returns from an observer dashboard to the same packet, report and filters", async () => {
+    setMobile(false);
+    window.history.pushState({}, "", "/?tab=Packets&hash=AA11&analyze=1&observation=1&iata=YOW&q=missing");
+    render(<App />);
+    const section = await screen.findByRole("region", { name: "Reception evidence" });
+    expect(within(section).getByText("No path entries").closest("details")).toHaveAttribute("open");
+    fireEvent.click(within(section).getByRole("button", { name: "Inspect observer" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Open observer dashboard" }));
+    expect(await screen.findByRole("heading", { name: "Observer dashboard" })).toBeInTheDocument();
+    expect(new URLSearchParams(window.location.search).has("observation")).toBe(false);
+    act(() => window.history.back());
+    // The originating drawer now stays mounted while hidden; wait for history, not its existence.
+    await waitFor(() => expect(new URLSearchParams(window.location.search).get("hash")).toBe("AA11"));
+    expect(await screen.findByTestId("packet-analyzer-drawer")).toBeInTheDocument();
+    const params = new URLSearchParams(window.location.search);
+    expect(params.get("hash")).toBe("AA11"); expect(params.get("observation")).toBe("1");
+    expect(params.get("iata")).toBe("YOW"); expect(params.get("q")).toBe("missing");
+  });
   it.each([false, true])("opens an unloaded selection explicitly and preserves region and filters (mobile=%s)", async (mobile) => {
     setMobile(mobile);
     window.history.pushState({}, "", "/?tab=Packets&hash=BB22&iata=YOW&q=missing");

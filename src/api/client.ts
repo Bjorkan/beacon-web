@@ -1,6 +1,6 @@
 import { API_BASE, DEFAULT_PAGE_SIZE } from "../lib/constants";
 import { noteRateLimited, noteRequestOk, parseRetryAfter } from "./rate-limit";
-import type { CursorPage, PacketSummary, PacketDetail, IataCode, RegionSummary, Region, BrokerStatus, KnownRoute, CrossIATARoute, TraceTagSummary, TraceType, TraceDetail } from "../types/api";
+import type { CursorPage, PacketSummary, PacketDetail, IataCode, RegionSummary, Region, BrokerStatus, RouteEvidence, KnownRoute, CrossIATARoute, TraceTagSummary, TraceType, TraceDetail } from "../types/api";
 import type { ChannelPage, ChannelMessage } from "../features/channels/types";
 import type { ObserverSummary, Observer, AdvertObservation } from "../features/observers/types";
 import type { NodeSummary, Node, NodeObservation, NodeNeighbor } from "../features/nodes/types";
@@ -142,14 +142,16 @@ export function getChannels(params?: { iatas?: string[]; limit?: number; cursor?
 // a CursorPage so MessagePanel can load older history on demand via useInfiniteQuery.
 export async function getChannelMessagesPage(
   channelId: number,
-  params?: { iatas?: string[]; cursor?: number; limit?: number },
+  params?: { iatas?: string[]; cursor?: number; limit?: number; scope?: string },
 ): Promise<CursorPage<ChannelMessage>> {
   const limit = params?.limit ?? DEFAULT_PAGE_SIZE;
-  const page = await request<{ items: ChannelMessage[] }>(`/channels/${channelId}/messages`, {
+  const page = await request<{ items: ChannelMessage[]; nextCursor?: number | null; hasMore?: boolean }>(`/channels/${channelId}/messages`, {
     iatas: iatasParam(params?.iatas),
     cursor: params?.cursor,
     limit,
+    scope: params?.scope || undefined,
   });
+  if (typeof page.hasMore === "boolean") return { items: page.items, nextCursor: page.nextCursor ?? null, hasMore: page.hasMore };
   return toCursorPage(page.items, limit, (m) => m.id);
 }
 
@@ -185,6 +187,10 @@ export async function getKnownRoutesPage(
     limit,
   });
   return toCursorPage(items, limit, (r) => r.lastSeen);
+}
+
+export function getRouteEvidence(iata: string, pathKey: string, params: { range?: string; since?: number; until?: number; pageCursor?: string; limit?: number }, signal?: AbortSignal): Promise<RouteEvidence> {
+  return request(`/routes/${encodeURIComponent(iata)}/${encodeURIComponent(pathKey)}/observations`, params, signal);
 }
 
 // Search known routes for a path between two node hash prefixes within a single IATA. All three params
@@ -225,8 +231,15 @@ export function getTraceDetail(tag: string): Promise<TraceDetail> {
   return request(`/traces/${tag}`);
 }
 
-export function getObserver(observerId: string): Promise<Observer> {
-  return request(`/observers/${observerId}`);
+export async function getObserver(observerId: string): Promise<Observer> {
+  const observer = await request<Observer>(`/observers/${observerId}`);
+  // Older servers marshal the stored JSON byte slice as base64 instead of an object.
+  let metadata: unknown = observer.statusMetadata;
+  if (typeof metadata === "string") {
+    try { metadata = JSON.parse(new TextDecoder().decode(Uint8Array.from(atob(metadata), c => c.charCodeAt(0)))); }
+    catch { metadata = undefined; }
+  }
+  return { ...observer, statusMetadata: metadata && typeof metadata === "object" && !Array.isArray(metadata) ? metadata as Record<string, unknown> : undefined };
 }
 
 export function getObserverAdverts(
@@ -368,8 +381,8 @@ export function getObserverTelemetry(
   return request(`/observers/${observerId}/telemetry`, { range, interval, afterId });
 }
 
-export function getObserverActivity(observerId: string, range: string, interval: string): Promise<ObserverActivity> {
-  return request(`/observers/${observerId}/activity`, { range, interval });
+export function getObserverActivity(observerId: string, range: string, interval: string, until?: number): Promise<ObserverActivity> {
+  return request(`/observers/${observerId}/activity`, { range, interval, until });
 }
 
 // Lets a caller hide a feature the server doesn't have rather than show it as failed.
