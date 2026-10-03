@@ -1,3 +1,9 @@
+import type { CursorPage } from "../../types/api";
+
+export interface ChannelPage extends CursorPage<ChannelSummary> {
+  nextPageCursor?: string; // opaque precise cursor; older servers only return nextCursor
+}
+
 export interface ChannelSummary {
   id: number;
   name: string | null;
@@ -27,4 +33,7 @@ export interface ChannelMessage {
   content: string;
   sentAt: number; // epoch ms, from the sender's embedded timestamp
   observationCount?: number;
+  channelId?: number; // supplied by live events; channel history already has an ID-specific endpoint
+  scope?: string | null; // absent on older servers, null when no name was recorded
+  scopeStatus?: "matched" | "unscoped" | "unknown" | "unavailable";
 }

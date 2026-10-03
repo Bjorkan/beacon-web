@@ -1,11 +1,12 @@
 import { useState, useEffect, useCallback, useMemo, useSyncExternalStore } from "react";
 import { useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
 import { getPackets } from "../../api/client";
+import { isRateLimited } from "../../api/rate-limit";
 import { useRegion } from "../../hooks/useRegion";
 import type { WsPacketObservation, WsLagged } from "../../types/ws";
 import type { PacketSummary } from "../../types/api";
 import type { PacketServerFilter } from "./types";
-import { LIVE_BUFFER_CAP, MAX_INFINITE_PAGES } from "../../lib/constants";
+import { LIVE_BUFFER_CAP } from "../../lib/constants";
 
 // merge and deduplicate live + paginated packets
 
@@ -123,7 +124,8 @@ class LivePacketStore {
 // combines live WS stream with paginated history
 
 export function usePackets(frozen: boolean = false, serverFilter: PacketServerFilter | null = null) {
-  const { iatas, regionKey } = useRegion();
+  const { iatas, regionKey, isResolved } = useRegion();
+  const pending = isResolved === false;
   const queryClient = useQueryClient();
   const [store] = useState(() => new LivePacketStore());
   const [laggedCount, setLaggedCount] = useState(0);
@@ -152,6 +154,8 @@ export function usePackets(frozen: boolean = false, serverFilter: PacketServerFi
 
   const handlePacketObservation = useCallback(
     (data: WsPacketObservation["data"]) => {
+      // the previous region's subscription can still deliver after the buffer reset
+      if (iatas && !iatas.includes(data.observation.iata)) return;
       const summary: PacketSummary = {
         packetHash: data.packetHash,
         payloadType: data.packet.payloadType,
@@ -162,6 +166,7 @@ export function usePackets(frozen: boolean = false, serverFilter: PacketServerFi
         lastHeardAt: data.observation.heardAt,
         observationCount: data.packet.observationCount,
         scope: data.packet.scope,
+        summary: data.packet.summary,
         latestObserver: {
           id: data.observation.observerId,
           displayName: data.observation.observerName,
@@ -176,7 +181,7 @@ export function usePackets(frozen: boolean = false, serverFilter: PacketServerFi
 
       store.pushOrUpdate(summary);
     },
-    [store],
+    [store, iatas],
   );
 
   // Reset (drop to one fresh first page) instead of invalidate: an invalidate replays every cached
@@ -185,7 +190,8 @@ export function usePackets(frozen: boolean = false, serverFilter: PacketServerFi
   const handleLagged = useCallback(
     (data: WsLagged) => {
       setLaggedCount((prev) => prev + data.droppedCount);
-      queryClient.resetQueries({ queryKey: ["packets", regionKey] });
+      // while the API is throttling us the refetch would only 429; the next lag notice or remount heals it
+      if (!isRateLimited()) queryClient.resetQueries({ queryKey: ["packets", regionKey] });
     },
     [queryClient, regionKey],
   );
@@ -204,6 +210,7 @@ export function usePackets(frozen: boolean = false, serverFilter: PacketServerFi
     data: history,
     fetchNextPage,
     hasNextPage,
+    isFetching,
     isFetchingNextPage,
     isLoading,
     isError,
@@ -216,7 +223,7 @@ export function usePackets(frozen: boolean = false, serverFilter: PacketServerFi
     getNextPageParam: (last) => last.nextCursor ?? undefined,
     initialPageParam: undefined as number | undefined,
     staleTime: Infinity,
-    maxPages: MAX_INFINITE_PAGES,
+    enabled: !pending,
   });
 
   const allPackets = useMemo(
@@ -249,8 +256,9 @@ export function usePackets(frozen: boolean = false, serverFilter: PacketServerFi
     acknowledgeNewPackets,
     fetchNextPage,
     hasNextPage: hasNextPage ?? false,
+    isFetching,
     isFetchingNextPage,
-    isLoading,
+    isLoading: isLoading || pending,
     isError,
     observersByHash,
     handlePacketObservation,

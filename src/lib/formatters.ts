@@ -1,5 +1,7 @@
 // hex and time display helpers
 
+import i18n from "../i18n";
+
 export function formatHex(hex: string): string {
   return hex.slice(0, 8).toUpperCase();
 }
@@ -16,6 +18,14 @@ export function formatAbsolute(epochMs: number, opts?: { ms?: boolean }): string
   return opts?.ms ? `${base}.${pad(d.getMilliseconds(), 3)}` : base;
 }
 
+// The UTC counterpart to formatAbsolute, for charts/tables anchored to server-side hour/minute
+// boundaries rather than the viewer's local time.
+export function formatUtc(epochMs: number, opts?: { seconds?: boolean; timeOnly?: boolean }): string {
+  const iso = new Date(epochMs).toISOString();
+  const date = iso.slice(0, 10), time = iso.slice(11, opts?.seconds ? 19 : 16);
+  return opts?.timeOnly ? time : `${date} ${time}`;
+}
+
 // signal quality and radio metric formatting
 
 export type SignalLevel = "good" | "mid" | "bad";
@@ -24,6 +34,12 @@ export const SIGNAL_LEVEL_CLASSES: Record<SignalLevel, string> = {
   good: "text-green",
   mid: "text-warn",
   bad: "text-danger",
+};
+
+export const SIGNAL_LEVEL_BORDER_CLASSES: Record<SignalLevel, string> = {
+  good: "border-l-green",
+  mid: "border-l-warn",
+  bad: "border-l-danger",
 };
 
 export function snrLevel(snr: number | null | undefined): SignalLevel | null {
@@ -47,23 +63,25 @@ export function formatUptime(seconds: number): string {
   const d = Math.floor(seconds / 86400);
   const h = Math.floor((seconds % 86400) / 3600);
   const m = Math.floor((seconds % 3600) / 60);
-  if (d > 0) return `${d}d ${h}h ${m}m`;
-  if (h > 0) return `${h}h ${m}m`;
-  return `${m}m`;
+  const unit = (u: "d" | "h" | "m", count: number) => i18n.t(`timestamp.unit.${u}`, { count });
+  if (d > 0) return `${unit("d", d)} ${unit("h", h)} ${unit("m", m)}`;
+  if (h > 0) return `${unit("h", h)} ${unit("m", m)}`;
+  return unit("m", m);
 }
 
 // Signed device-clock drift for the node detail, e.g. "+42s ahead", "-1h 1m behind", "in sync".
 // formatUptime floors to whole minutes and is unsigned, so it can't render sub-minute drift.
 // +ve = device clock ahead of the server (matches clockDriftSeconds).
-export function formatClockDrift(seconds: number): string {
-  if (seconds === 0) return "in sync";
-  const dir = seconds > 0 ? "ahead" : "behind";
+export function formatClockDrift(seconds: number, labels = { inSync: "in sync", ahead: "ahead", behind: "behind" }): string {
+  if (seconds === 0) return labels.inSync;
+  const dir = seconds > 0 ? labels.ahead : labels.behind;
   const sign = seconds > 0 ? "+" : "-";
   const s = Math.abs(seconds);
   const h = Math.floor(s / 3600);
   const m = Math.floor((s % 3600) / 60);
   const sec = s % 60;
-  const mag = h > 0 ? `${h}h ${m}m` : m > 0 ? `${m}m ${sec}s` : `${sec}s`;
+  const unit = (u: "h" | "m" | "s", count: number) => i18n.t(`timestamp.unit.${u}`, { count });
+  const mag = h > 0 ? `${unit("h", h)} ${unit("m", m)}` : m > 0 ? `${unit("m", m)} ${unit("s", sec)}` : unit("s", sec);
   return `${sign}${mag} ${dir}`;
 }
 
@@ -90,28 +108,48 @@ export function formatRatePerDay(count: number | null | undefined, windowMs: num
   const days = windowMs / 86_400_000;
   const rate = days > 0 ? count / days : 0;
   const shown = rate >= 10 ? formatCount(Math.round(rate)) : String(Math.round(rate * 10) / 10);
-  return `${shown}/d`;
+  return i18n.t("units.perDay", { value: shown });
 }
+
+export type TimeAgoUnit = "s" | "m" | "h" | "d";
 
 // clamp negative values from clock skew
-export function timeAgoMs(epochMs: number): string {
+export function timeAgoParts(epochMs: number): { count: number; unit: TimeAgoUnit } {
   const seconds = Math.max(0, Math.floor((Date.now() - epochMs) / 1000));
-  if (seconds < 60) return `${seconds}s`;
+  if (seconds < 60) return { count: seconds, unit: "s" };
   const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) return `${minutes}m`;
+  if (minutes < 60) return { count: minutes, unit: "m" };
   const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}h`;
-  return `${Math.floor(hours / 24)}d`;
+  if (hours < 24) return { count: hours, unit: "h" };
+  return { count: Math.floor(hours / 24), unit: "d" };
 }
 
-// Node/observer summaries carry radio as a compact "freq,bw,sf" string (e.g. "915,250,11").
-// Formats freq/SF/bandwidth like the observer panel ("915 MHz · SF11 · 250 kHz"); the compact
-// string carries no coding rate, so there's no "CR 4/x" segment.
+// Compact English "7d" matching Timestamp's English relative phrasing; kept for tests that assert
+// against it, not used by app code (see timeAgoParts for the i18n path).
+export function timeAgoMs(epochMs: number): string {
+  const { count, unit } = timeAgoParts(epochMs);
+  return `${count}${unit}`;
+}
+
+// One radio config format for every panel ("915 MHz · SF11 · 250 kHz · CR 4/5"); unknown or zero parts drop out.
+export function formatRadioParts(r: { freqMhz?: number | null; sf?: number | null; bwKhz?: number | null; cr?: number | null }): string | null {
+  const known = (v: number | null | undefined): v is number => v != null && v > 0;
+  const parts = [
+    known(r.freqMhz) && `${r.freqMhz} MHz`,
+    known(r.sf) && `SF${r.sf}`,
+    known(r.bwKhz) && `${r.bwKhz} kHz`,
+    known(r.cr) && `CR 4/${r.cr}`,
+  ].filter(Boolean) as string[];
+  return parts.length > 0 ? parts.join(" · ") : null;
+}
+
+// Node/observer summaries carry radio as a compact "freq,bw,sf" string (e.g. "915,250,11"); the
+// compact string carries no coding rate, so there's no "CR 4/x" segment.
 export function formatRadio(radio: string | null | undefined): string | null {
   if (!radio) return null;
   const [freq, bw, sf] = radio.split(",");
   if (!freq || !bw || !sf) return radio; // unexpected shape — show it raw rather than hide it
-  const f = Number(freq), b = Number(bw);
-  if (Number.isNaN(f) || Number.isNaN(b)) return radio; // non-numeric freq/bw — show raw, not "NaN MHz"
-  return `${f} MHz · SF${sf} · ${b} kHz`;
+  const f = Number(freq), b = Number(bw), s = Number(sf);
+  if (Number.isNaN(f) || Number.isNaN(b) || Number.isNaN(s)) return radio; // non-numeric — show raw, not "NaN MHz"
+  return formatRadioParts({ freqMhz: f, sf: s, bwKhz: b });
 }

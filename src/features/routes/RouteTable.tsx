@@ -1,14 +1,18 @@
 import { useState, useMemo, useCallback, useEffect, useRef, memo } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { getKnownRoutesPage, searchKnownRoutes, searchCrossIATARoutes, getIatas } from "../../api/client";
-import { useRegion } from "../../hooks/useRegion";
+import { useTranslation } from "react-i18next";
+import type { TFunction } from "i18next";
+import { useSearchParams } from "react-router-dom";
+import { getKnownRoutesPage, searchKnownRoutes, searchCrossIATARoutes, getIatas, type RouteCursor } from "../../api/client";
+import { useRegion, useRegionSelection } from "../../hooks/useRegion";
 import { useInfinitePages } from "../../hooks/useInfinitePages";
 import { Badge } from "../../components/Badge";
 import { Timestamp } from "../../components/Timestamp";
 import { DataTable, type Column } from "../../components/DataTable";
 import { LoadingPill } from "../../components/LoadingPill";
 import { MultiSelectDropdown } from "../../components/MultiSelectDropdown";
-import { RouteDetailPanel } from "./RouteDetailPanel";
+import { useIsMobile } from "../../hooks/useMediaQuery";
+import { RouteDetailPanel, type RouteActions } from "./RouteDetailPanel";
 import { ResolvedHopBlock } from "../packets/PathData";
 import { formatHex } from "../../lib/formatters";
 import type { KnownRoute, CrossIATARoute, ResolvedHop, ResolvedNode, RouteHop } from "../../types/api";
@@ -50,6 +54,7 @@ const RouteHopChain = memo(function RouteHopChain({ route }: { route: KnownRoute
 
 // A cross-IATA route: source segment → boundary hop (the two nodes that bridge the IATAs) → target segment.
 function CrossRouteCard({ route }: { route: CrossIATARoute }) {
+  const { t } = useTranslation();
   const { crossHop } = route;
   return (
     <div className="bg-bg-base border border-border rounded px-3 py-2 flex flex-col gap-1.5">
@@ -59,7 +64,7 @@ function CrossRouteCard({ route }: { route: CrossIATARoute }) {
           <span className="text-text-dim" aria-hidden>→</span>
           <Badge variant="default">{crossHop.toIata}</Badge>
         </div>
-        <span className="font-mono text-[11px] text-text-dim">{route.totalHops} hops</span>
+        <span className="font-mono text-[11px] text-text-dim">{t("routes.hops", { count: route.totalHops })}</span>
       </div>
       <div className="flex flex-wrap items-center gap-1 font-mono text-[13px]">
         <HopChain hops={route.sourceSegment} />
@@ -74,53 +79,61 @@ function CrossRouteCard({ route }: { route: CrossIATARoute }) {
   );
 }
 
-const COLUMNS: Column<KnownRoute>[] = [
+// ids keep sorting stable when the headers are translated
+const buildColumns = (t: TFunction): Column<KnownRoute>[] => [
   {
-    header: "IATA",
+    id: "area",
+    header: t("routes.columns.area"),
     sortValue: (r) => r.iata,
     cell: (r) => <Badge variant="default">{r.iata}</Badge>,
   },
   {
-    header: "Hops",
+    id: "hops",
+    header: t("routes.columns.hops"),
     sortValue: (r) => r.hopCount,
     cell: (r) => r.hopCount,
   },
   {
-    header: "Route",
+    id: "route",
+    header: t("routes.columns.route"),
     cell: (r) => <RouteHopChain route={r} />,
   },
   {
-    header: "Obs",
+    id: "obs",
+    header: t("routes.columns.obs"),
     className: "text-text-muted",
     sortValue: (r) => r.observationCount,
     cell: (r) => r.observationCount.toLocaleString(),
   },
   {
-    header: "First seen",
+    id: "firstSeen",
+    header: t("routes.columns.firstSeen"),
     className: "text-text-muted",
     sortValue: (r) => r.firstSeen,
     cell: (r) => <Timestamp value={r.firstSeen} />,
   },
   {
-    header: "Last seen",
+    id: "lastSeen",
+    header: t("routes.columns.lastSeen"),
     className: "text-text-muted",
     sortValue: (r) => r.lastSeen,
     cell: (r) => <Timestamp value={r.lastSeen} />,
   },
 ];
 
-function renderRouteCard(r: KnownRoute) {
+function RouteCard({ route: r }: { route: KnownRoute }) {
+  const { t } = useTranslation();
   return (
     <div className="flex flex-col gap-1.5">
       <div className="flex items-center justify-between gap-2">
         <Badge variant="default">{r.iata}</Badge>
-        <span className="font-mono text-[11px] text-text-dim">{r.hopCount} hops · {r.observationCount.toLocaleString()} obs</span>
+        <span className="font-mono text-[11px] text-text-dim">{t("routes.hops", { count: r.hopCount })} · {t("routes.obs", { count: r.observationCount, value: r.observationCount.toLocaleString() })}</span>
       </div>
       <RouteHopChain route={r} />
       <div className="flex items-center gap-2 font-mono text-[11px] text-text-muted">
-        <span>first <Timestamp value={r.firstSeen} /></span>
+        <span>{t("routes.first")} <Timestamp value={r.firstSeen} /></span>
         <span aria-hidden>·</span>
-        <span>last <Timestamp value={r.lastSeen} /></span>
+        <span>{t("routes.last")} <Timestamp value={r.lastSeen} /></span>
       </div>
     </div>
   );
@@ -140,19 +153,34 @@ function directedPairs(iatas: string[]): [string, string][] {
   return pairs;
 }
 
-export function RouteTable() {
-  const { iatas, regionKey } = useRegion();
+const renderRouteCard = (r: KnownRoute) => <RouteCard route={r} />;
 
+export function RouteTable(actions: RouteActions) {
+  const { t } = useTranslation();
+  const columns = useMemo(() => buildColumns(t), [t]);
+  const { iatas, isResolved } = useRegion();
+  const regionPending = isResolved === false;
+  const { selection } = useRegionSelection();
+  const [params, setParams] = useSearchParams();
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
 
+  const pathKey = params.get("route"), routeIata = params.get("routeIata");
+  const closeRoute = useCallback(() => {
+    // no-op when nothing is open, so callers (e.g. the region-change effect) can call it unconditionally
+    if (!pathKey && !selectedKey) return;
+    setSelectedKey(null);
+    setParams(previous => { const next = new URLSearchParams(previous); for (const key of ["route", "routeIata"]) next.delete(key); return next; }, { replace: true });
+  }, [pathKey, selectedKey, setParams]);
+
+
   // drop the selection when the region changes — the selected route may not be in the new region
-  const prevRegion = useRef(regionKey);
+  const prevRegion = useRef(selection);
   useEffect(() => {
-    if (prevRegion.current !== regionKey) {
-      prevRegion.current = regionKey;
-      setSelectedKey(null);
+    if (prevRegion.current !== selection) {
+      prevRegion.current = selection;
+      closeRoute();
     }
-  }, [regionKey]);
+  }, [selection, closeRoute]);
 
   // path search form: source→dest hashes, scoped to a multi-select of IATAs. One IATA → within-IATA
   // /routes/search; two+ → /routes/cross across the directed pairs. Hashes + ≥1 IATA required.
@@ -167,15 +195,16 @@ export function RouteTable() {
   // client-side below (a region can span several IATAs, which the endpoint can't express).
   const serverIata = iatas && iatas.length === 1 ? iatas[0] : undefined;
 
-  // Page the route set on demand (50 at a time, cursor = last route's lastSeen ms) — the DataTable
+  // Page the route set on demand (50 at a time, cursor = last route's lastSeen + id) — the DataTable
   // pulls the next page via loadMore() as you scroll, instead of eagerly loading the whole set.
   const { items: listRoutes, loadedCount, isPaging, isError, isLoading: listLoading, loadMore, hasMore } =
-    useInfinitePages<KnownRoute>({
+    useInfinitePages<KnownRoute, RouteCursor>({
       queryKey: ["routes", serverIata ?? ""],
       queryFn: (cursor) => getKnownRoutesPage({ iata: serverIata, cursor }),
       getId: routeId,
       keepPrevious: true,
       auto: false,
+      enabled: !regionPending,
     });
 
   const { data: searchRoutes, isLoading: searchLoading } = useQuery({
@@ -213,15 +242,28 @@ export function RouteTable() {
   // region = all). Filtering by IATA stays client-side, consistent with the other tabs.
   const rows = useMemo(() => {
     if (search) return isCross ? [] : searchRoutes;
-    if (!iatas || iatas.length === 0) return listRoutes;
+    if (regionPending) return [];
+    if (!iatas) return listRoutes;
     const set = new Set(iatas);
     return listRoutes.filter((r) => set.has(r.iata));
-  }, [search, isCross, searchRoutes, listRoutes, iatas]);
+  }, [search, isCross, searchRoutes, listRoutes, iatas, regionPending]);
 
   const selectedRoute = useMemo(
     () => rows?.find((r) => String(r.id) === selectedKey),
     [rows, selectedKey],
   );
+
+  const selectRoute = (id: string | null) => {
+    if (id === null) { closeRoute(); return; }
+    const route = rows?.find(row => String(row.id) === id);
+    if (route?.pathKey) {
+      setSelectedKey(null);
+      setParams(previous => { const next = new URLSearchParams(previous); next.set("route", route.pathKey!); next.set("routeIata", route.iata); return next; }, { replace: true });
+    } else {
+      closeRoute();
+      setSelectedKey(id);
+    }
+  };
 
   // A multi-IATA region filters globally-paged rows client-side, so the filtered list can be too
   // short to ever trigger scroll paging — or empty, with the region's routes deeper in the cursor
@@ -233,67 +275,74 @@ export function RouteTable() {
     loadMore();
   }, [search, serverIata, iatas, hasMore, isPaging, rows, loadedCount, loadMore]);
 
+  const isMobile = useIsMobile();
+  const panelOpen = Boolean(pathKey && routeIata || selectedRoute);
   const canSearch = !!(from.trim() && to.trim() && searchIatas.length >= 1);
   // clear any selection when the visible list changes out from under it (search submit/clear)
   const submitSearch = useCallback(() => {
     if (!from.trim() || !to.trim() || searchIatas.length < 1) return;
     setSearch({ from: from.trim(), to: to.trim(), iatas: searchIatas });
-    setSelectedKey(null);
-  }, [from, to, searchIatas]);
+    closeRoute();
+  }, [from, to, searchIatas, closeRoute]);
   const clearSearch = useCallback(() => {
     setSearch(null);
-    setSelectedKey(null);
-  }, []);
+    closeRoute();
+  }, [closeRoute]);
 
   const onKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter") submitSearch();
   };
 
   return (
-    <div className="flex flex-col flex-1 min-h-0">
+    <div className="flex flex-col flex-1 min-h-0 min-w-0">
       {/* stacks into two rows on mobile (the inputs would otherwise wrap around the arrow); one row at md+ */}
-      <div className="flex flex-col md:flex-row md:flex-wrap md:items-center gap-1.5 gap-y-1.5 px-4 py-2 border-b border-border-subtle bg-bg-base shrink-0">
+      <div className={`${panelOpen ? "hidden md:flex" : "flex"} flex-col md:flex-row md:flex-wrap md:items-center gap-1.5 gap-y-1.5 px-4 py-2 border-b border-border-subtle bg-bg-base shrink-0`}>
         <div className="flex items-center gap-1.5">
-          <span className="text-text-muted text-[11px] uppercase tracking-wider mr-1 shrink-0">Find path</span>
+          <span className="hidden md:inline text-text-muted text-[11px] uppercase tracking-wider mr-1 shrink-0">{t("routes.findPath")}</span>
           <input
-            className={`${inputClass} flex-1 min-w-0 md:flex-none md:w-24`}
-            placeholder="from hash"
+            className={`${inputClass} h-7 flex-1 min-w-0 md:flex-none md:w-24`}
+            placeholder={t("routes.fromPlaceholder")}
+            aria-label={t("routes.fromLabel")}
             value={from}
             onChange={(e) => setFrom(e.target.value)}
             onKeyDown={onKeyDown}
           />
           <span className="text-text-dim text-xs shrink-0" aria-hidden>→</span>
           <input
-            className={`${inputClass} flex-1 min-w-0 md:flex-none md:w-24`}
-            placeholder="to hash"
+            className={`${inputClass} h-7 flex-1 min-w-0 md:flex-none md:w-24`}
+            placeholder={t("routes.toPlaceholder")}
+            aria-label={t("routes.toLabel")}
             value={to}
             onChange={(e) => setTo(e.target.value)}
             onKeyDown={onKeyDown}
           />
         </div>
         <div className="flex items-center gap-1.5">
-          <MultiSelectDropdown
-            label="IATA"
-            options={iataOptions}
-            selected={searchIatas}
-            onChange={setSearchIatas}
-            align="left"
-          />
+          <div className="flex-1 min-w-0 md:flex-none">
+            <MultiSelectDropdown
+              label={t("routes.areas")}
+              options={iataOptions}
+              selected={searchIatas}
+              onChange={setSearchIatas}
+              align="left"
+              fullWidth={isMobile}
+            />
+          </div>
           <button
             type="button"
             onClick={submitSearch}
             disabled={!canSearch}
-            className="text-[11px] font-mono px-2 py-1 rounded-sm border border-border bg-bg-surface text-text-normal hover:border-primary-dim disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors"
+            className="h-7 text-[11px] font-mono px-3 rounded-sm border border-border bg-bg-surface text-text-normal hover:border-primary-dim disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors"
           >
-            Search
+            {t("routes.search")}
           </button>
           {search && (
             <button
               type="button"
               onClick={clearSearch}
-              className="text-[11px] font-mono px-2 py-1 rounded-sm text-text-dim hover:text-text-normal cursor-pointer transition-colors"
+              className="h-7 text-[11px] font-mono px-2 rounded-sm text-text-dim hover:text-text-normal cursor-pointer transition-colors"
             >
-              Clear
+              {t("routes.clear")}
             </button>
           )}
         </div>
@@ -303,24 +352,24 @@ export function RouteTable() {
         {isCross ? (
           <div className="flex-1 min-w-0 overflow-y-auto p-3 flex flex-col gap-2">
             {crossLoading ? (
-              <div className="font-mono text-[13px] text-text-dim">Searching…</div>
+              <div className="font-mono text-[13px] text-text-dim">{t("routes.searching")}</div>
             ) : crossRoutes && crossRoutes.length > 0 ? (
               crossRoutes.map((r, i) => <CrossRouteCard key={i} route={r} />)
             ) : (
-              <div className="font-mono text-[13px] text-text-dim">No cross-IATA routes</div>
+              <div className="font-mono text-[13px] text-text-dim">{t("routes.noCross")}</div>
             )}
           </div>
         ) : (
-          <div className="relative flex-1 min-w-0 flex flex-col min-h-0">
+          <div className={`relative flex-1 min-w-0 ${panelOpen ? "hidden md:flex" : "flex"} flex-col min-h-0`}>
             <DataTable
-              columns={COLUMNS}
+              columns={columns}
               rows={rows}
               rowKey={(r) => String(r.id)}
-              selectedKey={selectedKey}
-              onSelect={setSelectedKey}
-              isLoading={search ? searchLoading : listLoading}
-              emptyLabel={search ? "No matching routes" : "No routes"}
-              defaultSort={{ header: "Last seen", direction: "desc" }}
+              selectedKey={pathKey ? String(rows?.find(row => row.pathKey === pathKey && row.iata === routeIata)?.id ?? "") : selectedKey}
+              onSelect={selectRoute}
+              isLoading={search ? searchLoading : listLoading || regionPending}
+              emptyLabel={t(search ? "routes.noMatches" : "routes.empty")}
+              defaultSort={{ id: "lastSeen", direction: "desc" }}
               onEndReached={search ? undefined : loadMore}
               renderCard={renderRouteCard}
             />
@@ -329,8 +378,10 @@ export function RouteTable() {
             )}
           </div>
         )}
-        {selectedRoute && (
-          <RouteDetailPanel route={selectedRoute} onClose={() => setSelectedKey(null)} />
+        {pathKey && routeIata ? (
+          <RouteDetailPanel key={`${routeIata}:${pathKey}`} route={rows?.find(row => row.pathKey === pathKey && row.iata === routeIata)} iata={routeIata} pathKey={pathKey} onClose={closeRoute} {...actions} />
+        ) : selectedRoute && (
+          <RouteDetailPanel route={selectedRoute} onClose={() => setSelectedKey(null)} {...actions} />
         )}
       </div>
     </div>

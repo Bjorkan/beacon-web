@@ -147,3 +147,27 @@ describe("computeFieldRanges — ANON_REQ (lean backend shape, no `type` field)"
     expect(ranges.ciphertext).toEqual({ start: 36, end: 46 });
   });
 });
+
+describe("transport frames", () => {
+  it("puts the transport codes back after the header as little-endian bytes", () => {
+    const d = makeDetail({ payloadType: PayloadType.GROUP_TEXT, rawPayload: "3b5c22" });
+    d.header = { ...d.header, raw: "14", routeType: RouteType.TRANSPORT_FLOOD, routeTypeName: "TRANSPORT_FLOOD" };
+    d.transportCodes = { regionCode: 49240, subRegionCode: 0 };
+    const obs = makeObs({ raw: "81", hashSize: 3, hopCount: 1, pathBytes: "bd6089" });
+    const frame = buildObservationFrame(d, obs);
+    expect(frame).toBe("14" + "58c00000" + "81" + "bd6089" + "3b5c22");
+    const ranges = computeFieldRanges(d, obs, frame.length / 2);
+    expect(frame.slice(ranges.pathLength!.start * 2, ranges.pathLength!.end * 2)).toBe("81");
+  });
+  // older rows can carry a transport route without stored codes; the frame has no bytes for them
+  it("keeps the field ranges aligned when a transport route has no codes", () => {
+    const d = makeDetail({ payloadType: PayloadType.GROUP_TEXT, rawPayload: "3b5c22" });
+    d.header = { ...d.header, raw: "14", routeType: RouteType.TRANSPORT_FLOOD, routeTypeName: "TRANSPORT_FLOOD" };
+    const obs = makeObs({ raw: "81", hashSize: 3, hopCount: 1, pathBytes: "bd6089" });
+    const frame = buildObservationFrame(d, obs);
+    const ranges = computeFieldRanges(d, obs, frame.length / 2);
+    expect(ranges.transport).toBeUndefined();
+    expect(frame.slice(ranges.pathLength!.start * 2, ranges.pathLength!.end * 2)).toBe("81");
+    expect(frame.slice(ranges.payload!.start * 2, ranges.payload!.end * 2)).toBe("3b5c22");
+  });
+});

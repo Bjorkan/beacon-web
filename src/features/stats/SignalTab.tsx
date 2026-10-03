@@ -1,0 +1,75 @@
+import { useMemo } from "react";
+import { useTranslation } from "react-i18next";
+import { InfoTip } from "../../components/InfoTip";
+import { SectionInfo } from "./SectionInfo";
+import { formatCount, formatUtc } from "../../lib/formatters";
+import { Card, ChartCard, StatCard } from "./cards";
+import { useChartColors } from "./chartTheme";
+import { signalBinLabel, signalCoverageOption, signalHistogramOption, signalHours, signalTrendOption } from "./signal";
+import { useSignalStats } from "./useSignalStats";
+import type { StatsRange } from "./types";
+
+const average = (value: number | null | undefined, unit = "") => value == null ? "—" : `${value.toFixed(1)}${unit ? ` ${unit}` : ""}`;
+
+export function SignalTab({ range }: { range: StatsRange }) {
+  const { t } = useTranslation();
+  const query = useSignalStats(range);
+  const c = useChartColors();
+  const loading = query.isPending || query.isPlaceholderData;
+  const data = loading || query.isError ? undefined : query.data;
+  const hours = useMemo(() => signalHours(data), [data]);
+  const charts = useMemo(() => ({
+    snr: signalHistogramOption(data?.snr, "SNR", "dB", c, t), rssi: signalHistogramOption(data?.rssi, "RSSI", "dBm", c, t),
+    snrTrend: signalTrendOption(hours, "snr", c, t), rssiTrend: signalTrendOption(hours, "rssi", c, t), coverage: signalCoverageOption(data, c, t),
+  }), [data, hours, c, t]);
+  const state = { isLoading: loading, isError: query.isError };
+  const sparks = useMemo(() => data && {
+    receptions: hours.map((h) => h.receptions),
+    snr: hours.map((h) => h.snrAverage),
+    rssi: hours.map((h) => h.rssiAverage),
+    reported: hours.map((h) => h.receptions !== null),
+  }, [data, hours]);
+
+  return (
+    <div className="mx-auto flex w-full min-w-0 max-w-[1200px] flex-col gap-3.5 p-4">
+      <SectionInfo text={[t("signal.subtitle"), t("signal.measurement"), data && t("signal.window", { since: formatUtc(data.since), until: formatUtc(data.until) })]} />
+      {query.isError && <p role="alert" className="text-sm text-danger">{t("signal.error")}</p>}
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        <StatCard label={t("signal.receptions")} value={data ? formatCount(data.receptions) : "—"} accent={c.primary} sublabel={t(`stats.ranges.${range}`)} spark={sparks?.receptions} />
+        <StatCard label={t("signal.meanSnr")} value={average(data?.snr.average, "dB")} accent={c.secondary} spark={sparks?.snr} />
+        <StatCard label={t("signal.meanRssi")} value={average(data?.rssi.average, "dBm")} accent={c.green} spark={sparks?.rssi} />
+        <StatCard label={t("signal.hoursWithRecords")} value={data ? `${data.hourly.length}/${hours.length}` : "—"} accent={c.warn} presence={sparks?.reported} />
+      </div>
+      <div className="grid min-w-0 grid-cols-1 gap-3.5 lg:grid-cols-2">
+        <ChartCard title={t("signal.histogramTitle", { metric: "SNR", unit: "dB" })} option={charts.snr} height={280} isEmpty={!data?.snr.samples} {...state} />
+        <ChartCard title={t("signal.histogramTitle", { metric: "RSSI", unit: "dBm" })} option={charts.rssi} height={280} isEmpty={!data?.rssi.samples} {...state} />
+        <ChartCard title={t("signal.meanTitle", { metric: "SNR", unit: "dB" })} option={charts.snrTrend} height={230} isEmpty={!data?.snr.samples} {...state} />
+        <ChartCard title={t("signal.meanTitle", { metric: "RSSI", unit: "dBm" })} option={charts.rssiTrend} height={230} isEmpty={!data?.rssi.samples} {...state} />
+      </div>
+      <div className="grid min-w-0 grid-cols-1 gap-3.5 lg:grid-cols-2">
+        <ChartCard title={t("signal.availability")} option={charts.coverage} height={150} isEmpty={!data?.receptions} {...state} />
+        <Card title={t("signal.averagesTitle")} right={<InfoTip text={t("signal.averagesHelp")} />}>
+          {!data ? <p className="py-4 text-sm text-text-muted">{query.isError ? t("common.dataUnavailable") : t("signal.loading")}</p> : !data.receptions ? <p className="py-4 text-sm text-text-muted">{t("signal.empty")}</p> : (
+            <div className="overflow-x-auto"><table aria-label={t("signal.availabilityTable")} className="w-full text-left font-mono text-xs">
+              <thead className="text-[11px] text-text-muted sm:text-xs"><tr><th scope="col" className="py-2">{t("signal.metric")}</th><th scope="col" className="pl-2 text-right">{t("signal.samples")}</th><th scope="col" className="pl-2 text-right">{t("signal.missing")}</th><th scope="col" className="pl-2 text-right">{t("signal.share")}</th></tr></thead>
+              <tbody>{(["snr", "rssi"] as const).map((metric) => <tr key={metric} className="border-t border-border-subtle"><th scope="row" className="py-3 text-text-normal">{metric.toUpperCase()}</th><td className="pl-2 text-right text-text-bright">{data[metric].samples.toLocaleString()}</td><td className="pl-2 text-right text-text-muted">{(data.receptions - data[metric].samples).toLocaleString()}</td><td className="pl-2 text-right text-text-muted">{(100 * data[metric].samples / data.receptions).toFixed(1)}%</td></tr>)}</tbody>
+            </table></div>
+          )}
+        </Card>
+      </div>
+      {data && data.receptions > 0 && <details className="rounded-lg border border-border bg-bg-surface p-3.5">
+        <summary className="cursor-pointer font-mono text-[11px] font-semibold uppercase tracking-wider text-text-normal">{t("signal.details")} <InfoTip text={t("signal.binsHelp")} /></summary>
+        <div className="mt-3 grid grid-cols-1 gap-4 sm:grid-cols-2">
+          {(["snr", "rssi"] as const).map((metric) => <table key={metric} aria-label={t("signal.histogramTable", { metric: metric.toUpperCase() })} className="w-full text-left font-mono text-xs">
+            <thead className="text-text-muted"><tr><th scope="col" className="py-2">{metric.toUpperCase()} · {metric === "snr" ? "dB" : "dBm"}</th><th scope="col" className="text-right">{t("signal.samples")}</th></tr></thead>
+            <tbody>{data[metric].histogram.map((bin, i) => <tr key={i} className="border-t border-border-subtle"><th scope="row" className="py-1.5 font-normal text-text-normal">{signalBinLabel(bin, t)}</th><td className="text-right text-text-bright">{bin.count.toLocaleString()}</td></tr>)}</tbody>
+          </table>)}
+        </div>
+        <div className="mt-3 max-h-[340px] overflow-auto"><table aria-label={t("signal.hourlyTable")} className="w-full min-w-[540px] text-left font-mono text-xs">
+          <thead className="text-text-muted"><tr><th scope="col" className="py-2">{t("signal.utcHour")}</th><th scope="col">{t("signal.receptionsColumn")}</th><th scope="col">{t("signal.metricSamples", { metric: "SNR" })}</th><th scope="col">{t("signal.meanUnit", { unit: "dB" })}</th><th scope="col">{t("signal.metricSamples", { metric: "RSSI" })}</th><th scope="col">{t("signal.meanUnit", { unit: "dBm" })}</th></tr></thead>
+          <tbody>{data.hourly.map((row) => <tr key={row.hour} className="border-t border-border-subtle"><th scope="row" className="py-2 font-normal text-text-normal">{formatUtc(row.hour)}</th><td>{row.receptions.toLocaleString()}</td><td>{row.snrSamples.toLocaleString()}</td><td>{average(row.snrAverage)}</td><td>{row.rssiSamples.toLocaleString()}</td><td>{average(row.rssiAverage)}</td></tr>)}</tbody>
+        </table></div>
+      </details>}
+    </div>
+  );
+}

@@ -1,20 +1,26 @@
 import { useCallback, useMemo } from "react";
+import { useTranslation } from "react-i18next";
 import type { PacketSummary } from "../../types/api";
 import { formatPropagation } from "../../lib/formatters";
 import { Timestamp } from "../../components/Timestamp";
 import { usePacketDetail } from "./usePacketDetail";
 import { ObservationTable } from "./ObservationTable";
+import { ObservationCard } from "./ObservationCard";
+import { useIsMobile } from "../../hooks/useMediaQuery";
+import { PayloadType } from "../../types/enums";
 import { buildPacketPaths } from "../map/packet-path";
+import { traceSnrValues } from "./packet-investigation";
 
 // Roughly what fits the scroll cap; observations are unbounded server-side.
 const SKELETON_ROW_CAP = 12;
 
+// full-width and taller below md for a real tap target; desktop keeps its inline density
 const ACTION_BUTTON_CLASS =
-  "border border-border rounded-sm px-2 py-0.5 bg-bg-raised text-text-normal hover:bg-text-normal/3 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors";
+  "border border-border rounded-sm w-full md:w-auto px-3 py-2 md:px-2 md:py-0.5 text-[11px] md:text-[10px] bg-bg-raised text-text-normal hover:bg-text-normal/3 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors";
 
 interface Props {
   packet: PacketSummary;
-  onOpenAnalyzer: () => void;
+  onOpenAnalyzer: (observationId?: number) => void;
   onViewPath: () => void;
   selectedObservationId: number | null;
   onSelectObservation: (id: number) => void;
@@ -24,6 +30,8 @@ interface Props {
 // the per-observer table, which does wait on usePacketDetail.
 export function PacketExpansion({ packet, onOpenAnalyzer, onViewPath, selectedObservationId, onSelectObservation }: Props) {
   const { data, isLoading, isError, refetch } = usePacketDetail(packet.packetHash);
+  const isMobile = useIsMobile();
+  const { t } = useTranslation();
   const observer = packet.latestObserver;
   // firstHeardAt/lastHeardAt are epoch ms (same unit Timestamp expects), so the difference is
   // already in ms for formatPropagation -- no *1000 here.
@@ -33,45 +41,49 @@ export function PacketExpansion({ packet, onOpenAnalyzer, onViewPath, selectedOb
   // The summary already knows the count is zero, so skip the fetch-driven states entirely rather
   // than showing a blank (0-row) skeleton while it loads.
   const noObservations = packet.observationCount === 0;
-  const emptyState = <div className="text-[10px] text-text-dim py-2">No observations</div>;
+  const emptyState = <div className="text-[10px] text-text-dim py-2">{t("packetRow.noObservations")}</div>;
   // Picking an observation is the way into the analyzer — it opens on the one you clicked.
   const handleSelectObservation = useCallback(
     (id: number) => {
       onSelectObservation(id);
-      onOpenAnalyzer();
+      onOpenAnalyzer(id);
     },
     [onSelectObservation, onOpenAnalyzer],
   );
 
+  // below md the expansion is the bottom half of the tapped card (the row's own border-b is the
+  // divider); at md+ it stays the flat left-accented strip.
   return (
-    <div data-testid="packet-expansion" className="bg-bg-surface border-l-2 border-primary pl-6 pr-3 py-2">
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[10px] text-text-muted pb-2">
-        <span>
-          observer{" "}
+    <div data-testid="packet-expansion" className="bg-bg-surface border border-t-0 border-primary rounded-b-md px-3.5 py-2 md:border-0 md:border-l-2 md:rounded-none md:pl-6 md:pr-3">
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] md:text-[10px] text-text-muted pb-2">
+        {/* the mobile card header right above already names the latest observer */}
+        <span className="hidden md:inline">
+          {t("packetRow.observer")}{" "}
           {observer
             ? <span className="text-text-normal">{observer.displayName ?? observer.id.slice(0, 8)}</span>
-            : <span className="text-text-dim">n/a</span>}
+            : <span className="text-text-dim">{t("packetEndpoints.na")}</span>}
         </span>
-        <span>first <Timestamp value={packet.firstHeardAt} /></span>
-        <span>last <Timestamp value={packet.lastHeardAt} /></span>
-        <span>spread {formatPropagation(spread)}</span>
+        <span>{t("packetRow.first")} <Timestamp value={packet.firstHeardAt} /></span>
+        <span>{t("packetRow.last")} <Timestamp value={packet.lastHeardAt} /></span>
+        <span>{t("packetRow.spread")} {formatPropagation(spread)}</span>
         <button
           type="button"
           onClick={onViewPath}
           disabled={!ready || !hasPath}
-          title={hasPath ? undefined : "No resolved path to map"}
+          title={hasPath ? undefined : t("packetRow.noPath")}
           className={ACTION_BUTTON_CLASS}
         >
-          View path on map
+          {t("investigation.viewAll")}
         </button>
       </div>
 
-      <div className="max-h-[360px] overflow-y-auto">
+      {/* capped scroller is desktop-only; on touch it would trap the page scroll */}
+      <div data-testid="observation-scroller" className="md:max-h-[360px] md:overflow-y-auto">
         {isError ? (
-          <div className="flex items-center gap-3 text-[10px] text-danger py-2">
-            <span>Failed to load observations</span>
-            <button type="button" onClick={() => refetch()} className="border border-border rounded-sm px-2 py-0.5 bg-bg-raised cursor-pointer">
-              Retry
+          <div className="flex flex-wrap items-center gap-3 text-[11px] md:text-[10px] text-danger py-2">
+            <span>{t("packetRow.loadFailed")}</span>
+            <button type="button" onClick={() => refetch()} className={ACTION_BUTTON_CLASS}>
+              {t("observerPage.retry")}
             </button>
           </div>
         ) : noObservations ? (
@@ -89,7 +101,24 @@ export function PacketExpansion({ packet, onOpenAnalyzer, onViewPath, selectedOb
         ) : data && data.observations.length === 0 ? (
           emptyState
         ) : data ? (
-          <ObservationTable observations={data.observations} selectedId={selectedObservationId} onSelect={handleSelectObservation} />
+          // The table's eight columns need ~407px, so below md its Path column lands off-screen
+          // behind a nested sideways scroll. Cards give the path a full-width row of its own.
+          isMobile ? (
+            <div className="flex flex-col gap-1.5">
+              {data.observations.map((o) => (
+                <ObservationCard
+                  key={o.id}
+                  observation={o}
+                  selected={o.id === selectedObservationId}
+                  onClick={() => handleSelectObservation(o.id)}
+                  isTrace={data.header.payloadType === PayloadType.TRACE}
+                  snrValues={traceSnrValues(data)}
+                />
+              ))}
+            </div>
+          ) : (
+            <ObservationTable observations={data.observations} selectedId={selectedObservationId} onSelect={handleSelectObservation} />
+          )
         ) : null}
       </div>
     </div>

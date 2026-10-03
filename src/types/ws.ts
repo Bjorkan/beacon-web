@@ -35,6 +35,9 @@ export interface WsConfigured {
   type: "configured";
   id: string;
   resolvePath: boolean;
+  // echoed by servers that support these opt-ins; we never set them
+  includeObserverKey?: boolean;
+  includeRepeats?: boolean;
 }
 
 export interface WsPacketObservation {
@@ -51,10 +54,14 @@ export interface WsPacketObservation {
       isFirstObservation: boolean;
       observationCount: number;
       scope?: string; // matched transport scope name; omitted when none matched
+      summary?: string;
+      // later hearing over a new path, only sent to configure{includeRepeats}; observationCount is 0
+      isRepeat?: boolean;
     };
     observation: {
       observerId: string;
       observerName: string;
+      observerPublicKey?: string; // only with configure{includeObserverKey}
       iata: string;
       heardAt: number;
       rssi: number;
@@ -100,10 +107,12 @@ export interface WsNodeUpdate {
     name: string;
     nodeType: number;
     nodeTypeName: string;
+    // Omitted leaves the prior verdict unchanged; null clears an unknown/reset position.
+    possiblyForeign?: boolean | null;
     iata: string;
-    // decimal degrees, same as REST /nodes (api/nodes.go serializes *float64 degrees to both)
-    lat?: number;
-    lng?: number;
+    // decimal degrees as in REST /nodes; omitted keeps the prior position, null clears it (explicit 0/0 advert)
+    lat?: number | null;
+    lng?: number | null;
     isObserver: boolean;
     iatas: NodeIATA[];
     defaultScope?: string;

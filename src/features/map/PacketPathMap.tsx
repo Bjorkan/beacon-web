@@ -1,8 +1,9 @@
 // src/features/map/PacketPathMap.tsx
 import { useEffect, useRef, useState } from "react";
-import maplibregl from "maplibre-gl";
+import { Map as MapLibreMap, NavigationControl, AttributionControl, Popup, LngLatBounds } from "maplibre-gl";
+import "maplibre-gl/dist/maplibre-gl.css";
+import "./maplibre-worker";
 import type {
-  Map as MapLibreMap,
   GeoJSONSource,
   LineLayerSpecification,
   CircleLayerSpecification,
@@ -12,6 +13,7 @@ import type { Point } from "geojson";
 import type { PacketPath } from "./packet-path";
 import { packetPathsToFeatures } from "./packet-path";
 import { resolveMapStyle, DEFAULT_CENTER, DEFAULT_ZOOM, IATA_ZOOM } from "./types";
+import { mapLocale } from "./useMapLibre";
 
 // Private ids — this map instance is dedicated to the popup, so they can't collide with the main map.
 const LINE_SOURCE = "pp-lines";
@@ -38,16 +40,17 @@ export function PacketPathMap({ paths, selectedKey, styleId }: {
   // build the map once (styleId is read at creation; the popup doesn't hot-swap basemaps)
   useEffect(() => {
     if (mapRef.current || !containerRef.current) return;
-    const map = new maplibregl.Map({
+    const map = new MapLibreMap({
       container: containerRef.current,
       style: resolveMapStyle(styleId).url,
       center: DEFAULT_CENTER,
       zoom: DEFAULT_ZOOM,
       attributionControl: false,
+      locale: mapLocale(),
     });
     mapRef.current = map;
-    map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "top-right");
-    map.addControl(new maplibregl.AttributionControl({ compact: true }));
+    map.addControl(new NavigationControl({ showCompass: false }), "top-right");
+    map.addControl(new AttributionControl({ compact: true }));
     // start the attribution as a bare (i) instead of the wide expanded bar it pops open on load —
     // on mobile that bar overlaps the observer list beneath the map (same trick as useMapLibre)
     const attrib = map.getContainer().querySelector(".maplibregl-ctrl-attrib");
@@ -69,7 +72,7 @@ export function PacketPathMap({ paths, selectedKey, styleId }: {
       coords.textContent = `${lat.toFixed(5)}, ${lng.toFixed(5)}`;
       el.append(name, coords);
       // a fresh popup per click; closeOnClick removes the previous one on the same click
-      new maplibregl.Popup({ closeButton: false, closeOnClick: true, offset: 10 })
+      new Popup({ closeButton: false, closeOnClick: true, offset: 10 })
         .setLngLat([lng, lat]).setDOMContent(el).addTo(map);
     });
     const onLoad = () => setReady(true);
@@ -111,7 +114,7 @@ export function PacketPathMap({ paths, selectedKey, styleId }: {
     if (!map.getLayer(NODE_LABEL_LAYER)) {
       map.addLayer({
         id: NODE_LABEL_LAYER, type: "symbol", source: NODE_SOURCE,
-        layout: { "text-field": ["get", "label"], "text-size": 11, "text-offset": [0, 1.1], "text-anchor": "top", "text-optional": true },
+        layout: { "text-field": ["get", "label"], "text-font": ["Noto Sans Regular"], "text-size": 11, "text-offset": [0, 1.1], "text-anchor": "top", "text-optional": true },
         paint: {
           "text-color": paletteVar("--palette-text-bright", "#e5e7eb"),
           "text-halo-color": paletteVar("--palette-bg-base", "#0a0a0a"),
@@ -124,7 +127,7 @@ export function PacketPathMap({ paths, selectedKey, styleId }: {
     (map.getSource(NODE_SOURCE) as GeoJSONSource).setData(points);
 
     if (bounds.length) {
-      const b = bounds.reduce((acc, p) => acc.extend(p), new maplibregl.LngLatBounds(bounds[0], bounds[0]));
+      const b = bounds.reduce((acc, p) => acc.extend(p), new LngLatBounds(bounds[0], bounds[0]));
       map.fitBounds(b, { padding: 60, maxZoom: IATA_ZOOM });
     }
   }, [ready, paths, selectedKey]);

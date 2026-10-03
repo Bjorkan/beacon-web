@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, act, within, waitFor } from "@testing-library/react";
 import { App } from "../src/App";
 import type { PacketSummary, PacketDetail } from "../src/types/api";
 
@@ -29,18 +29,20 @@ vi.mock("../src/api/client", () => ({
   getRegion: async () => ({ id: 0, slug: "", displayName: "", iatas: [] }),
   getIatas: async () => [],
   getScopes: async () => [],
-  getChannels: async () => [],
+  getChannels: async () => ({ items: [], nextCursor: null, hasMore: false }),
   getChannelMessagesPage: async () => ({ items: [], nextCursor: null, hasMore: false }),
 }));
 
+vi.mock("../src/features/observers/ObserverPage", () => ({ ObserverPage: () => <h1>Observer dashboard</h1> }));
+
 const packet: PacketSummary = {
-  packetHash: "AA11", payloadType: 1, payloadTypeName: "ADVERT",
+  packetHash: "aa11", payloadType: 1, payloadTypeName: "ADVERT",
   routeType: 1, routeTypeName: "FLOOD",
   firstHeardAt: 1700000000000, lastHeardAt: 1700000002000, observationCount: 1,
 };
 
 const detail = {
-  packetHash: "AA11",
+  packetHash: "aa11",
   header: { raw: "12", routeType: 1, routeTypeName: "FLOOD", payloadType: 1, payloadTypeName: "ADVERT", payloadVersion: 1 },
   firstHeardAt: 1700000000000, lastHeardAt: 1700000002000, firstToLastMs: 2000, observationCount: 1,
   rawPayload: "", decrypted: false,
@@ -70,7 +72,7 @@ vi.mock("../src/features/packets/usePackets", () => ({
 
 vi.mock("../src/features/packets/usePacketDetail", () => ({
   usePacketDetail: (hash: string | null) => ({
-    data: hash === "AA11" ? detail : undefined,
+    data: hash === "aa11" ? detail : hash === "bb22" ? { ...detail, packetHash: "bb22" } : undefined,
     isLoading: false,
     isError: false,
     refetch: () => {},
@@ -136,8 +138,55 @@ afterEach(() => {
 });
 
 describe("Packets deep links", () => {
+  it("keeps the packet drawer beside the observer dashboard and returns to the same packet, report and filters", async () => {
+    setMobile(false);
+    window.history.pushState({}, "", "/?tab=Packets&hash=aa11&analyze=1&observation=1&iata=YOW&q=missing");
+    render(<App />);
+    const section = await screen.findByRole("region", { name: "Observations" });
+    expect(within(section).getByText("No path entries").closest("details")).toHaveAttribute("open");
+    fireEvent.click(within(section).getByRole("button", { name: "Inspect observer" }));
+    expect(await screen.findByRole("heading", { name: "Observer dashboard" })).toBeInTheDocument();
+    expect(new URLSearchParams(window.location.search).get("observation")).toBe("1");
+    expect(screen.getByTestId("packet-analyzer-drawer")).toBeInTheDocument();
+    act(() => window.history.back());
+    await waitFor(() => expect(new URLSearchParams(window.location.search).get("tab")).toBe("Packets"));
+    expect(await screen.findByTestId("packet-analyzer-drawer")).toBeInTheDocument();
+    const params = new URLSearchParams(window.location.search);
+    expect(params.get("hash")).toBe("aa11"); expect(params.get("observation")).toBe("1");
+    expect(params.get("iata")).toBe("YOW"); expect(params.get("q")).toBe("missing");
+  });
+  it.each([false, true])("opens an unloaded selection explicitly and preserves region and filters (mobile=%s)", async (mobile) => {
+    setMobile(mobile);
+    window.history.pushState({}, "", "/?tab=Packets&hash=bb22&iata=YOW&q=missing");
+    render(<App />);
+    const notice = await screen.findByRole("region", { name: "Selected packet" });
+    expect(screen.queryByTestId("packet-analyzer-drawer")).not.toBeInTheDocument();
+    fireEvent.click(within(notice).getByRole("button", { name: "Open analyzer" }));
+    expect(screen.getByTestId("packet-analyzer-drawer")).toHaveTextContent("BB22");
+    expect(screen.queryByRole("region", { name: "Selected packet" })).not.toBeInTheDocument();
+    const params = new URLSearchParams(window.location.search);
+    expect(params.get("analyze")).toBe("1");
+    expect(params.get("hash")).toBe("bb22");
+    expect(params.get("iata")).toBe("YOW");
+    expect(params.get("q")).toBe("missing");
+    fireEvent.click(screen.getByRole("button", { name: "Close analyzer" }));
+    expect(screen.getByRole("region", { name: "Selected packet" })).toBeInTheDocument();
+  });
+
+  it("updates the selection notice on URL navigation", async () => {
+    window.history.pushState({}, "", "/?tab=Packets&hash=bb22");
+    render(<App />);
+    expect(await screen.findByRole("region", { name: "Selected packet" })).toBeInTheDocument();
+    act(() => {
+      window.history.pushState({}, "", "/?tab=Packets&hash=aa11");
+      window.dispatchEvent(new PopStateEvent("popstate"));
+    });
+    expect(screen.queryByRole("region", { name: "Selected packet" })).not.toBeInTheDocument();
+    expect(screen.getByTestId("packet-expansion")).toBeInTheDocument();
+  });
+
   it("restores the expanded row and the drawer from ?hash&analyze=1", async () => {
-    window.history.pushState({}, "", "/?tab=Packets&hash=AA11&analyze=1");
+    window.history.pushState({}, "", "/?tab=Packets&hash=aa11&analyze=1");
     render(<App />);
 
     expect(await screen.findByTestId("packet-expansion")).toBeInTheDocument();
@@ -145,7 +194,7 @@ describe("Packets deep links", () => {
   });
 
   it("expands the row without the drawer from ?hash alone", async () => {
-    window.history.pushState({}, "", "/?tab=Packets&hash=AA11");
+    window.history.pushState({}, "", "/?tab=Packets&hash=aa11");
     render(<App />);
 
     expect(await screen.findByTestId("packet-expansion")).toBeInTheDocument();
@@ -156,7 +205,7 @@ describe("Packets deep links", () => {
     window.history.pushState({}, "", "/?tab=Packets&analyze=1");
     render(<App />);
 
-    expect(await screen.findByRole("button", { name: "AA11" })).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "aa11" })).toBeInTheDocument();
     expect(screen.queryByTestId("packet-expansion")).not.toBeInTheDocument();
     expect(screen.queryByTestId("packet-analyzer-drawer")).not.toBeInTheDocument();
   });
@@ -167,7 +216,7 @@ describe("leaving the Packets tab", () => {
   // to drop ?analyze or the analyzer covers the tab the user just asked for.
   it("closes the analyzer on mobile", async () => {
     setMobile(true);
-    window.history.pushState({}, "", "/?tab=Packets&hash=AA11&analyze=1");
+    window.history.pushState({}, "", "/?tab=Packets&hash=aa11&analyze=1");
     render(<App />);
     expect(await screen.findByTestId("packet-analyzer-drawer")).toBeInTheDocument();
 
@@ -178,7 +227,7 @@ describe("leaving the Packets tab", () => {
 
   it("keeps the analyzer open on desktop", async () => {
     setMobile(false);
-    window.history.pushState({}, "", "/?tab=Packets&hash=AA11&analyze=1");
+    window.history.pushState({}, "", "/?tab=Packets&hash=aa11&analyze=1");
     render(<App />);
     expect(await screen.findByTestId("packet-analyzer-drawer")).toBeInTheDocument();
 

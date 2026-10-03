@@ -1,7 +1,8 @@
 import type { EChartsOption } from "./echarts-setup";
 import { type ChartColors, tooltipStyle, withAlpha } from "./chartTheme";
 import { formatCount } from "../../lib/formatters";
-import type { TelemetryPoint } from "./types";
+import { airtimePctSeries, busyPct } from "./transforms";
+import type { ActivityPoint, TelemetryPoint } from "./types";
 
 const MONO = "JetBrains Mono, monospace";
 
@@ -28,19 +29,20 @@ function valueAxis(c: ChartColors, extra: Record<string, unknown> = {}) {
 
 // ---- Mesh ----
 
+// null values are hours the server hasn't rolled (or never can); echarts breaks the line there.
 export function observationsAreaOption(
-  points: { hour: number; observationCount: number; uniquePackets: number }[],
+  points: { hour: number; observations: number | null; uniquePackets: number | null }[],
   c: ChartColors,
+  labels = { observations: "Observations", uniquePackets: "Unique packets" },
 ): EChartsOption {
-  const obs = points.map((p) => [p.hour, p.observationCount]);
-  const uniq = points.map((p) => [p.hour, p.uniquePackets]);
   return {
     animation: false,
+    useUTC: true,
     backgroundColor: "transparent",
     grid: { left: 48, right: 14, top: 12, bottom: 24 },
     tooltip: { trigger: "axis", ...tooltipStyle(c), axisPointer: { type: "line", lineStyle: { color: c.primary } } },
     legend: {
-      data: ["Observations", "Unique packets"],
+      data: [labels.observations, labels.uniquePackets],
       right: 8,
       top: 0,
       itemWidth: 10,
@@ -52,11 +54,11 @@ export function observationsAreaOption(
     yAxis: valueAxis(c),
     series: [
       {
-        name: "Observations",
+        name: labels.observations,
         type: "line",
         smooth: true,
         symbol: "none",
-        data: obs,
+        data: points.map((p) => [p.hour, p.observations]),
         lineStyle: { color: c.primary, width: 2 },
         itemStyle: { color: c.primary },
         areaStyle: {
@@ -71,11 +73,11 @@ export function observationsAreaOption(
         },
       },
       {
-        name: "Unique packets",
+        name: labels.uniquePackets,
         type: "line",
         smooth: true,
         symbol: "none",
-        data: uniq,
+        data: points.map((p) => [p.hour, p.uniquePackets]),
         lineStyle: { color: c.secondary, width: 1.3, type: "dashed" },
         itemStyle: { color: c.secondary },
       },
@@ -153,6 +155,7 @@ export function presetBarsOption(
   rows: { name: string; nodes: number; observers: number }[],
   c: ChartColors,
   gridLeft = 172, // fits a full "910.525 · 62.5k · SF7" label
+  labels = { nodes: "Nodes", observers: "Observers" },
 ): EChartsOption {
   const totals = rows.map((r) => r.nodes + r.observers);
   const segment = (data: number[], color: string) => ({
@@ -169,7 +172,7 @@ export function presetBarsOption(
     grid: { left: gridLeft, right: 56, top: 22, bottom: 6 },
     tooltip: { trigger: "axis", ...tooltipStyle(c), axisPointer: { type: "shadow" } },
     legend: {
-      data: ["Nodes", "Observers"],
+      data: [labels.nodes, labels.observers],
       right: 8,
       top: 0,
       itemWidth: 10,
@@ -195,9 +198,9 @@ export function presetBarsOption(
       },
     },
     series: [
-      { name: "Nodes", ...segment(rows.map((r) => r.nodes), c.primary) },
+      { name: labels.nodes, ...segment(rows.map((r) => r.nodes), c.primary) },
       {
-        name: "Observers",
+        name: labels.observers,
         ...segment(rows.map((r) => r.observers), c.secondary),
         // outer segment carries the row total so it sits at the end of the whole stack
         label: {
@@ -307,33 +310,25 @@ export function typeBarOption(
 // ---- Observer telemetry ----
 // `t` arrives in epoch ms.
 
-// 1h points are cumulative counters, so chart per-report deltas (clamped at 0 for resets);
-// bucketed points already arrive as per-bucket deltas, so chart those as-is.
-function deltaSeries(points: TelemetryPoint[], key: "airtimeRxPct" | "airtimeTxPct") {
-  const out: [number, number | null][] = [];
-  for (let i = 1; i < points.length; i++) {
-    const prev = points[i - 1]![key];
-    const cur = points[i]![key];
-    const d = prev != null && cur != null ? Math.max(0, cur - prev) : null;
-    out.push([points[i]!.t, d]);
-  }
-  return out;
+function percentAxis(c: ChartColors) {
+  return valueAxis(c, { axisLabel: { color: c.textMuted, fontFamily: MONO, fontSize: 10, formatter: "{value}%" } });
 }
 
-export function airtimeOption(points: TelemetryPoint[], c: ChartColors, bucketed: boolean): EChartsOption {
-  const series = (key: "airtimeRxPct" | "airtimeTxPct") =>
-    bucketed ? points.map((p) => [p.t, p[key]]) : deltaSeries(points, key);
+const pctLabel = (v: unknown) => (typeof v === "number" ? `${v}%` : "—");
+
+export function airtimeOption(points: TelemetryPoint[], c: ChartColors, bucketMs: number | null): EChartsOption {
   return {
     animation: false,
+    useUTC: true,
     backgroundColor: "transparent",
-    grid: { left: 44, right: 14, top: 24, bottom: 22 },
+    grid: { left: 48, right: 14, top: 24, bottom: 22 },
     legend: { data: ["RX", "TX"], right: 6, top: 0, itemWidth: 10, itemHeight: 10, textStyle: { color: c.textNormal, fontFamily: MONO, fontSize: 10 } },
-    tooltip: { trigger: "axis", ...tooltipStyle(c) },
+    tooltip: { trigger: "axis", ...tooltipStyle(c), valueFormatter: pctLabel },
     xAxis: timeAxis(c),
-    yAxis: valueAxis(c),
+    yAxis: percentAxis(c),
     series: [
-      { name: "RX", type: "line", stack: "air", smooth: true, symbol: "none", connectNulls: true, data: series("airtimeRxPct"), lineStyle: { width: 1, color: c.green }, areaStyle: { color: withAlpha(c.green, 0.35) }, itemStyle: { color: c.green } },
-      { name: "TX", type: "line", stack: "air", smooth: true, symbol: "none", connectNulls: true, data: series("airtimeTxPct"), lineStyle: { width: 1, color: c.primary }, areaStyle: { color: withAlpha(c.primary, 0.35) }, itemStyle: { color: c.primary } },
+      { name: "RX", type: "line", stack: "air", smooth: true, symbol: "none", connectNulls: true, data: airtimePctSeries(points, "airtimeRxSecs", bucketMs), lineStyle: { width: 1, color: c.green }, areaStyle: { color: withAlpha(c.green, 0.35) }, itemStyle: { color: c.green } },
+      { name: "TX", type: "line", stack: "air", smooth: true, symbol: "none", connectNulls: true, data: airtimePctSeries(points, "airtimeTxSecs", bucketMs), lineStyle: { width: 1, color: c.primary }, areaStyle: { color: withAlpha(c.primary, 0.35) }, itemStyle: { color: c.primary } },
     ],
   };
 }
@@ -358,6 +353,7 @@ function metricLineOption(
 ): EChartsOption {
   return {
     animation: false,
+    useUTC: true,
     backgroundColor: "transparent",
     grid: { left: 50, right: 14, top: 14, bottom: 22 },
     tooltip: { trigger: "axis", ...tooltipStyle(c) },
@@ -379,15 +375,99 @@ function metricLineOption(
   };
 }
 
-export const batteryOption = (p: TelemetryPoint[], c: ChartColors) =>
-  metricLineOption(p, c, { name: "Battery V", color: c.primary, accessor: (x) => (x.batteryMv == null ? null : +(x.batteryMv / 1000).toFixed(3)) });
+export const batteryOption = (p: TelemetryPoint[], c: ChartColors, name = "Battery V") =>
+  metricLineOption(p, c, { name, color: c.primary, accessor: (x) => (x.batteryMv == null ? null : +(x.batteryMv / 1000).toFixed(3)) });
 
-export const noiseFloorOption = (p: TelemetryPoint[], c: ChartColors) =>
-  metricLineOption(p, c, { name: "Noise dBm", color: c.warn, accessor: (x) => x.noiseFloorDb });
+export const noiseFloorOption = (p: TelemetryPoint[], c: ChartColors, name = "Noise dBm") =>
+  metricLineOption(p, c, { name, color: c.warn, accessor: (x) => x.noiseFloorDb });
 
-export const queueOption = (p: TelemetryPoint[], c: ChartColors) =>
-  metricLineOption(p, c, { name: "Queue", color: c.secondary, accessor: (x) => x.queueLength, area: true });
+export const queueOption = (p: TelemetryPoint[], c: ChartColors, name = "Queue") =>
+  metricLineOption(p, c, { name, color: c.secondary, accessor: (x) => x.queueLength, area: true });
 
 // receiveErrors is a cumulative counter in raw points, a per-bucket delta in bucketed ones
-export const receiveErrorsOption = (p: TelemetryPoint[], c: ChartColors, bucketed: boolean) =>
-  metricLineOption(p, c, { name: "Recv errors", color: c.danger, accessor: (x) => x.receiveErrors, delta: !bucketed, area: true });
+export const receiveErrorsOption = (p: TelemetryPoint[], c: ChartColors, bucketed: boolean, name = "Recv errors") =>
+  metricLineOption(p, c, { name, color: c.danger, accessor: (x) => x.receiveErrors, delta: !bucketed, area: true });
+
+// ---- Observer activity (what it heard) ----
+
+export interface TimeWindow {
+  start: number; // epoch ms
+  end: number;
+}
+
+// Pin the axis to the selected range so a quiet observer shows empty space up to now.
+function windowAxis(c: ChartColors, w: TimeWindow) {
+  return { ...timeAxis(c), min: w.start, max: w.end };
+}
+
+// The bucket still in progress is measured against the time elapsed so far, not the full width.
+function busySpanMs(t: number, intervalMs: number, w: TimeWindow): number {
+  return t < w.end && t + intervalMs > w.end ? w.end - t : intervalMs;
+}
+
+export function busyOption(points: ActivityPoint[], c: ChartColors, intervalMs: number | null, w: TimeWindow, name = "Busy"): EChartsOption {
+  const pct = (p: ActivityPoint) => (intervalMs == null ? null : busyPct(p.airtimeMs, busySpanMs(p.t, intervalMs, w)));
+  return {
+    animation: false,
+    useUTC: true,
+    backgroundColor: "transparent",
+    grid: { left: 48, right: 14, top: 14, bottom: 22 },
+    tooltip: { trigger: "axis", ...tooltipStyle(c), valueFormatter: pctLabel },
+    xAxis: windowAxis(c, w),
+    yAxis: percentAxis(c),
+    series: [
+      {
+        name,
+        type: "line",
+        symbol: "none",
+        connectNulls: false,
+        data: points.map((p) => [p.t, pct(p)]),
+        lineStyle: { width: 1.5, color: c.green },
+        areaStyle: { color: withAlpha(c.green, 0.28) },
+        itemStyle: { color: c.green },
+      },
+    ],
+  };
+}
+
+export function heardOption(points: ActivityPoint[], c: ChartColors, w: TimeWindow, name = "Heard"): EChartsOption {
+  return {
+    animation: false,
+    useUTC: true,
+    backgroundColor: "transparent",
+    grid: { left: 48, right: 14, top: 14, bottom: 22 },
+    tooltip: { trigger: "axis", ...tooltipStyle(c) },
+    xAxis: windowAxis(c, w),
+    yAxis: valueAxis(c, { minInterval: 1 }),
+    series: [
+      {
+        name,
+        type: "line",
+        symbol: "none",
+        data: points.map((p) => [p.t, p.observations]),
+        lineStyle: { width: 1.5, color: c.primary },
+        areaStyle: { color: withAlpha(c.primary, 0.28) },
+        itemStyle: { color: c.primary },
+      },
+    ],
+  };
+}
+
+const dbLabel = (v: unknown) => (typeof v === "number" ? `${v} dB` : "—");
+
+export function snrHeardOption(points: ActivityPoint[], c: ChartColors, w: TimeWindow, labels = { average: "Avg", minimum: "Min" }): EChartsOption {
+  return {
+    animation: false,
+    useUTC: true,
+    backgroundColor: "transparent",
+    grid: { left: 54, right: 14, top: 24, bottom: 22 },
+    legend: { data: [labels.average, labels.minimum], right: 6, top: 0, itemWidth: 10, itemHeight: 10, textStyle: { color: c.textNormal, fontFamily: MONO, fontSize: 10 } },
+    tooltip: { trigger: "axis", ...tooltipStyle(c), valueFormatter: dbLabel },
+    xAxis: windowAxis(c, w),
+    yAxis: valueAxis(c, { scale: true, axisLabel: { color: c.textMuted, fontFamily: MONO, fontSize: 10, formatter: "{value} dB" } }),
+    series: [
+      { name: labels.average, type: "line", symbol: "none", connectNulls: false, data: points.map((p) => [p.t, p.snrAvg]), lineStyle: { width: 1.8, color: c.secondary }, itemStyle: { color: c.secondary } },
+      { name: labels.minimum, type: "line", symbol: "none", connectNulls: false, data: points.map((p) => [p.t, p.snrMin]), lineStyle: { width: 1, color: c.textMuted, type: "dashed" }, itemStyle: { color: c.textMuted } },
+    ],
+  };
+}

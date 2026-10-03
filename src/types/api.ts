@@ -2,9 +2,9 @@ import type { PathConfidence } from "./enums";
 
 // response wrappers
 
-export interface CursorPage<T> {
+export interface CursorPage<T, C = number> {
   items: T[];
-  nextCursor: number | null;
+  nextCursor: C | null;
   hasMore: boolean;
 }
 
@@ -35,6 +35,7 @@ export interface PacketSummary {
   observationCount: number;
   latestObserver?: LatestObserver;
   scope?: string; // matched transport scope name, e.g. "#bc"
+  summary?: string; // packet-derived display text (advert name, TRACE tag, ACK checksum, …)
 }
 
 export interface ResolvedNode {
@@ -156,12 +157,39 @@ export interface RouteHop {
 
 export interface KnownRoute {
   id: number;
+  pathKey?: string; // stable full-route identity; absent on older servers
   iata: string;
   hopCount: number;
   hops: RouteHop[];
   firstSeen: number; // epoch ms
   lastSeen: number; // epoch ms
   observationCount: number;
+}
+
+export interface RouteObservation {
+  id: number;
+  packetHash: string;
+  observerId: string;
+  observerName?: string;
+  heardAt: number;
+  payloadType: number;
+  payloadTypeName: string;
+  rssi?: number;
+  snr?: number;
+}
+
+export interface RouteEvidence {
+  route: KnownRoute;
+  windowStart: number;
+  windowEnd: number;
+  generatedAt: number;
+  matchType: "saved_path_prefixes";
+  matchAvailable: boolean;
+  hashSize?: number;
+  pathBytes?: string;
+  items: RouteObservation[];
+  hasMore: boolean;
+  nextPageCursor?: string;
 }
 
 // the boundary hop in a cross-IATA route: the link from the last node in the source IATA to the
@@ -211,8 +239,9 @@ export interface TracePacket {
   scope?: string; // matched transport scope name, when any
   firstHeardAt: number; // epoch ms
   lastHeardAt: number; // epoch ms
-  rawPath: RawHop[]; // one hop per trace path hash, index-aligned with resolvedRoute
-  resolvedRoute: ResolvedHop[]; // one hop per trace path hash; nodes empty when unresolved
+  // both null when the payload didn't parse; resolvedRoute also when the packet has no IATAs
+  rawPath: RawHop[] | null; // one hop per trace path hash, index-aligned with resolvedRoute
+  resolvedRoute: ResolvedHop[] | null; // one hop per trace path hash; nodes empty when unresolved
 }
 
 export interface TraceDetail {

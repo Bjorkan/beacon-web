@@ -1,6 +1,7 @@
-import { describe, it, expect } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { afterEach, describe, it, expect, vi } from "vitest";
+import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import { PacketEndpoints } from "../../../src/features/packets/PacketEndpoints";
+import i18n from "../../../src/i18n";
 import type { LatestObserver, PacketSummary } from "../../../src/types/api";
 
 const pkt = (observer?: LatestObserver): PacketSummary => ({
@@ -12,6 +13,16 @@ const pkt = (observer?: LatestObserver): PacketSummary => ({
 const obs = (over: Partial<LatestObserver> = {}): LatestObserver => ({
   id: "o1", iata: "YVR", pathLength: { raw: "00", hashSize: 1, hopCount: 0 }, ...over,
 });
+
+afterEach(() => vi.restoreAllMocks());
+
+const ambiguousSource = {
+  confidence: "ambiguous" as const,
+  nodes: [
+    { id: "source-a", name: "Alpha", publicKey: "aa010203" },
+    { id: "source-b", name: "Beta", publicKey: "aa040506" },
+  ],
+};
 
 describe("PacketEndpoints", () => {
   it("renders a single n/a when there is no observer at all", () => {
@@ -62,6 +73,78 @@ describe("PacketEndpoints", () => {
     render(<PacketEndpoints packet={pkt(obs({
       resolvedSource: { confidence: "none", nodes: [] },
     }))} />);
-    expect(screen.getByText("?")).toBeInTheDocument();
+    const chip = screen.getByText("?");
+    expect(chip).toBeInTheDocument();
+    expect(chip).toHaveAttribute("title", "No path resolution available");
+  });
+
+  it("translates the no-resolution title to French", async () => {
+    await act(() => i18n.changeLanguage("fr"));
+    render(<PacketEndpoints packet={pkt(obs({
+      resolvedSource: { confidence: "none", nodes: [] },
+    }))} />);
+    expect(screen.getByText("?")).toHaveAttribute("title", "Aucune résolution de chemin disponible");
+    await act(() => i18n.changeLanguage("en"));
+  });
+
+  it("shows a missing endpoint as n/d in French", async () => {
+    await act(() => i18n.changeLanguage("fr"));
+    render(<PacketEndpoints packet={pkt()} />);
+    expect(screen.getByText("n/d")).toBeInTheDocument();
+  });
+
+  it("shows an advert as its single source node with no destination", () => {
+    const advert = { ...pkt(obs({ resolvedSource: { confidence: "high", nodes: [{ id: "s", publicKey: "aa", name: "Fuzz HQ" }] } })), payloadType: 4, summary: "Fuzz HQ" };
+    render(<PacketEndpoints packet={advert} />);
+    expect(screen.getAllByText("Fuzz HQ")).toHaveLength(1);
+    expect(screen.queryByText("→")).not.toBeInTheDocument();
+    expect(screen.queryByText("n/a")).not.toBeInTheDocument();
+  });
+
+  it("falls back to the summary name for an advert with no resolved source", () => {
+    render(<PacketEndpoints packet={{ ...pkt(obs()), payloadType: 4, summary: "Fuzz HQ" }} />);
+    expect(screen.getByText("Fuzz HQ").className).toContain("text-green");
+    expect(screen.queryByText("n/a")).not.toBeInTheDocument();
+  });
+
+  it("replaces n/a with the summary when there are no endpoints", () => {
+    render(<PacketEndpoints packet={{ ...pkt(obs()), payloadType: 9, summary: "TRACE 2ca2a79c" }} />);
+    expect(screen.getByText("TRACE 2ca2a79c").className).toContain("text-text-muted");
+    expect(screen.queryByText("n/a")).not.toBeInTheDocument();
+  });
+
+  it("shows all ambiguous candidates on hover, with an additional-match count", () => {
+    render(<PacketEndpoints packet={pkt(obs({ resolvedSource: ambiguousSource }))} />);
+    const trigger = screen.getByText("Alpha +1").parentElement!;
+    fireEvent.mouseEnter(trigger);
+    const tip = screen.getByRole("tooltip");
+    expect(within(tip).getByText("Alpha")).toBeInTheDocument();
+    expect(within(tip).getByText("Beta")).toBeInTheDocument();
+    expect(screen.getByText("Alpha +1")).toHaveAttribute("title", "Alpha, Beta");
+    expect(within(tip).queryByText(/SNR/)).not.toBeInTheDocument();
+  });
+
+  it("keeps the containing packet row as the only keyboard button", () => {
+    render(<button type="button"><PacketEndpoints packet={pkt(obs({ resolvedSource: ambiguousSource }))} /></button>);
+    expect(screen.getAllByRole("button")).toHaveLength(1);
+    const chip = screen.getByText("Alpha +1").parentElement!;
+    expect(chip).not.toHaveAttribute("tabindex");
+    expect(screen.getByText("Alpha +1")).toHaveAttribute("title", "Alpha, Beta");
+  });
+
+  it("opens all candidates on touch without activating the packet row", () => {
+    vi.spyOn(window, "matchMedia").mockImplementation((query) => ({ matches: false, media: query, onchange: null, addEventListener: vi.fn(), removeEventListener: vi.fn(), addListener: vi.fn(), removeListener: vi.fn(), dispatchEvent: vi.fn() }));
+    const select = vi.fn();
+    render(<div onClick={select}><PacketEndpoints packet={pkt(obs({ resolvedDestination: ambiguousSource }))} /></div>);
+    fireEvent.click(screen.getByText("Alpha +1").parentElement!);
+    expect(within(screen.getByRole("tooltip")).getByText("Beta")).toBeInTheDocument();
+    expect(select).not.toHaveBeenCalled();
+    fireEvent.pointerDown(document.body);
+    expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
+  });
+
+  it("renders resolved endpoints without requiring physical path metadata", () => {
+    render(<PacketEndpoints packet={pkt(obs({ pathLength: undefined, resolvedSource: { confidence: "high", nodes: [{ id: "s", name: "Source", publicKey: "aa" }] } }))} />);
+    expect(screen.getByText("Source")).toBeInTheDocument();
   });
 });

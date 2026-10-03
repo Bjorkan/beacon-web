@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useMemo, useCallback } from "react";
+import { useTranslation } from "react-i18next";
 import { useClickOutside } from "../hooks/useClickOutside";
 
 interface Option {
@@ -19,6 +20,7 @@ interface MultiSelectDropdownProps {
 // checkbox dropdown with optional search filter
 
 export function MultiSelectDropdown({ label, options, selected, onChange, searchable, align = "left", fullWidth = false }: MultiSelectDropdownProps) {
+  const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   const [filter, setFilter] = useState("");
   const ref = useRef<HTMLDivElement>(null);
@@ -32,7 +34,9 @@ export function MultiSelectDropdown({ label, options, selected, onChange, search
   useEffect(() => {
     if (!open) return;
     function handleKey(e: KeyboardEvent) {
-      if (e.key === "Escape") setOpen(false);
+      if (e.key !== "Escape") return;
+      e.stopPropagation(); // the filter sheet listens on window; only the dropdown should close
+      setOpen(false);
     }
     document.addEventListener("keydown", handleKey);
     return () => document.removeEventListener("keydown", handleKey);
@@ -92,7 +96,7 @@ export function MultiSelectDropdown({ label, options, selected, onChange, search
                 type="text"
                 value={filter}
                 onChange={(e) => setFilter(e.target.value)}
-                placeholder="Filter..."
+                placeholder={t("common.filterPlaceholder")}
                 className="w-full text-[11px] font-mono bg-bg-surface border border-border rounded px-2 py-1 text-text-bright placeholder:text-text-dim"
               />
             </div>
@@ -106,7 +110,7 @@ export function MultiSelectDropdown({ label, options, selected, onChange, search
               }`}
               onClick={() => onChange(options.map((o) => o.value))}
             >
-              All
+              {t("common.all")}
             </button>
             <span className="text-border text-[11px]">·</span>
             <button
@@ -116,7 +120,7 @@ export function MultiSelectDropdown({ label, options, selected, onChange, search
               }`}
               onClick={() => onChange([])}
             >
-              None
+              {t("common.none")}
             </button>
           </div>
 
@@ -158,7 +162,7 @@ export function MultiSelectDropdown({ label, options, selected, onChange, search
               );
             })}
             {filtered.length === 0 && (
-              <div className="px-2.5 py-2 text-[11px] font-mono text-text-dim">No matches</div>
+              <div className="px-2.5 py-2 text-[11px] font-mono text-text-dim">{t("common.noMatches")}</div>
             )}
           </div>
         </div>

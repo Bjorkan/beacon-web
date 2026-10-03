@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import { render, screen, fireEvent, within } from "@testing-library/react";
 import { PacketTableRow } from "../../../src/features/packets/PacketTableRow";
+import i18n from "../../../src/i18n";
 import type { LatestObserver, PacketSummary, ResolvedHop } from "../../../src/types/api";
 
 const pkt = (over: Partial<PacketSummary> = {}): PacketSummary => ({
@@ -14,7 +15,7 @@ const node = (name: string): ResolvedHop => ({
   nodes: [{ id: "n-1", name, publicKey: "aabbccdd" }],
 });
 
-// pathLength is what makes buildPathSummary produce endpoints at all, so it is always present here.
+// Physical path metadata is independent of the logical source/destination chips.
 const observer = (
   over: { hopCount?: number; hashSize?: number } & Partial<Pick<LatestObserver, "resolvedSource" | "resolvedDestination">> = {},
 ): LatestObserver => {
@@ -23,6 +24,13 @@ const observer = (
 };
 
 describe("PacketTableRow", () => {
+  it("prefers endpoints over a payload summary", () => {
+    render(<PacketTableRow packet={pkt({ payloadType: 2, summary: "Packet summary", latestObserver: observer({ resolvedSource: node("Source node"), resolvedDestination: node("Destination node") }) })} expanded={false} onToggle={() => {}} />);
+    expect(screen.queryByText("Packet summary")).not.toBeInTheDocument();
+    expect(screen.getByText("Source node")).toBeInTheDocument();
+    expect(screen.getByText("Destination node")).toBeInTheDocument();
+  });
+
   it("exposes one button carrying the expansion state", () => {
     render(<PacketTableRow packet={pkt()} expanded={false} onToggle={() => {}} />);
     const btn = screen.getByRole("button");
@@ -36,7 +44,7 @@ describe("PacketTableRow", () => {
     expect(onToggle).toHaveBeenCalledOnce();
   });
 
-  it("is a single line, so the row height stays constant for the virtualizer", () => {
+  it("keeps packet content inside one row button", () => {
     const { container } = render(<PacketTableRow packet={pkt()} expanded={false} onToggle={() => {}} />);
     expect(container.querySelectorAll("button")).toHaveLength(1);
     expect(screen.queryByText("latest")).not.toBeInTheDocument();
@@ -115,5 +123,22 @@ describe("PacketTableRow", () => {
   it("falls back to Unknown when routeTypeName is empty", () => {
     render(<PacketTableRow packet={pkt({ routeTypeName: "" })} expanded={false} onToggle={() => {}} />);
     expect(screen.getByText("Unknown")).toBeInTheDocument();
+  });
+
+  it("keeps long route labels inside their dedicated track beside a scope", () => {
+    render(<PacketTableRow packet={pkt({ routeTypeName: "TRANSPORT_FLOOD", scope: "#ykf" })} expanded={false} onToggle={() => {}} />);
+    const route = screen.getByText("TRANSPORT_FLOOD");
+    expect(route).toHaveClass("truncate");
+    expect(route.parentElement).toHaveClass("min-w-0");
+    expect(screen.getByText("#ykf")).toBeInTheDocument();
+  });
+});
+
+describe("PacketTableRow in French", () => {
+  it("translates the unknown route and n/a fallbacks", async () => {
+    await i18n.changeLanguage("fr");
+    render(<PacketTableRow packet={pkt({ routeTypeName: "" })} expanded={false} onToggle={() => {}} />);
+    expect(screen.getByText("Inconnu")).toBeInTheDocument();
+    expect(screen.queryByText("n/a")).not.toBeInTheDocument();
   });
 });

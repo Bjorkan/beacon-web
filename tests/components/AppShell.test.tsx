@@ -1,12 +1,14 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { render, screen, fireEvent, waitFor, act } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { AppShell } from "../../src/components/AppShell";
 import { RegionProvider } from "../../src/hooks/useRegion";
 import { ALL_REGIONS } from "../../src/hooks/region-selection";
 import { getIatas, getRegions, getRegion } from "../../src/api/client";
 import type { WsManager } from "../../src/api/ws-manager";
+import { noteRateLimited, noteRequestOk } from "../../src/api/rate-limit";
 import pkg from "../../package.json";
+import i18n from "../../src/i18n";
 
 vi.mock("../../src/api/client", () => ({
   getIatas: vi.fn(),
@@ -20,12 +22,12 @@ const wsManager = {
   getLastEventTimestamp: () => Date.now(),
 } as unknown as WsManager;
 
-function renderShell() {
+function renderShell(onTabChange: (tab: string) => void = () => {}) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
     <QueryClientProvider client={client}>
       <RegionProvider defaultSelection={ALL_REGIONS}>
-        <AppShell activeTab="Packets" onTabChange={() => {}} wsManager={wsManager}>
+        <AppShell activeTab="Packets" onTabChange={onTabChange} wsManager={wsManager}>
           <div />
         </AppShell>
       </RegionProvider>
@@ -40,6 +42,24 @@ beforeEach(() => {
 });
 
 describe("AppShell", () => {
+  it("switches navigation to French while preserving tab identifiers and the active view", async () => {
+    vi.mocked(getIatas).mockResolvedValue([]);
+    const onTabChange = vi.fn();
+    renderShell(onTabChange);
+
+    fireEvent.click(screen.getByRole("button", { name: "Language: English" }));
+    fireEvent.click(screen.getByRole("button", { name: "Français", exact: true }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Langue: Français" })).toHaveAttribute("aria-expanded", "false"));
+    expect(screen.getAllByRole("tab", { name: "Paquets" })[0]).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByText("EN DIRECT")).toBeInTheDocument();
+    expect(document.documentElement.lang).toBe("fr");
+    expect(localStorage.getItem("beacon-language")).toBe("fr");
+    expect(onTabChange).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getAllByRole("tab", { name: "Carte" })[0]!);
+    expect(onTabChange).toHaveBeenCalledWith("Map");
+  });
+
   it("footer shows the package.json version", () => {
     vi.mocked(getIatas).mockResolvedValue([]);
     renderShell();
@@ -49,7 +69,8 @@ describe("AppShell", () => {
   it("region picker shows an error state when the IATA list fails to load", async () => {
     vi.mocked(getIatas).mockRejectedValue(new Error("boom"));
     renderShell();
-    fireEvent.click(screen.getByRole("button", { name: /REGION/ }));
+    expect(screen.getByText("Region")).toHaveClass("uppercase");
+    fireEvent.click(screen.getByRole("button", { name: /Region/ }));
 
     await waitFor(() => expect(screen.getByText("Failed to load")).toBeInTheDocument());
     expect(screen.queryByText("Loading…")).not.toBeInTheDocument();
@@ -73,11 +94,11 @@ const REGIONS = [
 // Opens the picker and returns the filter input, once both region and IATA lists have landed.
 // The trigger is focused first because a real browser click focuses the button; jsdom's does not.
 async function openPicker() {
-  const trigger = screen.getByRole("button", { name: /REGION/ });
+  const trigger = screen.getByRole("button", { name: /Region/ });
   trigger.focus();
   fireEvent.click(trigger);
   await waitFor(() => expect(screen.getByText("Western Canada")).toBeInTheDocument());
-  return screen.getByPlaceholderText(/Filter/);
+  return screen.getByPlaceholderText(/Search region or area code/);
 }
 
 describe("region picker filter", () => {
@@ -85,6 +106,22 @@ describe("region picker filter", () => {
     vi.mocked(getIatas).mockResolvedValue(IATAS);
     vi.mocked(getRegions).mockResolvedValue(REGIONS.map(({ id, slug, name }) => ({ id, slug, name })));
     vi.mocked(getRegion).mockImplementation(async (id: number) => REGIONS.find((r) => r.id === id)!);
+  });
+
+  it("searches the translated all-regions label and retains raw IATA values", async () => {
+    renderShell();
+    fireEvent.click(screen.getByRole("button", { name: "Language: English" }));
+    fireEvent.click(screen.getByRole("button", { name: "Français", exact: true }));
+    fireEvent.click(await screen.findByRole("button", { name: /Région/ }));
+    await screen.findByText("Western Canada");
+    const input = screen.getByRole("textbox", { name: "Rechercher une région ou un code de zone…" });
+    fireEvent.change(input, { target: { value: "toutes" } });
+    expect(screen.getByText("Toutes les régions")).toBeInTheDocument();
+
+    fireEvent.change(input, { target: { value: "yvr" } });
+    expect(screen.queryByText("Toutes les régions")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /Vancouver International/ }));
+    expect(screen.getByRole("button", { name: /Région\s*YVR/ })).toBeInTheDocument();
   });
 
   it("focuses the filter input when the picker opens", async () => {
@@ -99,7 +136,7 @@ describe("region picker filter", () => {
     expect(input).toHaveFocus();
 
     fireEvent.keyDown(input, { key: "Escape" }); // empty query, so this closes
-    expect(screen.getByRole("button", { name: /REGION/ })).toHaveFocus();
+    expect(screen.getByRole("button", { name: /Region/ })).toHaveFocus();
   });
 
   it("narrows the IATA list by code, ignoring surrounding whitespace", async () => {
@@ -123,7 +160,7 @@ describe("region picker filter", () => {
     // no region name or member code contains "toronto"
     expect(screen.queryByText("Regions")).not.toBeInTheDocument();
     // nothing above it, so the header must not draw a divider
-    expect(screen.getByText("IATA")).not.toHaveClass("border-t");
+    expect(screen.getByText("Areas")).not.toHaveClass("border-t");
   });
 
   it("surfaces a region whose member IATA matches, tagged with the matching code", async () => {
@@ -135,7 +172,7 @@ describe("region picker filter", () => {
     expect(screen.getByText("· YVR")).toBeInTheDocument();
     expect(screen.queryByText("Eastern Canada")).not.toBeInTheDocument();
     // something is above it now, so the header does draw a divider
-    expect(screen.getByText("IATA")).toHaveClass("border-t");
+    expect(screen.getByText("Areas")).toHaveClass("border-t");
   });
 
   it("tags a code match but not a name match, for the same query", async () => {
@@ -156,7 +193,7 @@ describe("region picker filter", () => {
     expect(screen.getByText("Western Canada")).toBeInTheDocument();
     expect(screen.queryByText("· YVR")).not.toBeInTheDocument();
     // nothing in the IATA group matches, so its header goes too
-    expect(screen.queryByText("IATA")).not.toBeInTheDocument();
+    expect(screen.queryByText("Areas")).not.toBeInTheDocument();
   });
 
   it("keeps an IATA with no display name matchable by code", async () => {
@@ -190,7 +227,7 @@ describe("region picker filter", () => {
 
     expect(screen.getByText("No matches")).toBeInTheDocument();
     expect(screen.queryByText("Regions")).not.toBeInTheDocument();
-    expect(screen.queryByText("IATA")).not.toBeInTheDocument();
+    expect(screen.queryByText("Areas")).not.toBeInTheDocument();
     expect(screen.queryByText("All Regions")).not.toBeInTheDocument();
   });
 
@@ -200,10 +237,10 @@ describe("region picker filter", () => {
     fireEvent.change(input, { target: { value: "yvr" } });
 
     fireEvent.keyDown(input, { key: "Escape" });
-    expect(screen.getByPlaceholderText(/Filter/)).toHaveValue("");
+    expect(screen.getByPlaceholderText(/Search region or area code/)).toHaveValue("");
     expect(screen.getByText("All Regions")).toBeInTheDocument();
 
-    fireEvent.keyDown(screen.getByPlaceholderText(/Filter/), { key: "Escape" });
+    fireEvent.keyDown(screen.getByPlaceholderText(/Search region or area code/), { key: "Escape" });
     expect(screen.queryByText("All Regions")).not.toBeInTheDocument();
   });
 
@@ -212,10 +249,80 @@ describe("region picker filter", () => {
     const input = await openPicker();
     fireEvent.change(input, { target: { value: "yvr" } });
 
-    fireEvent.click(screen.getByRole("button", { name: /REGION/ }));
-    fireEvent.click(screen.getByRole("button", { name: /REGION/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Region/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Region/ }));
 
-    await waitFor(() => expect(screen.getByPlaceholderText(/Filter/)).toHaveValue(""));
+    await waitFor(() => expect(screen.getByPlaceholderText(/Search region or area code/)).toHaveValue(""));
     expect(screen.getByText("Eastern Canada")).toBeInTheDocument();
+  });
+});
+
+describe("rate limit badge", () => {
+  beforeEach(() => {
+    vi.mocked(getIatas).mockResolvedValue([]);
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    noteRequestOk();
+    vi.useRealTimers();
+  });
+
+  it("is hidden by default", () => {
+    renderShell();
+    expect(screen.queryByText(/RATE LIMITED/)).not.toBeInTheDocument();
+  });
+
+  it("shows a countdown after a 429 and hides once Retry-After elapses", () => {
+    renderShell();
+
+    act(() => noteRateLimited(5_000));
+    expect(screen.getByText(/RATE LIMITED 5s/)).toHaveAttribute("role", "status");
+
+    act(() => vi.advanceTimersByTime(2_000));
+    expect(screen.getByText(/RATE LIMITED 3s/)).toBeInTheDocument();
+
+    act(() => vi.advanceTimersByTime(3_000));
+    expect(screen.queryByText(/RATE LIMITED/)).not.toBeInTheDocument();
+  });
+
+  it("clears on the next successful request", () => {
+    renderShell();
+
+    act(() => noteRateLimited(30_000));
+    expect(screen.getByText(/RATE LIMITED/)).toBeInTheDocument();
+
+    act(() => noteRequestOk());
+    expect(screen.queryByText(/RATE LIMITED/)).not.toBeInTheDocument();
+  });
+});
+
+describe("AppShell region picker alignment", () => {
+  it("opens rightward only below md so the desktop row's controls stay visible", async () => {
+    vi.mocked(getIatas).mockResolvedValue([]);
+    renderShell();
+    fireEvent.click(screen.getByRole("button", { name: /Region/ }));
+    const panel = screen.getByPlaceholderText("Search region or area code…").closest(".absolute")!;
+    expect(panel.className).toContain("left-0");
+    expect(panel.className).toContain("md:right-0");
+  });
+});
+
+describe("AppShell on a phone", () => {
+  afterEach(() => vi.restoreAllMocks());
+  it("keeps the header to one row and folds theme, language and GitHub into a settings menu", async () => {
+    const media = window.matchMedia("(max-width: 767px)");
+    vi.spyOn(window, "matchMedia").mockImplementation((query) => ({ ...media, media: query, matches: query === "(max-width: 767px)" }));
+    vi.mocked(getIatas).mockResolvedValue([]);
+    renderShell();
+    expect(screen.getByRole("button", { name: /Region/ })).toBeInTheDocument();
+    expect(screen.getByRole("status", { name: "LIVE" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /^Language:/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "GitHub" })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Settings" }));
+    expect(screen.getByRole("link", { name: "GitHub" })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Français" }));
+    await waitFor(() => expect(document.documentElement.lang).toBe("fr"));
+    await act(() => i18n.changeLanguage("en"));
   });
 });

@@ -4,15 +4,17 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { ReactNode } from "react";
 import { TraceList } from "../../../src/features/traces/TraceList";
 import { RegionProvider } from "../../../src/hooks/useRegion";
-import { ALL_REGIONS } from "../../../src/hooks/region-selection";
-import { getTraces, getTraceDetail, getRegions } from "../../../src/api/client";
+import { ALL_REGIONS, type RegionSelection } from "../../../src/hooks/region-selection";
+import { getTraces, getTraceDetail, getRegions, getRegion } from "../../../src/api/client";
 import { timeAgoMs } from "../../../src/lib/formatters";
 import type { TraceTagSummary, TraceDetail } from "../../../src/types/api";
+import i18n from "../../../src/i18n";
 
 vi.mock("../../../src/api/client", () => ({
   getTraces: vi.fn(),
   getTraceDetail: vi.fn(),
   getRegions: vi.fn(),
+  getRegion: vi.fn(),
 }));
 
 const mockGetTraces = vi.mocked(getTraces);
@@ -31,11 +33,11 @@ const detail: TraceDetail = {
   ],
 };
 
-function renderTraces(onAnalyze = vi.fn()) {
+function renderTraces(onAnalyze = vi.fn(), selection: RegionSelection = ALL_REGIONS) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const wrapper = ({ children }: { children: ReactNode }) => (
     <QueryClientProvider client={client}>
-      <RegionProvider defaultSelection={ALL_REGIONS}>{children}</RegionProvider>
+      <RegionProvider defaultSelection={selection}>{children}</RegionProvider>
     </QueryClientProvider>
   );
   render(<TraceList onAnalyze={onAnalyze} />, { wrapper });
@@ -174,6 +176,14 @@ describe("TraceList", () => {
     await waitFor(() => expect(mockGetTraces.mock.calls.at(-1)?.[1]).toMatchObject({ type: "PING" }));
   });
 
+  it("explains that the type filter classifies whole tags", async () => {
+    mockGetTraces.mockResolvedValue([]);
+
+    renderTraces();
+
+    expect(await screen.findByText(/TRACE if any packet in the tag is multi-hop/)).toBeInTheDocument();
+  });
+
   it("shows an empty state when there are no traces", async () => {
     mockGetTraces.mockResolvedValue([]);
 
@@ -181,4 +191,43 @@ describe("TraceList", () => {
 
     expect(await screen.findByText("No traces")).toBeInTheDocument();
   });
+
+  it("translates the list and the detail panel", async () => {
+    await i18n.changeLanguage("fr");
+    mockGetTraces.mockResolvedValue([tag("3f2a11c0", 2)]);
+    mockGetTraceDetail.mockResolvedValue(detail);
+    renderTraces();
+    expect(await screen.findByText("1 étiquette")).toBeInTheDocument();
+    expect(screen.getByText("2 paq. · 1 iata")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Tous" })).toBeInTheDocument();
+    fireEvent.click(screen.getByText("3F2A11C0"));
+    expect(await screen.findByText("Paquets")).toBeInTheDocument();
+    expect(await screen.findByText("2 paquets")).toBeInTheDocument();
+    expect(screen.getAllByText("analyser →")).toHaveLength(2);
+  });
+});
+
+it("waits for a named region to load before asking for its traces", async () => {
+  let loadRegions!: (value: { id: number; slug: string; name: string }[]) => void;
+  mockGetRegions.mockReturnValue(new Promise((done) => { loadRegions = done; }));
+  vi.mocked(getRegion).mockResolvedValue({ id: 1, slug: "onqc", name: "Ottawa", iatas: ["YOW"] });
+  mockGetTraces.mockResolvedValue([]);
+
+  renderTraces(vi.fn(), { regions: ["onqc"], iatas: [] });
+
+  await new Promise((done) => setTimeout(done, 50));
+  expect(mockGetTraces).not.toHaveBeenCalled();
+  expect(screen.queryByText("No traces")).not.toBeInTheDocument();
+
+  loadRegions([{ id: 1, slug: "onqc", name: "Ottawa" }]);
+  await waitFor(() => expect(mockGetTraces).toHaveBeenCalledWith(["YOW"], expect.anything()));
+});
+
+it("stops waiting once the region list loads without the selected region", async () => {
+  mockGetRegions.mockResolvedValue([]);
+  mockGetTraces.mockResolvedValue([]);
+
+  renderTraces(vi.fn(), { regions: ["deleted-region"], iatas: [] });
+
+  await waitFor(() => expect(mockGetTraces).toHaveBeenCalled());
 });

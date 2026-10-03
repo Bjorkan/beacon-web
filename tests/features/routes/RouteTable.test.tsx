@@ -1,9 +1,10 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import type { ReactNode } from "react";
+import { useEffect, type ReactNode } from "react";
 import { RouteTable } from "../../../src/features/routes/RouteTable";
-import { RegionProvider } from "../../../src/hooks/useRegion";
+import { MemoryRouter, useLocation } from "react-router-dom";
+import { RegionProvider, useRegionSelection } from "../../../src/hooks/useRegion";
 import { ALL_REGIONS } from "../../../src/hooks/region-selection";
 import {
   getKnownRoutesPage,
@@ -11,8 +12,10 @@ import {
   searchCrossIATARoutes,
   getIatas,
   getRegions,
+  getRegion,
 } from "../../../src/api/client";
 import type { KnownRoute, CrossIATARoute } from "../../../src/types/api";
+import i18n from "../../../src/i18n";
 
 vi.mock("../../../src/api/client", () => ({
   getKnownRoutesPage: vi.fn(),
@@ -20,7 +23,10 @@ vi.mock("../../../src/api/client", () => ({
   searchCrossIATARoutes: vi.fn(),
   getIatas: vi.fn(),
   getRegions: vi.fn(),
+  getRegion: vi.fn(),
 }));
+
+vi.mock("../../../src/features/routes/RouteDetailPanel", () => ({ RouteDetailPanel: ({ pathKey }: { pathKey?: string }) => <div data-testid="saved-route-selection">{pathKey}</div> }));
 
 const mockGetKnownRoutesPage = vi.mocked(getKnownRoutesPage);
 const mockSearchKnownRoutes = vi.mocked(searchKnownRoutes);
@@ -34,13 +40,13 @@ function renderTable(selection = ALL_REGIONS) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const wrapper = ({ children }: { children: ReactNode }) => (
     <QueryClientProvider client={client}>
-      <RegionProvider defaultSelection={selection}>{children}</RegionProvider>
+      <MemoryRouter><RegionProvider defaultSelection={selection}>{children}</RegionProvider></MemoryRouter>
     </QueryClientProvider>
   );
   render(<RouteTable />, { wrapper });
 }
 
-const openIataPicker = () => fireEvent.click(screen.getByText("IATA"));
+const openIataPicker = () => fireEvent.click(screen.getByText("Areas"));
 const checkIata = (code: string) => fireEvent.click(screen.getByRole("option", { name: new RegExp(code) }));
 
 beforeEach(() => {
@@ -138,4 +144,72 @@ describe("RouteTable search", () => {
 
     expect(await screen.findByText("42")).toBeInTheDocument();
   });
+});
+
+function LocationKeyProbe({ keys }: { keys: string[] }) {
+  const location = useLocation();
+  useEffect(() => {
+    if (keys[keys.length - 1] !== location.key) keys.push(location.key);
+  }, [location.key, keys]);
+  return null;
+}
+
+function ChangeRegionButton() {
+  const { setSelection } = useRegionSelection();
+  return <button onClick={() => setSelection({ regions: [], iatas: ["AAA"] })}>Change region</button>;
+}
+
+it("does not navigate on a region change with no route selected", async () => {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const keys: string[] = [];
+  render(
+    <QueryClientProvider client={client}>
+      <MemoryRouter>
+        <RegionProvider defaultSelection={ALL_REGIONS}>
+          <LocationKeyProbe keys={keys} />
+          <ChangeRegionButton />
+          <RouteTable />
+        </RegionProvider>
+      </MemoryRouter>
+    </QueryClientProvider>,
+  );
+  await screen.findByText("Find path");
+  const initialKeyCount = keys.length;
+
+  fireEvent.click(screen.getByRole("button", { name: "Change region" }));
+
+  await waitFor(() => expect(mockGetKnownRoutesPage).toHaveBeenCalledWith(expect.objectContaining({ iata: "AAA" })));
+  expect(keys.length).toBe(initialKeyCount);
+});
+
+it("preserves a shared saved route while a named region resolves", async () => {
+  vi.mocked(getRegions).mockResolvedValue([{ id: 1, slug: "ontario", name: "Ontario" }]);
+  vi.mocked(getRegion).mockResolvedValue({ id: 1, slug: "ontario", name: "Ontario", iatas: ["YOW"] });
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  render(<QueryClientProvider client={client}><MemoryRouter initialEntries={["/?tab=Routes&regions=ontario&route=shared-key&routeIata=YOW"]}><RegionProvider defaultSelection={{ regions: ["ontario"], iatas: [] }}><RouteTable /></RegionProvider></MemoryRouter></QueryClientProvider>);
+  await waitFor(() => expect(getRegion).toHaveBeenCalledWith(1));
+  await waitFor(() => expect(getKnownRoutesPage).toHaveBeenCalledWith(expect.objectContaining({ iata: "YOW" })));
+  expect(screen.getByTestId("saved-route-selection")).toHaveTextContent("shared-key");
+  client.clear();
+});
+
+it("translates the search bar, headers and empty state", async () => {
+  await i18n.changeLanguage("fr");
+  renderTable();
+  expect(await screen.findByText("Chercher un trajet")).toBeInTheDocument();
+  expect(screen.getByLabelText("Hash de départ")).toHaveAttribute("placeholder", "hash de départ");
+  expect(screen.getByRole("button", { name: "Rechercher" })).toBeInTheDocument();
+  expect(await screen.findByText("Aucun trajet")).toBeInTheDocument();
+});
+
+it("shows no routes for a region with no IATAs", async () => {
+  vi.mocked(getRegions).mockResolvedValue([{ id: 2, slug: "empty", name: "Empty" }]);
+  vi.mocked(getRegion).mockResolvedValue({ id: 2, slug: "empty", name: "Empty", iatas: [] });
+  mockGetKnownRoutesPage.mockResolvedValue({ items: [{ id: 1, iata: "CCC", hopCount: 1, hops: [], firstSeen: 1, lastSeen: 5, observationCount: 9 }], nextCursor: null, hasMore: false });
+
+  renderTable({ regions: ["empty"], iatas: [] });
+
+  await waitFor(() => expect(getRegion).toHaveBeenCalled());
+  expect(await screen.findByText("No routes")).toBeInTheDocument();
+  expect(screen.queryByText("9")).not.toBeInTheDocument();
 });

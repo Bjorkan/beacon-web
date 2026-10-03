@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from "react";
+import { useTranslation } from "react-i18next";
 import { Dropdown } from "./Dropdown";
 
 export interface SearchFieldOption {
@@ -13,11 +14,14 @@ interface SearchBarProps {
   fields: SearchFieldOption[];
   field: string;
   onFieldChange: (field: string) => void;
+  hideField?: boolean;
+  inputLabel?: string;
 }
 
 // debounced search input with field dropdown
 
-export function SearchBar({ value, onChange, fields, field, onFieldChange }: SearchBarProps) {
+export function SearchBar({ value, onChange, fields, field, onFieldChange, hideField = false, inputLabel }: SearchBarProps) {
+  const { t } = useTranslation();
   const [localValue, setLocalValue] = useState(value);
   const [prevValue, setPrevValue] = useState(value);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -56,7 +60,7 @@ export function SearchBar({ value, onChange, fields, field, onFieldChange }: Sea
 
   return (
     <div className="flex items-center flex-1 min-w-0">
-      <Dropdown
+      {!hideField && <Dropdown
         align="left"
         width="w-32"
         renderTrigger={({ toggle }) => (
@@ -92,7 +96,7 @@ export function SearchBar({ value, onChange, fields, field, onFieldChange }: Sea
             {f.label}
           </button>
         ))}
-      </Dropdown>
+      </Dropdown>}
 
       <div className="relative flex-1 min-w-0">
         <svg
@@ -108,9 +112,10 @@ export function SearchBar({ value, onChange, fields, field, onFieldChange }: Sea
         <input
           type="text"
           value={localValue}
+          aria-label={inputLabel}
           onChange={(e) => handleChange(e.target.value)}
-          placeholder={`Search by ${(currentField?.label ?? "").toLowerCase()}...`}
-          className="w-full text-[11px] font-mono bg-bg-surface border border-border rounded-r-sm pl-7 pr-7 py-1 text-text-bright placeholder:text-text-dim transition-colors"
+          placeholder={inputLabel ?? t("search.placeholder", { field: (currentField?.label ?? "").toLowerCase() })}
+          className={`w-full font-mono bg-bg-surface border border-border pl-7 pr-7 py-1 text-text-bright placeholder:text-text-dim transition-colors ${hideField ? "rounded-sm text-[11px]" : "rounded-r-sm text-[11px]"}`}
         />
         {localValue && (
           <button

@@ -1,12 +1,10 @@
 import { useRef, type ReactNode } from "react";
 import { useFocusTrap } from "../hooks/useFocusTrap";
 
-// Right-anchored modal: dims the surface, focuses and traps keyboard focus within the panel, and
-// closes on a backdrop click — only when the press started there, so releasing a text selection over
-// the backdrop doesn't close. Escape is left to the caller (some callers gate it on nested state).
-// Pass `inactive` when another overlay is stacked on top so this one steps out of the modal/a11y
-// path — it stops being an active modal and is hidden from assistive tech, while staying mounted so
-// focus can return into it when the overlay above closes.
+// Backdrop close fires only when the press started on the backdrop, so releasing a text
+// selection there doesn't close it. Escape stops at this layer.
+// `inactive` steps a stacked-under overlay out of the modal/a11y path while keeping it
+// mounted, so focus can return to it when the overlay above closes.
 export function ModalOverlay({ label, onClose, inactive = false, children }: {
   label: string;
   onClose: () => void;
@@ -26,8 +24,15 @@ export function ModalOverlay({ label, onClose, inactive = false, children }: {
       aria-label={label}
       aria-hidden={inactive || undefined}
       tabIndex={-1}
+      onKeyDown={(e) => {
+        if (e.key === "Escape" && !inactive) {
+          e.preventDefault();
+          e.stopPropagation();
+          onClose();
+        }
+      }}
       onMouseDown={(e) => { pressedBackdrop.current = e.target === e.currentTarget; }}
-      onClick={() => { if (pressedBackdrop.current) onClose(); }}
+      onClick={() => { if (!inactive && pressedBackdrop.current) onClose(); }}
     >
       <div className="h-full flex shadow-2xl" onClick={(e) => e.stopPropagation()}>
         {children}

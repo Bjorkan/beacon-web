@@ -1,187 +1,68 @@
-import { useEffect, useMemo, useState } from "react";
-import { useQuery, keepPreviousData } from "@tanstack/react-query";
-import { Badge } from "../../components/Badge";
+import { useMemo, type ReactNode } from "react";
+import { useTranslation } from "react-i18next";
+import { InfoTip } from "../../components/InfoTip";
 import { EmptyState } from "../../components/EmptyState";
-import { formatBattery, formatCount, formatUptime } from "../../lib/formatters";
-import { getObserversPage } from "../../api/client";
-import { useRegion } from "../../hooks/useRegion";
+import { ACTION_BUTTON_CLASS } from "../../components/action-button";
+import { formatRadioParts } from "../../lib/formatters";
+import { ObserverComparison } from "../observers/ObserverComparison";
+import { ObserverSummary } from "../observers/ObserverSummary";
 import { useChartColors } from "./chartTheme";
-import { useTopObservers } from "./useStats";
-import { useObserver, useObserverTelemetry } from "./useTelemetry";
-import { useTick } from "../../hooks/useTick";
-import { deriveObserverStatus } from "../observers/observer-status";
-import { airtimeOption, batteryOption, noiseFloorOption, queueOption, receiveErrorsOption } from "./chartOptions";
+import { activityParamsFor, useObserver, useObserverActivity, useObserverTelemetry } from "./useTelemetry";
+import {
+  airtimeOption,
+  batteryOption,
+  noiseFloorOption,
+  queueOption,
+  receiveErrorsOption,
+  busyOption,
+  heardOption,
+  snrHeardOption,
+  typeBarOption,
+} from "./chartOptions";
 import { Card, ChartCard } from "./cards";
-import { hasTelemetry } from "./transforms";
+import { fillActivity, hasTelemetry, intervalToMs, latestAirtimePct, payloadBarItems } from "./transforms";
 import { useLiveObserver } from "./useLiveStats";
+import { isNotFound } from "../../api/client";
 import type { WsManager } from "../../api/ws-manager";
-import type { Observer } from "../observers/types";
-import type { StatsRange } from "./types";
+import { RANGE_MS, type StatsRange } from "./types";
 
-function ObserverList({
-  range,
-  selectedId,
-  onSelect,
-}: {
-  range: StatsRange;
-  selectedId: string | null;
-  onSelect: (id: string) => void;
-}) {
-  const { iatas, regionKey } = useRegion();
-  const [query, setQuery] = useState("");
-  // debounce so the server-side lookup fires once per pause, not once per keystroke
-  const [q, setQ] = useState("");
-  useEffect(() => {
-    const id = setTimeout(() => setQ(query.trim()), 250);
-    return () => clearTimeout(id);
-  }, [query]);
-  const searching = q.length > 0;
-
-  // default: top observers by activity (with count + activity bar). Searching swaps to a server-side
-  // name lookup across ALL observers in the region, not just the loaded top rows.
-  const top = useTopObservers(range, 15);
-  const max = useMemo(() => Math.max(1, ...(top.data ?? []).map((o) => o.observationCount)), [top.data]);
-
-  const search = useQuery({
-    queryKey: ["observer-search", regionKey, q],
-    queryFn: () => getObserversPage(iatas, { name: q, limit: 50 }),
-    enabled: searching,
-    staleTime: 30_000,
-    placeholderData: keepPreviousData,
-  });
-
-  type Row = { id: string; name: string; count?: number; iata?: string; online?: boolean };
-  const rows: Row[] = searching
-    ? (search.data?.items ?? []).map((o) => ({ id: o.id, name: o.displayName ?? o.id.slice(0, 8), iata: o.iata, online: o.status === "online" }))
-    : (top.data ?? []).map((o) => ({ id: o.observerId, name: o.displayName ?? o.observerId.slice(0, 8), count: o.observationCount }));
-
-  const loading = searching ? search.isLoading : top.isLoading;
-
-  return (
-    <Card title="Observers" className="w-full">
-      <input
-        type="text"
-        value={query}
-        onChange={(e) => setQuery(e.target.value)}
-        placeholder="Search observers…"
-        className="mb-2 w-full rounded border border-border bg-bg-base px-2 py-1 font-mono text-[12px] text-text-normal placeholder:text-text-dim"
-      />
-      <div className="flex flex-col gap-0.5">
-        {loading && <div className="py-6 text-center font-mono text-[11px] text-text-dim">{searching ? "Searching…" : "Loading…"}</div>}
-        {searching && search.isError && (
-          <div className="py-6 text-center font-mono text-[11px] text-danger">Search failed</div>
-        )}
-        {!loading && !(searching && search.isError) && rows.length === 0 && (
-          <div className="py-6 text-center font-mono text-[11px] text-text-dim">{searching ? "No matches" : "No observers"}</div>
-        )}
-        {rows.map((r) => {
-          const active = r.id === selectedId;
-          return (
-            <button
-              key={r.id}
-              type="button"
-              onClick={() => onSelect(r.id)}
-              className={`relative overflow-hidden rounded border-l-2 px-2.5 py-1.5 text-left transition-colors cursor-pointer ${
-                active ? "border-primary bg-primary/10" : "border-transparent hover:bg-text-normal/3"
-              }`}
-            >
-              {r.count != null && (
-                <div
-                  className="absolute inset-y-0 left-0 bg-secondary/10"
-                  style={{ width: `${(r.count / max) * 100}%` }}
-                  aria-hidden
-                />
-              )}
-              <div className="relative flex items-center justify-between gap-2">
-                <span className={`truncate font-mono text-[12px] ${active ? "text-text-bright" : "text-text-normal"}`}>{r.name}</span>
-                {r.count != null ? (
-                  <span className="shrink-0 font-mono text-[11px] tabular-nums text-text-muted">{formatCount(r.count)}</span>
-                ) : (
-                  <span className="flex shrink-0 items-center gap-1.5 font-mono text-[11px] text-text-muted">
-                    {r.iata}
-                    <span className={`h-1.5 w-1.5 rounded-full ${r.online ? "bg-green" : "bg-text-dim/30"}`} aria-hidden />
-                  </span>
-                )}
-              </div>
-            </button>
-          );
-        })}
-      </div>
-    </Card>
-  );
+function airtimeLabel(a: { rx: number | null; tx: number | null }): string {
+  return [a.rx != null && `RX ${a.rx}%`, a.tx != null && `TX ${a.tx}%`].filter(Boolean).join(" · ");
 }
-
-function ObserverHeader({ observer }: { observer: Observer }) {
-  useTick(); // keep the recency-derived status badge fresh
-  const status = deriveObserverStatus(observer);
-  const radio = [
-    observer.radioFreqMhz && `${observer.radioFreqMhz} MHz`,
-    observer.radioSf && `SF${observer.radioSf}`,
-    observer.radioBwKhz && `${observer.radioBwKhz} kHz`,
-    observer.radioCr && `CR 4/${observer.radioCr}`,
-  ].filter(Boolean) as string[];
-
-  return (
-    <Card
-      title={
-        <span className="flex items-center gap-2">
-          <span className="text-text-bright normal-case">{observer.displayName ?? observer.id.slice(0, 8)}</span>
-          <Badge variant={status === "online" ? "live" : "offline"}>{status}</Badge>
-          {observer.observerType && <Badge variant="default">{observer.observerType}</Badge>}
-        </span>
-      }
-      right={
-        <span className="rounded-sm bg-primary/6 px-1.5 py-px font-mono text-[12px] font-semibold text-primary">{observer.iata}</span>
-      }
-    >
-      <div className="flex flex-wrap items-center gap-x-6 gap-y-1.5 font-mono text-[12px]">
-        <Metric label="Battery" value={observer.batteryLevel != null ? formatBattery(observer.batteryLevel) : "—"} />
-        <Metric label="Uptime" value={observer.uptimeSeconds != null ? formatUptime(observer.uptimeSeconds) : "—"} />
-        <Metric label="Observations" value={observer.observationCount.toLocaleString()} />
-        {radio.length > 0 && <Metric label="Radio" value={radio.join(" · ")} />}
-      </div>
-    </Card>
-  );
-}
-
-function Metric({ label, value }: { label: string; value: string }) {
-  return (
-    <span>
-      <span className="text-text-dim">{label} </span>
-      <span className="text-text-normal">{value}</span>
-    </span>
-  );
-}
-
 interface ObserverTabProps {
   range: StatsRange;
   selectedObserverId: string | null;
-  onSelectObserver: (observerId: string) => void;
+  onSelectObserver: (id: string) => void;
   wsManager: WsManager;
+  comparison?: { id: string; until: number | null; onSelect: (id: string) => void; onRefresh: () => number };
+  // observer-level controls the host page puts on the header's name row
+  actions?: ReactNode;
 }
-
-export function ObserverTab({ range, selectedObserverId, onSelectObserver, wsManager }: ObserverTabProps) {
+export function ObserverTab({ range, selectedObserverId, wsManager, comparison, actions }: ObserverTabProps) {
+  const { t } = useTranslation();
   const colors = useChartColors();
   useLiveObserver(wsManager, selectedObserverId, range);
-  const topObservers = useTopObservers(range, 15);
-  const observer = useObserver(selectedObserverId);
+  const observer = useObserver(selectedObserverId, true);
   const telemetry = useObserverTelemetry(selectedObserverId, range);
-
-  // default to the busiest observer once the list loads and nothing is selected
-  useEffect(() => {
-    if (selectedObserverId) return;
-    const first = topObservers.data?.[0];
-    if (first) onSelectObserver(first.observerId);
-  }, [selectedObserverId, topObservers.data, onSelectObserver]);
-
+  const activity = useObserverActivity(selectedObserverId, range, comparison?.until ?? undefined);
   const points = useMemo(() => telemetry.data?.points ?? [], [telemetry.data]);
-  // use the response's interval, not the range prop — keepPreviousData can briefly show the old range's points
-  const bucketed = telemetry.data != null && telemetry.data.interval !== "1h";
-  const airtime = useMemo(() => airtimeOption(points, colors, bucketed), [points, colors, bucketed]);
-  const battery = useMemo(() => batteryOption(points, colors), [points, colors]);
-  const noise = useMemo(() => noiseFloorOption(points, colors), [points, colors]);
-  const queue = useMemo(() => queueOption(points, colors), [points, colors]);
-  const recvErrors = useMemo(() => receiveErrorsOption(points, colors, bucketed), [points, colors, bucketed]);
+  // Use the response interval so the plotted bucket width always matches the data.
+  const bucketMs =
+    telemetry.data != null && telemetry.data.interval !== "1h" ? intervalToMs(telemetry.data.interval) : null;
+  const bucketed = bucketMs != null;
+  const airtime = useMemo(() => airtimeOption(points, colors, bucketMs), [points, colors, bucketMs]);
+  // Show the latest airtime percentage only when computed from unbucketed reports.
+  const latestAirtime = useMemo(
+    () => (bucketMs == null && hasTelemetry(points) ? latestAirtimePct(points, null) : { rx: null, tx: null }),
+    [points, bucketMs],
+  );
+  const battery = useMemo(() => batteryOption(points, colors, t("observerPage.batteryV")), [points, colors, t]);
+  const noise = useMemo(() => noiseFloorOption(points, colors, t("observerPage.noiseDbm")), [points, colors, t]);
+  const queue = useMemo(() => queueOption(points, colors, t("observerPage.queue")), [points, colors, t]);
+  const recvErrors = useMemo(
+    () => receiveErrorsOption(points, colors, bucketed, t("observerPage.errors")),
+    [points, colors, bucketed, t],
+  );
 
   // Bots / MQTT bridges report status but no device telemetry — show one clear empty state rather
   // than five flat-zero charts. When some telemetry exists, gate each chart on its own metric.
@@ -191,45 +72,201 @@ export function ObserverTab({ range, selectedObserverId, onSelectObserver, wsMan
   const missing = (...accessors: ((p: (typeof points)[number]) => number | null)[]) =>
     ready && !points.some((p) => accessors.some((a) => a(p) != null));
 
-  return (
-    <div className="mx-auto flex max-w-[1100px] flex-col gap-3.5 px-4 py-4 lg:flex-row">
-      <div className="w-full shrink-0 lg:w-[260px]">
-        <ObserverList range={range} selectedId={selectedObserverId} onSelect={onSelectObserver} />
-      </div>
+  // A 404 without cached data means this server has no activity endpoint yet.
+  const heardUnavailable = !activity.data && activity.isError && isNotFound(activity.error);
+  const heardLoading = activity.isLoading;
+  const heardData = activity.data;
+  const intervalMs = heardData ? intervalToMs(heardData.interval) : null;
+  // the window ends at the last fetch so the right edge follows now on every poll
+  const heardWindow = useMemo(() => {
+    const end = heardData?.windowEnd ?? activity.dataUpdatedAt;
+    const span = (heardData && intervalToMs(heardData.range)) ?? RANGE_MS[range];
+    return { start: heardData?.windowStart ?? end - span, end };
+  }, [heardData, activity.dataUpdatedAt, range]);
+  const heard = useMemo(
+    () => (heardData && intervalMs ? fillActivity(heardData.points, intervalMs, heardWindow, heardData) : []),
+    [heardData, intervalMs, heardWindow],
+  );
+  const busy = useMemo(
+    () => busyOption(heard, colors, intervalMs, heardWindow, t("charts.busy")),
+    [heard, colors, intervalMs, heardWindow, t],
+  );
+  const heardCount = useMemo(
+    () => heardOption(heard, colors, heardWindow, t("observerPage.packets")),
+    [heard, colors, heardWindow, t],
+  );
+  const snr = useMemo(
+    () =>
+      snrHeardOption(heard, colors, heardWindow, {
+        average: t("observerPage.mean"),
+        minimum: t("observerPage.minimum"),
+      }),
+    [heard, colors, heardWindow, t],
+  );
+  const payloadItems = useMemo(
+    () =>
+      payloadBarItems(heardData?.payloadTypes ?? []).map((item) =>
+        item.name.toLowerCase() === "unknown" ? { ...item, name: t("observerPage.unknown") } : item,
+      ),
+    [heardData, t],
+  );
+  const payload = useMemo(() => typeBarOption(payloadItems, colors), [payloadItems, colors]);
+  const nothingHeard = heardData != null && heardData.points.length === 0;
+  const costed = heardData?.points.some((p) => p.airtimeMs != null) ?? false;
+  const heardSnr = heard.some((p) => p.snrAvg != null);
+  const radioLabel = formatRadioParts(heardData?.radio ?? {});
+  const interval = heardData?.interval ?? activityParamsFor(range).interval;
+  const perBucket =
+    interval === "1h"
+      ? t("observerPage.hour")
+      : interval === "24h"
+        ? t("observerPage.day")
+        : interval.replace("m", " min").replace("h", " h");
 
-      <div className="flex min-w-0 flex-1 flex-col gap-3.5">
-        {!selectedObserverId ? (
-          <Card title="Telemetry">
-            <EmptyState title="Select an observer" subtitle="Pick an observer to view its telemetry" />
-          </Card>
-        ) : (
-          <>
-            {observer.data && <ObserverHeader observer={observer.data} />}
-            {noTelemetry ? (
-              <Card title="Telemetry">
-                <EmptyState title="No telemetry reported" subtitle="This observer publishes status but no device telemetry" />
-              </Card>
-            ) : (
-              <>
-                <ChartCard
-                  title={<>Airtime TX / RX · {range}</>}
-                  height={180}
-                  option={airtime}
-                  isLoading={telemetry.isLoading}
-                  isError={telemetry.isError}
-                  isEmpty={missing((p) => p.airtimeTxPct, (p) => p.airtimeRxPct)}
-                />
-                <div className="grid grid-cols-1 gap-3.5 lg:grid-cols-2">
-                  <ChartCard title="Battery" height={168} option={battery} isLoading={telemetry.isLoading} isError={telemetry.isError} isEmpty={missing((p) => p.batteryMv)} />
-                  <ChartCard title="Noise floor" height={168} option={noise} isLoading={telemetry.isLoading} isError={telemetry.isError} isEmpty={missing((p) => p.noiseFloorDb)} />
-                  <ChartCard title="Queue length" height={168} option={queue} isLoading={telemetry.isLoading} isError={telemetry.isError} isEmpty={missing((p) => p.queueLength)} />
-                  <ChartCard title="Receive errors" height={168} option={recvErrors} isLoading={telemetry.isLoading} isError={telemetry.isError} isEmpty={missing((p) => p.receiveErrors)} />
-                </div>
-              </>
-            )}
-          </>
-        )}
+  if (!selectedObserverId) return <EmptyState title={t("observerPage.choose")} />;
+  if (observer.isError)
+    return (
+      <div className="p-4" role="alert">
+        <p>{t("observerPage.loadFailed")}</p>
+        <button className={ACTION_BUTTON_CLASS} onClick={() => void observer.refetch()}>
+          {t("observerPage.retry")}
+        </button>
       </div>
-    </div>
+    );
+  if (!observer.data)
+    return (
+      <p className="p-4" role="status">
+        {t("observerPage.recording")}
+      </p>
+    );
+  return (
+    <section className="mx-auto flex w-full max-w-[1600px] flex-col gap-4 p-4">
+      <ObserverSummary
+        observer={observer.data}
+        activity={heardData}
+        points={points}
+        pending={heardLoading || (!heardData && activity.isError)}
+        actions={actions}
+      />
+      {comparison && <ObserverComparison observerA={observer.data} activityA={heardData} range={range} observerBId={comparison.id} until={comparison.until} onSelect={comparison.onSelect} onRefresh={() => {
+        const nextUntil = comparison.onRefresh();
+        void observer.refetch();
+        void telemetry.refetch();
+        if (nextUntil === comparison.until) void activity.refetch();
+        return nextUntil;
+      }} />}
+      {heardUnavailable ? (
+        <Card title={t("observerPage.records")}>
+          <p className="text-sm text-text-muted">{t("observerPage.summaryMissing")}</p>
+        </Card>
+      ) : nothingHeard ? (
+        <Card title={t("observerPage.records")}>
+          <EmptyState title={t("observerPage.empty")} />
+        </Card>
+      ) : (
+        <>
+          <div className="grid grid-cols-1 gap-4 xl:grid-cols-3">
+            <ChartCard
+              title={t("observerPage.activity", { interval: perBucket })}
+              option={heardCount}
+              height={235}
+              isLoading={heardLoading}
+              isError={!heardData && activity.isError}
+            />
+            <ChartCard
+              title={t("observerPage.mix")}
+              option={payload}
+              height={235}
+              isLoading={heardLoading}
+              isError={!heardData && activity.isError}
+              isEmpty={heardData != null && payloadItems.length === 0}
+            />
+            <ChartCard
+              title={t("observerPage.signal")}
+              option={snr}
+              height={235}
+              isLoading={heardLoading}
+              isError={!heardData && activity.isError}
+              isEmpty={heardData != null && !heardSnr}
+            />
+          </div>
+          {activity.isError && (
+            <button className={ACTION_BUTTON_CLASS} onClick={() => void activity.refetch()}>
+              {t("observerPage.retry")}
+            </button>
+          )}
+        </>
+      )}
+      <h2 className="mt-2 text-lg font-semibold text-text-bright">{t("observerPage.device")}</h2>
+      {noTelemetry ? (
+        <Card title={t("observerPage.noTelemetry")} right={<InfoTip text={t("observerPage.noTelemetryHelp")} />}>
+          {null}
+        </Card>
+      ) : (
+        <>
+          <ChartCard
+            title={`${t("observerPage.airtime")} · ${t(`stats.ranges.${range}`)}`}
+            right={<span className="text-xs text-text-muted">{airtimeLabel(latestAirtime)}</span>}
+            height={200}
+            option={airtime}
+            isLoading={telemetry.isLoading}
+            isError={!telemetry.data && telemetry.isError}
+            isEmpty={missing(
+              (p) => p.airtimeTxSecs,
+              (p) => p.airtimeRxSecs,
+            )}
+          />
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+            <ChartCard
+              title={t("observerPage.battery")}
+              height={180}
+              option={battery}
+              isLoading={telemetry.isLoading}
+              isError={!telemetry.data && telemetry.isError}
+              isEmpty={missing((p) => p.batteryMv)}
+            />
+            <ChartCard
+              title={t("observerPage.noise")}
+              height={180}
+              option={noise}
+              isLoading={telemetry.isLoading}
+              isError={!telemetry.data && telemetry.isError}
+              isEmpty={missing((p) => p.noiseFloorDb)}
+            />
+            <ChartCard
+              title={t("observerPage.queue")}
+              height={180}
+              option={queue}
+              isLoading={telemetry.isLoading}
+              isError={!telemetry.data && telemetry.isError}
+              isEmpty={missing((p) => p.queueLength)}
+            />
+            <ChartCard
+              title={t("observerPage.errors")}
+              height={180}
+              option={recvErrors}
+              isLoading={telemetry.isLoading}
+              isError={!telemetry.data && telemetry.isError}
+              isEmpty={missing((p) => p.receiveErrors)}
+            />
+          </div>
+          {telemetry.isError && (
+            <button className={ACTION_BUTTON_CLASS} onClick={() => void telemetry.refetch()}>
+              {t("observerPage.retry")}
+            </button>
+          )}
+        </>
+      )}
+      {!heardUnavailable && costed && (
+        <ChartCard
+          title={`${t("observerPage.busy")} · ${t(`stats.ranges.${range}`)}`}
+          right={<span className="text-xs text-text-muted">{radioLabel}</span>}
+          height={180}
+          option={busy}
+          isLoading={heardLoading}
+          isError={!heardData && activity.isError}
+        />
+      )}
+    </section>
   );
 }

@@ -21,6 +21,17 @@ function detail(observations: Observation[], over: Partial<PacketDetail> = {}): 
 }
 
 describe("buildPacketPaths", () => {
+  it("excludes location resets and invalid candidates from observation and trace paths", () => {
+    const candidates: ResolvedHop = { confidence: "ambiguous", nodes: [...hop("reset", 0, 0).nodes, ...hop("invalid", 181, 10).nodes, ...hop("valid", 0, 45).nodes] };
+    const hops = [hop("unknown", 0, 0), candidates, hop("end", -75, 0)];
+    const ordinary = buildPacketPaths(detail([obs(1, hops)]));
+    const trace = buildPacketPaths(detail([], { header: { payloadType: PayloadType.TRACE, routeType: 1 }, resolvedRoute: hops } as Partial<PacketDetail>));
+    expect(ordinary).toEqual([]); expect(trace).toEqual([]);
+    const valid = buildPacketPaths(detail([obs(1, [hop("start", 0, 45), hop("end", -75, 0)])]));
+    expect(valid[0].points.map(p => [p.lng, p.lat])).toEqual([[0, 45], [-75, 0]]);
+    expect(buildPacketPaths(detail([obs(1, [hop("unknown", 0, 0), hop("one", -75, 45)])]))).toEqual([]);
+  });
+
   it("keys each path by observerId and carries propagation, fastest first", () => {
     const d = detail([
       obs(1, [hop("a", -79, 43), hop("b", -75, 45)], { observerId: "obs-slow", observerName: "Slow", propagationTimeMs: 900 }),
@@ -133,19 +144,18 @@ describe("buildPacketPaths", () => {
     expect(buildPacketPaths(d)).toEqual([]);
   });
 
-  it("uses the first located candidate for an ambiguous relay hop", () => {
+  it("does not turn the only located candidate into a resolved identity", () => {
     const multi: ResolvedHop = {
       confidence: "ambiguous",
       nodes: [
         { id: "unlocated", publicKey: "p0" }, // no coords — skipped
-        { id: "located", publicKey: "p1", longitude: -78, latitude: 44 }, // first with coords — used
+        { id: "located", publicKey: "p1", longitude: -78, latitude: 44 }, // location does not disambiguate identity
       ],
     };
     const d = detail([
       obs(1, [multi, hop("relay2", -77, 45)], { observerId: "obs-1", propagationTimeMs: 100 }),
     ]);
-    const [path] = buildPacketPaths(d);
-    expect(path!.points.map((p) => p.id)).toEqual(["located", "relay2"]);
+    expect(buildPacketPaths(d)).toEqual([]);
   });
 
   it("omits observations that resolve to fewer than 2 located hops", () => {
@@ -202,4 +212,10 @@ describe("packetPathsToFeatures", () => {
     expect(points.features[0]!.properties.label).toBe("abcdef"); // label stays truncated for the map
     expect(points.features[1]!.properties.title).toBe("Repeater North");
   });
+});
+
+it("resumes a confirmed segment after returning to the same node across a gap", () => {
+  const paths = buildPacketPaths(detail([obs(1, [hop("a", -79, 43), hop("missing"), hop("a", -79, 43), hop("b", -75, 45)])]));
+  expect(paths[0].points.map(point => point.id)).toEqual(["a", "b"]);
+  expect(paths[0].points[1].breakBefore).toBeUndefined();
 });
