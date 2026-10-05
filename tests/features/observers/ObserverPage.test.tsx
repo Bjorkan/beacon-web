@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import "../../../src/i18n";
-import { render, screen, fireEvent, within, waitFor } from "@testing-library/react";
+import { act, render, screen, fireEvent, within, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter, useNavigate, useLocation } from "react-router-dom";
 import type { WsManager } from "../../../src/api/ws-manager";
@@ -12,7 +12,12 @@ const directory: ObserverSummary[] = [
   { id: "observer-b", displayName: "Basement B", iata: "YOW", status: "offline", observerType: "RemoteTerm" },
 ];
 vi.mock("../../../src/features/observers/useObserverDirectory", () => ({
-  useObserverDirectory: () => ({ data: directory, isPending: false, isError: false, refetch: vi.fn() }),
+  useObserverDirectory: (_ws: unknown, options: { search?: string } | string) => {
+    const search = typeof options === "string" ? "" : options.search ?? "";
+    const rows = directory.filter(o => search === "%" || o.displayName?.toLowerCase().includes(search));
+    return { data: directory, observers: rows, observerTypes: ["meshcore-ha", "RemoteTerm"], isPending: false,
+      isError: false, retry: vi.fn(), refetch: vi.fn(), loadMore: vi.fn(), resetKey: search };
+  },
 }));
 vi.mock("../../../src/hooks/useScopes", () => ({ useScopes: () => [] }));
 vi.mock("../../../src/api/client", () => ({ getBrokers: () => Promise.resolve([]) }));
@@ -167,4 +172,11 @@ it("rejects duplicate, malformed and future comparison anchors", async () => {
   const hour = Math.floor(Date.now() / 3_600_000) * 3_600_000 - 3_600_000;
   view(`?tab=Observers&observer=observer-a&compareWith=observer-b&compareUntil=${hour}&compareUntil=${hour}`);
   expect(await screen.findByTestId("comparison-until")).toHaveTextContent("null");
+});
+
+it("preserves server-filtered wildcard results instead of filtering the loaded page again", async () => {
+  view();
+  fireEvent.change(screen.getByPlaceholderText("Search by name..."), { target: { value: "%" } });
+  await act(async () => { await new Promise(resolve => setTimeout(resolve, 350)); });
+  expect(list().getAllByRole("button")).toHaveLength(2);
 });

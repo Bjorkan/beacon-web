@@ -333,6 +333,13 @@
       }
     },
     "observerPage": {
+      "refresh": "Uppdatera",
+      "loadMore": "Ladda fler observatörer",
+      "end": "Alla observatörer har laddats",
+      "upgradeRequired": "Sidindelning av observatörer kräver en serveruppgradering.",
+      "countsUnavailable": "Trafikräkning är inte tillgänglig för denna period.",
+      "countsUnavailableName": "Trafikräkning är inte tillgänglig för denna period; sorterar efter namn.",
+      "countsThrough": "Antal fram till {{time}} UTC",
       "back": "Tillbaka till observatörer",
       "detail": "Observatörsdetaljer",
       "range": "Tidsintervall",
