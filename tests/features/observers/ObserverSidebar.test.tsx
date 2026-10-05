@@ -82,3 +82,17 @@ it("shows upgrade and retry, loading, and empty-filter states", () => {
   rerender(<ObserverSidebar {...props} observers={[]} filtered hasNextPage={false} />);
   expect(screen.getByText("No matches")).toBeInTheDocument();
 });
+
+
+it.each(["partial", "unavailable"] as const)("renders available traffic and zero counts without a Name fallback when coverage is %s", status => {
+  render(<ObserverSidebar {...props} observers={props.observers.slice(0, 3)} effectiveSort="traffic"
+    windowEnd={1791162000000} coverage={{ status, expectedHours: 168, completeHours: 0, missingHours: 168, partialHours: 0 }} />);
+  const rows = screen.getAllByRole("option");
+  expect(rows.map(row => row.textContent)).toEqual(["Receiver Charlie900", "Receiver Alpha100", "Receiver Zero0"]);
+  expect(rows[0].querySelector('[style]')).toHaveStyle({ width: "90%" });
+  expect(rows[2].querySelector('[style]')).toHaveStyle({ width: "0%" });
+  expect(screen.queryByText(/counts unavailable/i)).not.toBeInTheDocument();
+  expect(screen.queryByText(/Name order/)).not.toBeInTheDocument();
+  expect(screen.getByText(/coverage is incomplete/)).toBeInTheDocument();
+  expect(screen.getByText(/Available history, up to 7 days/)).toBeInTheDocument();
+});

@@ -46,9 +46,13 @@ export function ObserverSidebar({ observers, filtered, isPending, isError, unsup
       {onRefresh && !unsupported && <button type="button" onClick={onRefresh} disabled={isPending || isFetchingNextPage}
         className="mb-2 self-end px-3 font-mono text-[10px] text-primary disabled:opacity-50">{t("observerPage.refresh")}</button>}
       {coverage && coverage.status !== "complete" && <p className={messageClass}>
-        {t(effectiveSort === "name" ? "observerPage.countsUnavailableName" : "observerPage.countsUnavailable")}
+        {t(maxObservationCount != null ? "observerPage.countsPartial"
+          : effectiveSort === "name" ? "observerPage.countsUnavailableName" : "observerPage.countsUnavailable")}
       </p>}
-      {windowEnd != null && <p className="shrink-0 px-3 pb-2 font-mono text-[10px] text-text-dim">{t("observerPage.countsThrough", { time: formatUtc(windowEnd) })}</p>}
+      {windowEnd != null && <div className="shrink-0 px-3 pb-2 font-mono text-[10px] text-text-dim">
+        <p>{t("observerPage.directoryPeriod")}</p>
+        <p>{t("observerPage.countsThrough", { time: formatUtc(windowEnd) })}</p>
+      </div>}
       {unsupported ? <div className={messageClass}><p>{t("observerPage.upgradeRequired")}</p>
         <button type="button" onClick={onRetry} className="mt-2 text-primary">{t("observerPage.retry")}</button></div>
         : isPending ? <div className={messageClass}>{t("common.loading")}</div>

@@ -2,16 +2,13 @@ import { useCallback, useEffect, useMemo, useRef } from "react";
 import { useInfiniteQuery, useQuery, useQueryClient, type InfiniteData } from "@tanstack/react-query";
 import { getObserverDirectoryPage, supportsObserverDirectory } from "../../api/client";
 import { API_BASE } from "../../lib/constants";
-import { useTick } from "../../hooks/useTick";
 import { useWsObserverStatusHandler } from "../../hooks/useWsHandlers";
-import { rolledWindow, useStatsRegion } from "../stats/useStats";
-import type { StatsRange } from "../stats/types";
+import { useStatsRegion } from "../stats/useStats";
 import type { ObserverDirectoryItem, ObserverDirectoryPage, ObserverDirectorySort } from "./types";
 import type { WsManager } from "../../api/ws-manager";
 import type { WsObserverStatus } from "../../types/ws";
 
 export interface ObserverDirectoryOptions {
-  range: StatsRange;
   sort: ObserverDirectorySort;
   search: string;
   status: string;
@@ -26,8 +23,6 @@ const retryDelay = (attempt: number, error: Error) =>
 
 export function useObserverDirectory(wsManager: WsManager, options: ObserverDirectoryOptions) {
   const { where, regionKey, isResolved } = useStatsRegion();
-  const now = useTick(60_000);
-  const { since, until } = rolledWindow(options.range, now);
   const { sort, search, status, type, broker, scope } = options;
   const queryClient = useQueryClient();
   const capability = useQuery({
@@ -37,14 +32,15 @@ export function useObserverDirectory(wsManager: WsManager, options: ObserverDire
     staleTime: 60_000,
     retryDelay,
   });
-  const queryKey = useMemo(() => ["observer-directory", API_BASE, regionKey, since, until, sort, search, status, type, broker, scope],
-    [regionKey, since, until, sort, search, status, type, broker, scope]);
+  const queryKey = useMemo(() => ["observer-directory", API_BASE, regionKey, sort, search, status, type, broker, scope],
+    [regionKey, sort, search, status, type, broker, scope]);
   const list = useInfiniteQuery({
     queryKey,
     queryFn: ({ pageParam, signal }) => getObserverDirectoryPage({
-      location: where, since, until, sort, name: search || undefined, status: status || undefined,
+      location: where, sort, name: search || undefined, status: status || undefined,
       type: type || undefined, broker: broker || undefined, scope: scope || undefined, ...pageParam, limit: 200,
     }, signal),
+    // Refetch starts unbounded; later pages take their bounds from the new first response.
     initialPageParam: undefined as Continuation,
     getNextPageParam: (last, pages, _lastParam, params): Continuation => {
       const first = pages[0];

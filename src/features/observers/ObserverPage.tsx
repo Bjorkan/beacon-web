@@ -42,7 +42,7 @@ export function ObserverPage({ wsManager, onAnalyzePacket }: { wsManager: WsMana
   const [scope, setScope] = useState("");
   const [minimized, setMinimized] = useState(false);
   const [sort, setSort] = useState<ObserverDirectorySort>("traffic");
-  const directory = useObserverDirectory(wsManager, { range, sort, search, status, type, broker, scope });
+  const directory = useObserverDirectory(wsManager, { sort, search, status, type, broker, scope });
   const { data: brokers } = useQuery({ queryKey: ["brokers"], queryFn: getBrokers, staleTime: 60_000 });
   const scopeOptions = useScopes(scope);
   const typeOptions = directory.observerTypes;

@@ -11,7 +11,7 @@ const region = { regionKey: "YOW", iatas: ["YOW"], isResolved: true, emptyRegion
 vi.mock("../../../src/hooks/useRegion", () => ({ useRegion: () => region }));
 let statusHandler: (data: WsObserverStatus["data"]) => void;
 const ws = { onObserverStatus: (handler: typeof statusHandler) => { statusHandler = handler; return () => {}; } } as WsManager;
-const defaults: ObserverDirectoryOptions = { range: "7d", sort: "traffic", search: "", status: "", type: "", broker: "", scope: "" };
+const defaults: ObserverDirectoryOptions = { sort: "traffic", search: "", status: "", type: "", broker: "", scope: "" };
 const reply = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status });
 const failure = (status: number, message = "failed") => reply({ error: { code: "error", message } }, status);
 let requests: URL[];
@@ -58,16 +58,13 @@ it("loads only the first page initially, then returns later counts beyond 200 wi
   expect(result.current.hasNextPage).toBe(false);
 });
 
-it("sends every filter and a complete seven-day rollup window on the first request", async () => {
+it("sends every filter but lets the server choose the rolling seven-day window", async () => {
   const { result } = view({ ...defaults, search: "roof", status: "online", type: "RemoteTerm", broker: "local", scope: "#test" });
   await waitFor(() => expect(result.current.observers).toHaveLength(1));
   const p = listingRequests()[0].searchParams;
   expect(Object.fromEntries(p)).toMatchObject({ iatas: "YOW", name: "roof", status: "online", type: "RemoteTerm", broker: "local", scope: "#test", sort: "traffic" });
-  const until = Number(p.get("until"));
-  expect(until - Number(p.get("since"))).toBe(7 * 86400000);
-  expect(until % 3600000).toBe(0);
-  expect(Date.now() - until).toBeGreaterThanOrEqual(35 * 60000);
-  expect(Date.now() - until).toBeLessThan(95 * 60000);
+  expect(p.has("since")).toBe(false);
+  expect(p.has("until")).toBe(false);
 });
 
 it("ignores a slow old-filter page and restarts for new filters and sort", async () => {
@@ -210,16 +207,17 @@ it("repeats every filter on continuation using the response window, then clears 
   expect(listingRequests().at(-1)?.searchParams.has("cursor")).toBe(false);
 });
 
-it("starts a new first page on region and range changes", async () => {
+it("starts a new first page with a server-chosen window on region changes", async () => {
   respond = url => reply(directoryPage([directoryRow(url.searchParams.get("iatas")!)]));
   const { result, rerender } = view();
   await waitFor(() => expect(result.current.observers[0]?.id).toBe("YOW"));
   region.iatas = ["YVR"]; region.regionKey = "YVR";
-  rerender({ ...defaults, range: "30d" });
+  rerender({ ...defaults });
   await waitFor(() => expect(result.current.observers.map(o => o.id)).toEqual(["YVR"]));
   const p = listingRequests().at(-1)!.searchParams;
   expect(p.has("cursor")).toBe(false);
-  expect(Number(p.get("until")) - Number(p.get("since"))).toBe(30 * 86400000);
+  expect(p.has("since")).toBe(false);
+  expect(p.has("until")).toBe(false);
 });
 
 it.each([undefined, 0])("stops when a nonterminal response has no usable cursor (%s)", async nextCursor => {
@@ -243,4 +241,68 @@ it("refreshes loaded rows each minute so fetched online status does not stay gre
     expect(result.current.observers[0]?.status).toBe("offline");
     expect(listingRequests()).toHaveLength(2);
   } finally { vi.useRealTimers(); }
+});
+
+it("uses a fresh rolling window on periodic refresh and replaces all loaded pages atomically", async () => {
+  vi.useFakeTimers();
+  vi.setSystemTime(new Date("2026-10-05T12:15:23.456Z"));
+  let generation = 0;
+  let finishSecondPage: (response: Response) => void;
+  const page = (part: string, end: number) => directoryPage([directoryRow(`${generation}-${part}`, generation ? 200 : 100)], {
+    windowStart: end - 7 * 86400000, windowEnd: end,
+    hasMore: part === "first", nextCursor: part === "first" ? 200 : undefined,
+    maxObservationCount: generation ? 200 : 100,
+  });
+  respond = url => {
+    const continuation = url.searchParams.has("cursor");
+    if (generation && continuation) return new Promise(resolve => { finishSecondPage = resolve; });
+    return reply(page(continuation ? "second" : "first", continuation ? Number(url.searchParams.get("until")) : Date.now()));
+  };
+  try {
+    const { result } = view();
+    await act(async () => { await vi.advanceTimersByTimeAsync(10); });
+    await act(async () => { await result.current.loadMore(); await vi.advanceTimersByTimeAsync(10); });
+    expect(result.current.observers.map(o => o.id)).toEqual(["0-first", "0-second"]);
+    const oldEnd = result.current.windowEnd;
+    generation = 1;
+    await act(async () => { await vi.advanceTimersByTimeAsync(60_000); });
+    const refreshFirst = listingRequests().at(-2)!.searchParams;
+    const refreshNext = listingRequests().at(-1)!.searchParams;
+    expect(refreshFirst.has("cursor")).toBe(false);
+    expect(refreshFirst.has("since")).toBe(false);
+    expect(refreshFirst.has("until")).toBe(false);
+    expect(Number(refreshNext.get("until"))).toBeGreaterThan(oldEnd!);
+    expect(Number(refreshNext.get("until")) - Number(refreshNext.get("since"))).toBe(7 * 86400000);
+    expect(result.current.windowEnd).toBe(oldEnd);
+    expect(result.current.observers.map(o => o.id)).toEqual(["0-first", "0-second"]);
+    expect(result.current.maxObservationCount).toBe(100);
+    await act(async () => {
+      finishSecondPage!(reply(page("second", Number(refreshNext.get("until")))));
+      await vi.advanceTimersByTimeAsync(10);
+    });
+    expect(result.current.observers.map(o => o.id)).toEqual(["1-first", "1-second"]);
+    expect(result.current.windowEnd).toBe(Number(refreshNext.get("until")));
+    expect(result.current.maxObservationCount).toBe(200);
+  } finally { vi.useRealTimers(); }
+});
+
+it("ignores a pending old-window continuation when manual refresh obtains a new window", async () => {
+  let finishOld: (response: Response) => void;
+  let fresh = false;
+  respond = url => url.searchParams.has("cursor") ? new Promise(resolve => { finishOld = resolve; })
+    : reply(directoryPage([directoryRow(fresh ? "fresh" : "old")], {
+      windowStart: fresh ? 1790557260123 : 1790557200000, windowEnd: fresh ? 1791162060123 : 1791162000000,
+      hasMore: !fresh, nextCursor: fresh ? undefined : 200,
+    }));
+  const { result } = view();
+  await waitFor(() => expect(result.current.observers[0]?.id).toBe("old"));
+  act(() => { void result.current.loadMore(); });
+  await waitFor(() => expect(listingRequests()).toHaveLength(2));
+  fresh = true;
+  await act(async () => { await result.current.refresh(); });
+  await waitFor(() => expect(result.current.observers.map(o => o.id)).toEqual(["fresh"]));
+  await act(async () => finishOld!(reply(directoryPage([directoryRow("stale")]))));
+  expect(result.current.observers.map(o => o.id)).toEqual(["fresh"]);
+  expect(result.current.windowEnd).toBe(1791162060123);
+  expect(Object.fromEntries(listingRequests().at(-1)!.searchParams)).toEqual({ iatas: "YOW", sort: "traffic", limit: "200" });
 });

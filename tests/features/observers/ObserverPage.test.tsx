@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter, useNavigate, useLocation } from "react-router-dom";
 import type { WsManager } from "../../../src/api/ws-manager";
 import type { ObserverSummary } from "../../../src/features/observers/types";
+import { useObserverDirectory } from "../../../src/features/observers/useObserverDirectory";
 import { ObserverPage } from "../../../src/features/observers/ObserverPage";
 
 const directory: ObserverSummary[] = [
@@ -12,12 +13,12 @@ const directory: ObserverSummary[] = [
   { id: "observer-b", displayName: "Basement B", iata: "YOW", status: "offline", observerType: "RemoteTerm" },
 ];
 vi.mock("../../../src/features/observers/useObserverDirectory", () => ({
-  useObserverDirectory: (_ws: unknown, options: { search?: string } | string) => {
+  useObserverDirectory: vi.fn((_ws: unknown, options: { search?: string } | string) => {
     const search = typeof options === "string" ? "" : options.search ?? "";
     const rows = directory.filter(o => search === "%" || o.displayName?.toLowerCase().includes(search));
     return { data: directory, observers: rows, observerTypes: ["meshcore-ha", "RemoteTerm"], isPending: false,
       isError: false, retry: vi.fn(), refetch: vi.fn(), loadMore: vi.fn(), resetKey: search };
-  },
+  }),
 }));
 vi.mock("../../../src/hooks/useScopes", () => ({ useScopes: () => [] }));
 vi.mock("../../../src/api/client", () => ({ getBrokers: () => Promise.resolve([]) }));
@@ -178,5 +179,17 @@ it("preserves server-filtered wildcard results instead of filtering the loaded p
   view();
   fireEvent.change(screen.getByPlaceholderText("Search by name..."), { target: { value: "%" } });
   await act(async () => { await new Promise(resolve => setTimeout(resolve, 350)); });
+  expect(list().getAllByRole("button")).toHaveLength(2);
+});
+
+
+it("changes the detail range without changing the directory request", async () => {
+  view("?tab=Observers&observer=observer-a&range=7d");
+  expect(await screen.findByRole("heading")).toHaveTextContent("Dashboard observer-a 7d");
+  const before = vi.mocked(useObserverDirectory).mock.calls.at(-1)![1];
+  expect(before).not.toHaveProperty("range");
+  fireEvent.click(within(screen.getByRole("group", { name: "Time range" })).getByRole("button", { name: "30d" }));
+  expect(await screen.findByRole("heading")).toHaveTextContent("Dashboard observer-a 30d");
+  expect(vi.mocked(useObserverDirectory).mock.calls.at(-1)![1]).toEqual(before);
   expect(list().getAllByRole("button")).toHaveLength(2);
 });

@@ -333,6 +333,8 @@
       }
     },
     "observerPage": {
+      "countsPartial": "Counts use available history; coverage is incomplete.",
+      "directoryPeriod": "Available history, up to 7 days",
       "refresh": "Refresh",
       "loadMore": "Load more observers",
       "end": "All observers loaded",
