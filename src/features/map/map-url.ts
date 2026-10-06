@@ -30,11 +30,19 @@ export interface MapViewSnapshot {
 
 const NEIGHBOR_MODES: NeighborLinesMode[] = ["on", "selected", "off"];
 
-function parseCoord(lat: string | null, lng: string | null): [number, number] | undefined {
+function parseCoord(
+  lat: string | null,
+  lng: string | null,
+): [number, number] | undefined {
   if (lat === null || lng === null) return undefined;
   const latN = Number.parseFloat(lat);
   const lngN = Number.parseFloat(lng);
-  if (!Number.isFinite(latN) || !Number.isFinite(lngN) || Math.abs(latN) > 90 || Math.abs(lngN) > 180) {
+  if (
+    !Number.isFinite(latN) ||
+    !Number.isFinite(lngN) ||
+    Math.abs(latN) > 90 ||
+    Math.abs(lngN) > 180
+  ) {
     return undefined;
   }
   return [lngN, latN];
@@ -54,15 +62,20 @@ function parseBool(raw: string | null): boolean | undefined {
 }
 
 // A canonical node-type name, or undefined for anything else (All, a label, a stale saved value).
-export function parseNodeType(raw: string | null | undefined): string | undefined {
+export function parseNodeType(
+  raw: string | null | undefined,
+): string | undefined {
   const type = raw?.toLowerCase();
-  return type && NODE_TYPE_NAMES.includes(type as (typeof NODE_TYPE_NAMES)[number]) ? type : undefined;
+  return type &&
+    NODE_TYPE_NAMES.includes(type as (typeof NODE_TYPE_NAMES)[number])
+    ? type
+    : undefined;
 }
 
 export function parseMapView(params: URLSearchParams): ParsedMapView {
   const view: ParsedMapView = {};
 
-  const center = parseCoord(params.get("lat"), params.get("lng"));
+  const center = parseCoord(params.get("latitude"), params.get("longitude"));
   if (center) view.center = center;
 
   const zoom = parseZoom(params.get("zoom"));
@@ -101,10 +114,12 @@ function round(n: number, dp: number): string {
 // Authoritative param map for a copy-link snapshot: every managed key set to its current value, with
 // node_type deleted (null) when All so a stale ?node_type can't survive. Region/tab are handled by the
 // caller (the URL is built from the address bar, which already carries ?iata).
-export function buildMapParams(view: MapViewSnapshot): Record<string, string | null> {
+export function buildMapParams(
+  view: MapViewSnapshot,
+): Record<string, string | null> {
   return {
-    lat: round(view.center[1], 5),
-    lng: round(view.center[0], 5),
+    latitude: round(view.center[1], 5),
+    longitude: round(view.center[0], 5),
     zoom: round(view.zoom, 2),
     clustering: view.clustered ? "on" : "off",
     node_type: view.nodeType || null,

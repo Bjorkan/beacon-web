@@ -9,8 +9,8 @@ export interface NodeSummary {
   nodeType: number;
   nodeTypeName: string;
   name: string | null;
-  lat: number | null;
-  lng: number | null;
+  latitude: number | null;
+  longitude: number | null;
   radio?: string; // compact "freq,bw,sf" string, e.g. "915,250,11"; absent when unknown
   defaultScope?: string; // most recently matched transport scope name, e.g. "#bc"
   iatas: NodeIATA[];
@@ -48,8 +48,8 @@ export interface NodeNeighbor {
   publicKey: string; // hex-encoded prefix
   nodeType: number;
   nodeTypeName: string;
-  lat?: number;
-  lng?: number;
+  latitude?: number;
+  longitude?: number;
   iata: string;
   observationCount: number;
   firstSeen: number; // epoch ms

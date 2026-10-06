@@ -13,19 +13,19 @@ describe("parseMapView", () => {
     expect(parseMapView(new URLSearchParams(""))).toEqual({});
   });
 
-  it("reads lat+lng into a maplibre [lng, lat] center", () => {
-    expect(parseMapView(new URLSearchParams("lat=45.32&lng=-75.66"))).toEqual({ center: [-75.66, 45.32] });
+  it("reads latitude+longitude into a maplibre [lng, lat] center", () => {
+    expect(parseMapView(new URLSearchParams("latitude=45.32&longitude=-75.66"))).toEqual({ center: [-75.66, 45.32] });
   });
 
-  it("omits the center unless BOTH lat and lng are present", () => {
-    expect(parseMapView(new URLSearchParams("lat=45.32"))).toEqual({});
-    expect(parseMapView(new URLSearchParams("lng=-75.66"))).toEqual({});
+  it("omits the center unless BOTH latitude and longitude are present", () => {
+    expect(parseMapView(new URLSearchParams("latitude=45.32"))).toEqual({});
+    expect(parseMapView(new URLSearchParams("longitude=-75.66"))).toEqual({});
   });
 
   it("omits an out-of-range center", () => {
-    expect(parseMapView(new URLSearchParams("lat=200&lng=0"))).toEqual({});
-    expect(parseMapView(new URLSearchParams("lat=0&lng=500"))).toEqual({});
-    expect(parseMapView(new URLSearchParams("lat=abc&lng=0"))).toEqual({});
+    expect(parseMapView(new URLSearchParams("latitude=200&longitude=0"))).toEqual({});
+    expect(parseMapView(new URLSearchParams("latitude=0&longitude=500"))).toEqual({});
+    expect(parseMapView(new URLSearchParams("latitude=abc&longitude=0"))).toEqual({});
   });
 
   it("reads a valid zoom and omits an out-of-range or malformed one", () => {
@@ -78,7 +78,7 @@ describe("parseMapView", () => {
 
   it("combines every param into one view", () => {
     const params = new URLSearchParams(
-      "lat=53.31&lng=-113.58&zoom=9&clustering=off&node_type=repeater&neighbor_lines=on&style=liberty&flow=on&borders=on",
+      "latitude=53.31&longitude=-113.58&zoom=9&clustering=off&node_type=repeater&neighbor_lines=on&style=liberty&flow=on&borders=on",
     );
     expect(parseMapView(params)).toEqual({
       center: [-113.58, 53.31],
@@ -107,8 +107,8 @@ describe("buildMapParams", () => {
 
   it("emits every managed key with rounded camera values", () => {
     expect(buildMapParams(snapshot)).toEqual({
-      lat: "53.31235",
-      lng: "-113.58346",
+      latitude: "53.31235",
+      longitude: "-113.58346",
       zoom: "9.46",
       clustering: "off",
       node_type: "repeater",

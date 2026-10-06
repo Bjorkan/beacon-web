@@ -25,8 +25,8 @@ function node(overrides: Partial<NodeSummary>): NodeSummary {
     nodeType: 1,
     nodeTypeName: "repeater",
     name: "Node 1",
-    lat: 45,
-    lng: -75,
+    latitude: 45,
+    longitude: -75,
     iatas: [],
     knownNeighborCount: 0,
     ...overrides,
@@ -42,7 +42,7 @@ describe("buildNeighbourGraph", () => {
   });
 
   it("includes unlocated nodes (unlike the map's coordinate-gated edges)", () => {
-    const g = buildNeighbourGraph([node({ id: "a", lat: null, lng: null })], 1000);
+    const g = buildNeighbourGraph([node({ id: "a", latitude: null, longitude: null })], 1000);
     expect(g.nodes).toHaveLength(1);
     expect(g.nodes[0]!.id).toBe("a");
   });

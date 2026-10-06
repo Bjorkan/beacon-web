@@ -61,8 +61,8 @@ describe("getNodesPage", () => {
     nodeType: 1,
     nodeTypeName: "repeater",
     name: "Node 1",
-    lat: 1,
-    lng: 2,
+    latitude: 1,
+    longitude: 2,
     iatas: [],
   };
 

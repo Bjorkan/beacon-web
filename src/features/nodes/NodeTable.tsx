@@ -48,7 +48,7 @@ interface NodeTableProps {
 
 function renderNodeCard(node: NodeSummary, t: TFunction) {
   const location = hasMapLocation(node)
-    ? `${node.lat.toFixed(2)}, ${node.lng.toFixed(2)}`
+    ? `${node.latitude.toFixed(2)}, ${node.longitude.toFixed(2)}`
     : null;
   return (
     <div className="flex flex-col gap-1.5 font-mono text-xs">
@@ -154,7 +154,7 @@ export function NodeTable({ wsManager, selectedNodeId, onSelectNode }: NodeTable
       className: "text-text-muted",
       cell: (node) =>
         hasMapLocation(node)
-          ? `${node.lat.toFixed(2)}, ${node.lng.toFixed(2)}`
+          ? `${node.latitude.toFixed(2)}, ${node.longitude.toFixed(2)}`
           : "—",
     },
   ], [t]);

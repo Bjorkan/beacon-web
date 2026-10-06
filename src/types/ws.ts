@@ -111,8 +111,8 @@ export interface WsNodeUpdate {
     possiblyForeign?: boolean | null;
     iata: string;
     // decimal degrees as in REST /nodes; omitted keeps the prior position, null clears it (explicit 0/0 advert)
-    lat?: number | null;
-    lng?: number | null;
+    latitude?: number | null;
+    longitude?: number | null;
     isObserver: boolean;
     iatas: NodeIATA[];
     defaultScope?: string;

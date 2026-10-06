@@ -12,8 +12,8 @@ function node(overrides: Partial<NodeSummary>): NodeSummary {
     nodeType: 1,
     nodeTypeName: "repeater",
     name: "Node 1",
-    lat: 45,
-    lng: -75,
+    latitude: 45,
+    longitude: -75,
     iatas: [],
     ...overrides,
   };
@@ -25,18 +25,18 @@ function update(overrides: Partial<WsNodeUpdate["data"]>): WsNodeUpdate["data"] 
 
 describe("patchNodeSummary", () => {
   it("applies foreign status changes without moving coordinates and clears explicit null", () => {
-    const list = [node({ id: "a", name: "Keep", lat: 10, lng: 20, possiblyForeign: true })];
-    const local = patchNodeSummary(list, update({ nodeId: "a", name: "Keep", lat: 10, lng: 20, possiblyForeign: false }))!;
+    const list = [node({ id: "a", name: "Keep", latitude: 10, longitude: 20, possiblyForeign: true })];
+    const local = patchNodeSummary(list, update({ nodeId: "a", name: "Keep", latitude: 10, longitude: 20, possiblyForeign: false }))!;
     expect(local[0]!.possiblyForeign).toBe(false);
     expect(local).not.toBe(list);
-    const unknown = patchNodeSummary(local, update({ nodeId: "a", name: "Keep", lat: 0, lng: 0, possiblyForeign: null }))!;
+    const unknown = patchNodeSummary(local, update({ nodeId: "a", name: "Keep", latitude: 0, longitude: 0, possiblyForeign: null }))!;
     expect(unknown[0]!.possiblyForeign).toBeUndefined();
     expect(list[0]!.possiblyForeign).toBe(true);
   });
 
   it("retains the flag and list identity when an advert omits the position/classification", () => {
-    const list = [node({ id: "a", name: "Keep", lat: 10, lng: 20, possiblyForeign: true })];
-    expect(patchNodeSummary(list, update({ nodeId: "a", name: "Keep", lat: undefined, lng: undefined }))).toBe(list);
+    const list = [node({ id: "a", name: "Keep", latitude: 10, longitude: 20, possiblyForeign: true })];
+    expect(patchNodeSummary(list, update({ nodeId: "a", name: "Keep", latitude: undefined, longitude: undefined }))).toBe(list);
   });
   it("returns the list unchanged (same ref) when it is undefined", () => {
     expect(patchNodeSummary(undefined, update({}))).toBeUndefined();
@@ -49,10 +49,10 @@ describe("patchNodeSummary", () => {
 
   it("patches name/lat/lng of the matching node immutably", () => {
     const list = [node({ id: "a", name: "Old" }), node({ id: "b" })];
-    const out = patchNodeSummary(list, update({ nodeId: "b", name: "Renamed", lat: 50, lng: -80 }))!;
+    const out = patchNodeSummary(list, update({ nodeId: "b", name: "Renamed", latitude: 50, longitude: -80 }))!;
     expect(out).not.toBe(list);
     expect(out[0]).toBe(list[0]); // untouched node keeps its reference
-    expect(out[1]).toMatchObject({ id: "b", name: "Renamed", lat: 50, lng: -80 });
+    expect(out[1]).toMatchObject({ id: "b", name: "Renamed", latitude: 50, longitude: -80 });
   });
 
   it("keeps the previous name when the update name is empty", () => {
@@ -62,35 +62,35 @@ describe("patchNodeSummary", () => {
   });
 
   it("keeps the previous lat/lng when the update omits them", () => {
-    const list = [node({ id: "a", lat: 10, lng: 20 })];
-    const out = patchNodeSummary(list, update({ nodeId: "a", lat: undefined, lng: undefined }))!;
-    expect(out[0]!.lat).toBe(10);
-    expect(out[0]!.lng).toBe(20);
+    const list = [node({ id: "a", latitude: 10, longitude: 20 })];
+    const out = patchNodeSummary(list, update({ nodeId: "a", latitude: undefined, longitude: undefined }))!;
+    expect(out[0]!.latitude).toBe(10);
+    expect(out[0]!.longitude).toBe(20);
   });
 
   it("clears the position when the update sends explicit null", () => {
-    const list = [node({ id: "a", lat: 10, lng: 20 })];
-    const out = patchNodeSummary(list, update({ nodeId: "a", lat: null, lng: null }))!;
+    const list = [node({ id: "a", latitude: 10, longitude: 20 })];
+    const out = patchNodeSummary(list, update({ nodeId: "a", latitude: null, longitude: null }))!;
     expect(out).not.toBe(list);
-    expect(out[0]!.lat).toBeNull();
-    expect(out[0]!.lng).toBeNull();
+    expect(out[0]!.latitude).toBeNull();
+    expect(out[0]!.longitude).toBeNull();
   });
 
   it("returns the same ref when a null clear hits a node that is already unlocated", () => {
-    const list = [node({ id: "a", name: "Keep", lat: null, lng: null })];
-    expect(patchNodeSummary(list, update({ nodeId: "a", name: "Keep", lat: null, lng: null }))).toBe(list);
+    const list = [node({ id: "a", name: "Keep", latitude: null, longitude: null })];
+    expect(patchNodeSummary(list, update({ nodeId: "a", name: "Keep", latitude: null, longitude: null }))).toBe(list);
   });
 
   it("returns the same list ref when the update changes nothing (no needless repaint)", () => {
-    const list = [node({ id: "a", name: "Keep", lat: 10, lng: 20 })];
+    const list = [node({ id: "a", name: "Keep", latitude: 10, longitude: 20 })];
     // re-advert with identical name + omitted coords: every field resolves back to the prev value
-    const out = patchNodeSummary(list, update({ nodeId: "a", name: "Keep", lat: undefined, lng: undefined }));
+    const out = patchNodeSummary(list, update({ nodeId: "a", name: "Keep", latitude: undefined, longitude: undefined }));
     expect(out).toBe(list);
   });
 
   it("returns the same list ref when an empty name resolves to the unchanged previous name", () => {
-    const list = [node({ id: "a", name: "Keep", lat: 10, lng: 20 })];
-    const out = patchNodeSummary(list, update({ nodeId: "a", name: "", lat: 10, lng: 20 }));
+    const list = [node({ id: "a", name: "Keep", latitude: 10, longitude: 20 })];
+    const out = patchNodeSummary(list, update({ nodeId: "a", name: "", latitude: 10, longitude: 20 }));
     expect(out).toBe(list);
   });
 });
@@ -111,17 +111,17 @@ describe("upsertNodePages", () => {
     const old = pages([node({ id: "a" })], [node({ id: "b" })]);
     const out = upsertNodePages(
       old,
-      update({ nodeId: "new1", name: "Fresh", nodeTypeName: "repeater", publicKey: "pk2", lat: 50.5, lng: -100.25, isObserver: false, iatas: [], possiblyForeign: true }),
+      update({ nodeId: "new1", name: "Fresh", nodeTypeName: "repeater", publicKey: "pk2", latitude: 50.5, longitude: -100.25, isObserver: false, iatas: [], possiblyForeign: true }),
     )!;
     expect(out).not.toBe(old);
     expect(out.pages[0]).toBe(old.pages[0]); // earlier pages keep their refs
     expect(out.pages[1]!.items.map((n) => n.id)).toEqual(["b", "new1"]);
-    expect(out.pages[1]!.items[1]).toMatchObject({ name: "Fresh", lat: 50.5, lng: -100.25, possiblyForeign: true });
+    expect(out.pages[1]!.items[1]).toMatchObject({ name: "Fresh", latitude: 50.5, longitude: -100.25, possiblyForeign: true });
   });
 
   it("keeps the same ref for a re-advert that changes nothing", () => {
-    const old = pages([node({ id: "a", name: "Keep", lat: 10, lng: 20 })]);
-    expect(upsertNodePages(old, update({ nodeId: "a", name: "Keep", lat: undefined, lng: undefined }))).toBe(old);
+    const old = pages([node({ id: "a", name: "Keep", latitude: 10, longitude: 20 })]);
+    expect(upsertNodePages(old, update({ nodeId: "a", name: "Keep", latitude: undefined, longitude: undefined }))).toBe(old);
   });
 
   it("passes undefined caches through", () => {
@@ -130,7 +130,7 @@ describe("upsertNodePages", () => {
 
   it("inserts a fresh node with an explicit null position", () => {
     const old = pages([node({ id: "a" })]);
-    const out = upsertNodePages(old, update({ nodeId: "new1", lat: null, lng: null }))!;
-    expect(out.pages[0]!.items[1]).toMatchObject({ id: "new1", lat: null, lng: null });
+    const out = upsertNodePages(old, update({ nodeId: "new1", latitude: null, longitude: null }))!;
+    expect(out.pages[0]!.items[1]).toMatchObject({ id: "new1", latitude: null, longitude: null });
   });
 });

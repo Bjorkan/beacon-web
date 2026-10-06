@@ -11,7 +11,7 @@ vi.mock("../../../src/api/client", () => ({ getNodesPage: vi.fn() }));
 const mockGetNodesPage = vi.mocked(getNodesPage);
 
 function node(id: string): NodeSummary {
-  return { id, publicKey: id, nodeType: 1, nodeTypeName: "repeater", name: id, lat: 0, lng: 0, iatas: [] };
+  return { id, publicKey: id, nodeType: 1, nodeTypeName: "repeater", name: id, latitude: 0, longitude: 0, iatas: [] };
 }
 
 function wrapper() {

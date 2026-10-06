@@ -23,8 +23,8 @@ const node: Node = {
   nodeType: 2,
   nodeTypeName: "REPEATER",
   name: "Self Node",
-  lat: null,
-  lng: null,
+  latitude: null,
+  longitude: null,
   iatas: [],
   locationSource: null,
   lastAdvertAt: null,
@@ -102,7 +102,7 @@ describe("NodeDetailPanel neighbors", () => {
 
 describe("NodeDetailPanel location", () => {
   it("hides Lat/Lng but keeps the source for a 0/0 advert reset", async () => {
-    mockGetNode.mockResolvedValue({ ...node, lat: 0, lng: 0, locationSource: "advert" });
+    mockGetNode.mockResolvedValue({ ...node, latitude: 0, longitude: 0, locationSource: "advert" });
 
     renderPanel();
 
@@ -140,7 +140,7 @@ describe("NodeDetailPanel clock drift", () => {
 });
 
 describe("NodeDetailPanel View on map", () => {
-  function renderWithMap(onViewOnMap?: (lat: number, lng: number) => void) {
+  function renderWithMap(onViewOnMap?: (latitude: number, longitude: number) => void) {
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     render(
       <QueryClientProvider client={client}>
@@ -150,7 +150,7 @@ describe("NodeDetailPanel View on map", () => {
   }
 
   it("sends the node's coordinates", async () => {
-    mockGetNode.mockResolvedValue({ ...node, lat: 45.42153, lng: -75.69719 });
+    mockGetNode.mockResolvedValue({ ...node, latitude: 45.42153, longitude: -75.69719 });
     const onViewOnMap = vi.fn();
     renderWithMap(onViewOnMap);
     fireEvent.click(await screen.findByRole("button", { name: "View on map" }));
@@ -164,14 +164,14 @@ describe("NodeDetailPanel View on map", () => {
   });
 
   it("is not offered when the caller has no map to open", async () => {
-    mockGetNode.mockResolvedValue({ ...node, lat: 45.42153, lng: -75.69719 });
+    mockGetNode.mockResolvedValue({ ...node, latitude: 45.42153, longitude: -75.69719 });
     renderWithMap();
     await screen.findByText("Self Node");
     expect(screen.queryByRole("button", { name: "View on map" })).not.toBeInTheDocument();
   });
 
   it("shows the French label", async () => {
-    mockGetNode.mockResolvedValue({ ...node, lat: 45.42153, lng: -75.69719 });
+    mockGetNode.mockResolvedValue({ ...node, latitude: 45.42153, longitude: -75.69719 });
     await act(() => i18n.changeLanguage("fr"));
     renderWithMap(vi.fn());
     expect(await screen.findByRole("button", { name: "Voir sur la carte" })).toBeInTheDocument();
@@ -179,14 +179,14 @@ describe("NodeDetailPanel View on map", () => {
   });
 
   it("is not offered for an explicit 0/0 advert reset", async () => {
-    mockGetNode.mockResolvedValue({ ...node, lat: 0, lng: 0 });
+    mockGetNode.mockResolvedValue({ ...node, latitude: 0, longitude: 0 });
     renderWithMap(vi.fn());
     await screen.findByText("Self Node");
     expect(screen.queryByRole("button", { name: "View on map" })).not.toBeInTheDocument();
   });
 
   it("is still offered when only one axis is zero", async () => {
-    mockGetNode.mockResolvedValue({ ...node, lat: 0, lng: 10 });
+    mockGetNode.mockResolvedValue({ ...node, latitude: 0, longitude: 10 });
     const onViewOnMap = vi.fn();
     renderWithMap(onViewOnMap);
     fireEvent.click(await screen.findByRole("button", { name: "View on map" }));

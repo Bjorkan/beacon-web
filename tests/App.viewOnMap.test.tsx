@@ -28,7 +28,7 @@ vi.mock("../src/components/AppShell", () => ({
 vi.mock("../src/features/nodes/NodeTable", () => ({ NodeTable: () => null }));
 vi.mock("../src/features/map/MapView", () => ({ MapView: () => <p>Map view</p> }));
 vi.mock("../src/features/nodes/NodeDetailPanel", () => ({
-  NodeDetailPanel: ({ nodeId, onViewOnMap }: { nodeId: string; onViewOnMap?: (lat: number, lng: number) => void }) => (
+  NodeDetailPanel: ({ nodeId, onViewOnMap }: { nodeId: string; onViewOnMap?: (latitude: number, longitude: number) => void }) => (
     <section aria-label={`Node ${nodeId}`}>
       {onViewOnMap && <button onClick={() => onViewOnMap(45.42153, -75.69719)}>View on map</button>}
     </section>

@@ -26,7 +26,7 @@ const obs = (id: number, over: Partial<Observation> = {}): Observation => ({
 // partial detail fixture — any non-TRACE payload type does
 const header = () => ({ raw: "12", routeType: RouteType.FLOOD, routeTypeName: "FLOOD", payloadType: PayloadType.ADVERT, payloadTypeName: "ADVERT", payloadVersion: 1 });
 
-const resolvedHop = (id: string, lng: number, lat: number) => ({ confidence: "high" as const, nodes: [{ id, publicKey: "pk", longitude: lng, latitude: lat }] });
+const resolvedHop = (id: string, longitude: number, latitude: number) => ({ confidence: "high" as const, nodes: [{ id, publicKey: "pk", longitude: lng, latitude: lat }] });
 
 // a detail with a real drawable path (>=2 located hops), for the "hasPath" enabled cases
 const detailWithPath = (): PacketDetail => ({

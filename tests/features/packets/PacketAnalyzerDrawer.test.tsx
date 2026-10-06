@@ -171,7 +171,7 @@ describe("transport scope", () => {
   });
 });
 
-const hop = (id: string, lng: number, lat: number) => ({ confidence: "high" as const, nodes: [{ id, publicKey: "pk", longitude: lng, latitude: lat }] });
+const hop = (id: string, longitude: number, latitude: number) => ({ confidence: "high" as const, nodes: [{ id, publicKey: "pk", longitude: lng, latitude: lat }] });
 
 function makeDetail(resolvedPath: unknown[]): PacketDetail {
   return {

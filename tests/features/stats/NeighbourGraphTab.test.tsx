@@ -15,7 +15,7 @@ vi.mock("../../../src/features/stats/NeighbourGraph", () => ({ NeighbourGraph: (
 vi.mock("../../../src/api/client", () => ({ getNodeNeighbors: vi.fn() }));
 
 function node(id: string, neighborIds: string[]): NodeSummary {
-  return { id, publicKey: id, nodeType: 2, nodeTypeName: "repeater", name: id, lat: 45, lng: -75, iatas: ["YVR"], neighborIds } as NodeSummary;
+  return { id, publicKey: id, nodeType: 2, nodeTypeName: "repeater", name: id, latitude: 45, longitude: -75, iatas: ["YVR"], neighborIds } as NodeSummary;
 }
 
 function mount() {

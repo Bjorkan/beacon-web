@@ -20,19 +20,19 @@ export function packetChain(
 export function locatedHopNode(hop: ResolvedHop) {
   if (hop.confidence !== "high" || hop.nodes.length !== 1) return undefined;
   const node = hop.nodes[0]!;
-  return hasMapLocation({ lat: node.latitude, lng: node.longitude }) ? node : undefined;
+  return hasMapLocation({ latitude: node.latitude, longitude: node.longitude }) ? node : undefined;
 }
 
 // Animate only a completely located, unambiguous chain; skipping a hop would invent a link.
-export function resolvedPathNodes(resolvedPath: ResolvedHop[]): { id: string; lng: number; lat: number }[] {
+export function resolvedPathNodes(resolvedPath: ResolvedHop[]): { id: string; longitude: number; latitude: number }[] {
   const seen = new Set<string>();
-  const out: { id: string; lng: number; lat: number }[] = [];
+  const out: { id: string; longitude: number; latitude: number }[] = [];
   for (const hop of resolvedPath) {
     const node = locatedHopNode(hop);
     if (!node) return [];
     if (!seen.has(node.id)) {
       seen.add(node.id);
-      out.push({ id: node.id, lng: node.longitude!, lat: node.latitude! });
+      out.push({ id: node.id, longitude: node.longitude!, latitude: node.latitude! });
     }
   }
   return out;

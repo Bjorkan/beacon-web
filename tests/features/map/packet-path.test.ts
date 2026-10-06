@@ -28,7 +28,7 @@ describe("buildPacketPaths", () => {
     const trace = buildPacketPaths(detail([], { header: { payloadType: PayloadType.TRACE, routeType: 1 }, resolvedRoute: hops } as Partial<PacketDetail>));
     expect(ordinary).toEqual([]); expect(trace).toEqual([]);
     const valid = buildPacketPaths(detail([obs(1, [hop("start", 0, 45), hop("end", -75, 0)])]));
-    expect(valid[0].points.map(p => [p.lng, p.lat])).toEqual([[0, 45], [-75, 0]]);
+    expect(valid[0].points.map(p => [p.longitude, p.latitude])).toEqual([[0, 45], [-75, 0]]);
     expect(buildPacketPaths(detail([obs(1, [hop("unknown", 0, 0), hop("one", -75, 45)])]))).toEqual([]);
   });
 
@@ -173,10 +173,10 @@ describe("buildPacketPaths", () => {
 
 const P: PacketPath[] = [
   { key: "1", label: "A", color: "#111", points: [
-    { id: "a", lng: -79, lat: 43 }, { id: "b", lng: -78, lat: 44 }, { id: "c", lng: -77, lat: 45 },
+    { id: "a", longitude: -79, latitude: 43 }, { id: "b", longitude: -78, latitude: 44 }, { id: "c", longitude: -77, latitude: 45 },
   ] },
   { key: "2", label: "B", color: "#222", points: [
-    { id: "d", lng: -80, lat: 46 }, { id: "e", lng: -76, lat: 47 },
+    { id: "d", longitude: -80, latitude: 46 }, { id: "e", longitude: -76, latitude: 47 },
   ] },
 ];
 
@@ -204,8 +204,8 @@ describe("packetPathsToFeatures", () => {
 
   it("carries the untruncated node identity as title", () => {
     const path: PacketPath = { key: "k", label: "L", color: "#111", points: [
-      { id: "abcdef123456", lng: -79, lat: 43 },                 // no name -> title is the full id
-      { id: "z", name: "Repeater North", lng: -78, lat: 44 },    // named -> title is the name
+      { id: "abcdef123456", longitude: -79, latitude: 43 },                 // no name -> title is the full id
+      { id: "z", name: "Repeater North", longitude: -78, latitude: 44 },    // named -> title is the name
     ] };
     const { points } = packetPathsToFeatures([path], null);
     expect(points.features[0]!.properties.title).toBe("abcdef123456");

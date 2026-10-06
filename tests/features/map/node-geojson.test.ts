@@ -9,8 +9,8 @@ function node(overrides: Partial<NodeSummary>): NodeSummary {
     nodeType: 1,
     nodeTypeName: "repeater",
     name: "Node 1",
-    lat: 45,
-    lng: -75,
+    latitude: 45,
+    longitude: -75,
     iatas: [],
     ...overrides,
   };
@@ -24,13 +24,13 @@ describe("nodesToFeatureCollection", () => {
   });
 
   it("maps a located node to a Point feature in [lng, lat] order", () => {
-    const fc = nodesToFeatureCollection([node({ lat: 45.3, lng: -75.6 })]);
+    const fc = nodesToFeatureCollection([node({ latitude: 45.3, longitude: -75.6 })]);
     expect(fc.features).toHaveLength(1);
     expect(fc.features[0]!.geometry).toEqual({ type: "Point", coordinates: [-75.6, 45.3] });
   });
 
   it("keeps whole-degree coordinates intact (the API sends decimal degrees, never microdegrees)", () => {
-    const fc = nodesToFeatureCollection([node({ lat: 51, lng: -114 })]);
+    const fc = nodesToFeatureCollection([node({ latitude: 51, longitude: -114 })]);
     expect(fc.features[0]!.geometry.coordinates).toEqual([-114, 51]);
   });
 
@@ -57,34 +57,34 @@ describe("nodesToFeatureCollection", () => {
 
   it("drops nodes missing lat or lng", () => {
     const fc = nodesToFeatureCollection([
-      node({ id: "a", lat: null, lng: -75 }),
-      node({ id: "b", lat: 45, lng: null }),
-      node({ id: "c", lat: 45, lng: -75 }),
+      node({ id: "a", latitude: null, longitude: -75 }),
+      node({ id: "b", latitude: 45, longitude: null }),
+      node({ id: "c", latitude: 45, longitude: -75 }),
     ]);
     expect(fc.features.map((f) => f.properties.id)).toEqual(["c"]);
   });
 
   it("omits location resets and unusable coordinates", () => {
     const positions = [[0, 0], [-0, 0], [NaN, 10], [10, Infinity], [91, 20], [-91, 20], [10, 181], [10, -181]];
-    expect(nodesToFeatureCollection(positions.map(([lat, lng], i) => node({ id: String(i), lat, lng }))).features).toEqual([]);
+    expect(nodesToFeatureCollection(positions.map(([lat, lng], i) => node({ id: String(i), latitude: lat, longitude: lng }))).features).toEqual([]);
   });
 
   it("keeps valid equator, prime-meridian and boundary locations", () => {
     const positions = [[0, -75], [45, 0], [90, 180], [-90, -180]];
-    const fc = nodesToFeatureCollection(positions.map(([lat, lng], i) => node({ id: String(i), lat, lng })));
+    const fc = nodesToFeatureCollection(positions.map(([lat, lng], i) => node({ id: String(i), latitude: lat, longitude: lng })));
     expect(fc.features.map((f) => f.geometry.coordinates)).toEqual([[-75, 0], [0, 45], [180, 90], [-180, -90]]);
   });
 
   it("passes decimal coordinates through untouched (api/nodes.go sends *float64 degrees)", () => {
-    const fc = nodesToFeatureCollection([node({ lat: 49.28, lng: -123.12 })]);
+    const fc = nodesToFeatureCollection([node({ latitude: 49.28, longitude: -123.12 })]);
     expect(fc.features[0]!.geometry.coordinates).toEqual([-123.12, 49.28]);
   });
 });
 
 describe("buildNeighborEdges", () => {
-  const a = node({ id: "a", lat: 45, lng: -75, neighborIds: ["b", "c"] });
-  const b = node({ id: "b", lat: 46, lng: -76, neighborIds: ["a"] });
-  const c = node({ id: "c", lat: 47, lng: -77, neighborIds: ["a"] });
+  const a = node({ id: "a", latitude: 45, longitude: -75, neighborIds: ["b", "c"] });
+  const b = node({ id: "b", latitude: 46, longitude: -76, neighborIds: ["a"] });
+  const c = node({ id: "c", latitude: 47, longitude: -77, neighborIds: ["a"] });
 
   it("emits one undirected edge per neighbor pair (a<->b counted once) in [lng, lat] order", () => {
     const fc = buildNeighborEdges([a, b], "on", null);
@@ -97,8 +97,8 @@ describe("buildNeighborEdges", () => {
   });
 
   it("skips neighbor ids absent from the set or without coordinates", () => {
-    const lonely = node({ id: "a", lat: 45, lng: -75, neighborIds: ["ghost"] });
-    const noCoord = node({ id: "b", lat: null, lng: null, neighborIds: ["a"] });
+    const lonely = node({ id: "a", latitude: 45, longitude: -75, neighborIds: ["ghost"] });
+    const noCoord = node({ id: "b", latitude: null, longitude: null, neighborIds: ["a"] });
     expect(buildNeighborEdges([lonely, noCoord], "on", null).features).toEqual([]);
   });
 
@@ -115,15 +115,15 @@ describe("buildNeighborEdges", () => {
   });
 
   it("ignores a node that lists itself as a neighbor (no zero-length edge)", () => {
-    const selfRef = node({ id: "a", lat: 45, lng: -75, neighborIds: ["a", "b"] });
+    const selfRef = node({ id: "a", latitude: 45, longitude: -75, neighborIds: ["a", "b"] });
     const fc = buildNeighborEdges([selfRef, b], "on", null);
     expect(fc.features).toHaveLength(1); // a<->b only, not a<->a
   });
 
   it("omits both directions of neighbour edges to reset or invalid locations", () => {
     const valid = node({ id: "a", neighborIds: ["reset", "invalid"] });
-    const reset = node({ id: "reset", lat: 0, lng: 0, neighborIds: ["a"] });
-    const invalid = node({ id: "invalid", lat: 91, lng: 10, neighborIds: ["a"] });
+    const reset = node({ id: "reset", latitude: 0, longitude: 0, neighborIds: ["a"] });
+    const invalid = node({ id: "invalid", latitude: 91, longitude: 10, neighborIds: ["a"] });
     for (const mode of ["on", "selected"] as const) {
       expect(buildNeighborEdges([valid, reset, invalid], mode, "a").features).toEqual([]);
     }
@@ -133,9 +133,9 @@ describe("buildNeighborEdges", () => {
 });
 
 describe("neighborFocusIds", () => {
-  const a = node({ id: "a", lat: 45, lng: -75, neighborIds: ["b", "c"] });
-  const b = node({ id: "b", lat: 46, lng: -76, neighborIds: ["a"] });
-  const c = node({ id: "c", lat: 47, lng: -77, neighborIds: ["a"] });
+  const a = node({ id: "a", latitude: 45, longitude: -75, neighborIds: ["b", "c"] });
+  const b = node({ id: "b", latitude: 46, longitude: -76, neighborIds: ["a"] });
+  const c = node({ id: "c", latitude: 47, longitude: -77, neighborIds: ["a"] });
 
   const sorted = (ids: string[] | null) => (ids ? [...ids].sort() : ids);
 
@@ -153,17 +153,17 @@ describe("neighborFocusIds", () => {
   });
 
   it("skips neighbor ids that are absent or unlocated", () => {
-    const noCoord = node({ id: "c", lat: null, lng: null, neighborIds: ["a"] });
+    const noCoord = node({ id: "c", latitude: null, longitude: null, neighborIds: ["a"] });
     expect(sorted(neighborFocusIds([a, b, noCoord], "a"))).toEqual(["a", "b"]);
   });
 
   it("returns null when the selected node is unlocated (no marker to keep lit)", () => {
-    const unlocated = node({ id: "a", lat: null, lng: null, neighborIds: ["b"] });
+    const unlocated = node({ id: "a", latitude: null, longitude: null, neighborIds: ["b"] });
     expect(neighborFocusIds([unlocated, b], "a")).toBeNull();
   });
 
   it("returns null when the selected node has no located neighbors", () => {
-    const lonely = node({ id: "x", lat: 45, lng: -75, neighborIds: ["ghost"] });
+    const lonely = node({ id: "x", latitude: 45, longitude: -75, neighborIds: ["ghost"] });
     expect(neighborFocusIds([lonely, b], "x")).toBeNull();
   });
 });
@@ -171,9 +171,9 @@ describe("neighborFocusIds", () => {
 describe("buildFocusedNeighborEdges", () => {
   const DAY = 86400000;
   const NOW = 1000 * DAY;
-  const sel = node({ id: "a", lat: 45, lng: -75 });
+  const sel = node({ id: "a", latitude: 45, longitude: -75 });
   function nb(o: Partial<NodeNeighbor>): NodeNeighbor {
-    return { id: "b", publicKey: "pk", nodeType: 2, nodeTypeName: "repeater", iata: "YOW", observationCount: 10, firstSeen: 0, lastSeen: NOW, lat: 46, lng: -76, ...o };
+    return { id: "b", publicKey: "pk", nodeType: 2, nodeTypeName: "repeater", iata: "YOW", observationCount: 10, firstSeen: 0, lastSeen: NOW, latitude: 46, longitude: -76, ...o };
   }
 
   it("returns empty when nothing is selected", () => {
@@ -181,11 +181,11 @@ describe("buildFocusedNeighborEdges", () => {
   });
 
   it("returns empty when the selected node has no coordinates", () => {
-    expect(buildFocusedNeighborEdges(node({ id: "a", lat: null, lng: null }), [nb({})], NOW).features).toEqual([]);
+    expect(buildFocusedNeighborEdges(node({ id: "a", latitude: null, longitude: null }), [nb({})], NOW).features).toEqual([]);
   });
 
   it("draws one edge selected->neighbor with obs, in [lng, lat] order", () => {
-    const fc = buildFocusedNeighborEdges(sel, [nb({ id: "b", lat: 46, lng: -76, observationCount: 42, lastSeen: NOW })], NOW);
+    const fc = buildFocusedNeighborEdges(sel, [nb({ id: "b", latitude: 46, longitude: -76, observationCount: 42, lastSeen: NOW })], NOW);
     expect(fc.features).toHaveLength(1);
     expect(fc.features[0]!.geometry.coordinates).toEqual([[-75, 45], [-76, 46]]);
     expect(fc.features[0]!.properties.obs).toBe(42);
@@ -210,17 +210,17 @@ describe("buildFocusedNeighborEdges", () => {
 
   it("skips neighbors without coordinates and any self-referential row", () => {
     const fc = buildFocusedNeighborEdges(sel, [
-      nb({ id: "b", lat: undefined, lng: undefined }),
-      nb({ id: "a", lat: 45, lng: -75 }), // self — no zero-length edge
-      nb({ id: "c", lat: 47, lng: -77, observationCount: 5 }),
+      nb({ id: "b", latitude: undefined, longitude: undefined }),
+      nb({ id: "a", latitude: 45, longitude: -75 }), // self — no zero-length edge
+      nb({ id: "c", latitude: 47, longitude: -77, observationCount: 5 }),
     ], NOW);
     expect(fc.features.map((f) => f.properties.obs)).toEqual([5]);
   });
 
   it("omits reset and invalid locations from focused edges", () => {
-    const candidates = [nb({ id: "reset", lat: 0, lng: 0 }), nb({ id: "invalid", lat: 10, lng: Infinity }), nb({ id: "valid", lat: 0, lng: 15 })];
+    const candidates = [nb({ id: "reset", latitude: 0, longitude: 0 }), nb({ id: "invalid", latitude: 10, longitude: Infinity }), nb({ id: "valid", latitude: 0, longitude: 15 })];
     expect(buildFocusedNeighborEdges(sel, candidates, NOW).features.map((f) => f.geometry.coordinates)).toEqual([[[-75, 45], [15, 0]]]);
-    expect(buildFocusedNeighborEdges(node({ lat: 0, lng: 0 }), [nb({})], NOW).features).toEqual([]);
+    expect(buildFocusedNeighborEdges(node({ latitude: 0, longitude: 0 }), [nb({})], NOW).features).toEqual([]);
   });
 });
 

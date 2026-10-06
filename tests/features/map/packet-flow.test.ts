@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { packetChain, resolvedPathNodes, posAtHop, trailCoords } from "../../../src/features/map/packet-flow";
 import type { ResolvedHop } from "../../../src/types/api";
 
-function hop(id: string, lng: number, lat: number): ResolvedHop {
+function hop(id: string, longitude: number, latitude: number): ResolvedHop {
   return { confidence: "high", nodes: [{ id, publicKey: "pk", longitude: lng, latitude: lat }] };
 }
 
@@ -30,7 +30,7 @@ describe("resolvedPathNodes", () => {
   it("suppresses an animation when a gap would invent a link", () => {
     const path: ResolvedHop[] = [hop("a", -75, 45), { confidence: "none", nodes: [] }, hop("a", -75, 45), hop("b", -76, 46)];
     expect(resolvedPathNodes(path)).toEqual([]);
-    expect(resolvedPathNodes([hop("a", -75, 45), hop("a", -75, 45), hop("b", -76, 46)])).toEqual([{ id: "a", lng: -75, lat: 45 }, { id: "b", lng: -76, lat: 46 }]);
+    expect(resolvedPathNodes([hop("a", -75, 45), hop("a", -75, 45), hop("b", -76, 46)])).toEqual([{ id: "a", longitude: -75, latitude: 45 }, { id: "b", longitude: -76, latitude: 46 }]);
   });
 
   it("skips hops with no located candidate", () => {
@@ -40,7 +40,7 @@ describe("resolvedPathNodes", () => {
   it("rejects reset/invalid and ambiguous locations while accepting valid zero axes", () => {
     const candidates: ResolvedHop = { confidence: "ambiguous", nodes: [...hop("reset", 0, 0).nodes, ...hop("invalid", 10, 91).nodes, ...hop("valid", 0, 45).nodes] };
     expect(resolvedPathNodes([hop("unknown", 0, 0), candidates, hop("bad", Infinity, 10)])).toEqual([]);
-    expect(resolvedPathNodes([hop("valid", 0, 45)])).toEqual([{ id: "valid", lng: 0, lat: 45 }]);
+    expect(resolvedPathNodes([hop("valid", 0, 45)])).toEqual([{ id: "valid", longitude: 0, latitude: 45 }]);
   });
 });
 

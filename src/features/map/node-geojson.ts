@@ -21,7 +21,7 @@ export function nodesToFeatureCollection(
     features.push({
       type: "Feature",
       // GeoJSON/maplibre order is [lng, lat]; the API sends decimal degrees as-is
-      geometry: { type: "Point", coordinates: [n.lng, n.lat] },
+      geometry: { type: "Point", coordinates: [n.longitude, n.latitude] },
       properties: {
         id: n.id,
         name: n.name,
@@ -70,7 +70,13 @@ export function buildNeighborEdges(
       seen.add(key);
       features.push({
         type: "Feature",
-        geometry: { type: "LineString", coordinates: [[n.lng, n.lat], [other.lng!, other.lat!]] },
+        geometry: {
+          type: "LineString",
+          coordinates: [
+            [n.longitude, n.latitude],
+            [other.longitude!, other.latitude!],
+          ],
+        },
         properties: { selected: incident },
       });
     }
@@ -84,15 +90,22 @@ export function buildNeighborEdges(
 // are folded per neighbor: obs summed, lastSeen taken at its freshest. `now` defaults to the current
 // time; tests pass it explicitly so the age stays deterministic.
 export function buildFocusedNeighborEdges(
-  selected: Pick<NodeSummary, "id" | "lat" | "lng"> | null | undefined,
+  selected:
+    Pick<NodeSummary, "id" | "latitude" | "longitude"> | null | undefined,
   neighbors: NodeNeighbor[],
   now: number = Date.now(),
 ): FeatureCollection<LineString, NeighborEdgeProps> {
-  const empty: FeatureCollection<LineString, NeighborEdgeProps> = { type: "FeatureCollection", features: [] };
+  const empty: FeatureCollection<LineString, NeighborEdgeProps> = {
+    type: "FeatureCollection",
+    features: [],
+  };
   if (!hasMapLocation(selected)) return empty;
-  const from: [number, number] = [selected.lng, selected.lat];
+  const from: [number, number] = [selected.longitude, selected.latitude];
 
-  const byId = new Map<string, { lng: number; lat: number; obs: number; lastSeen: number }>();
+  const byId = new Map<
+    string,
+    { longitude: number; latitude: number; obs: number; lastSeen: number }
+  >();
   for (const nb of neighbors) {
     if (nb.id === selected.id || !hasMapLocation(nb)) continue;
     const prev = byId.get(nb.id);
@@ -100,7 +113,12 @@ export function buildFocusedNeighborEdges(
       prev.obs += nb.observationCount;
       prev.lastSeen = Math.max(prev.lastSeen, nb.lastSeen);
     } else {
-      byId.set(nb.id, { lng: nb.lng, lat: nb.lat, obs: nb.observationCount, lastSeen: nb.lastSeen });
+      byId.set(nb.id, {
+        longitude: nb.longitude,
+        latitude: nb.latitude,
+        obs: nb.observationCount,
+        lastSeen: nb.lastSeen,
+      });
     }
   }
 
@@ -108,8 +126,15 @@ export function buildFocusedNeighborEdges(
   for (const n of byId.values()) {
     features.push({
       type: "Feature",
-      geometry: { type: "LineString", coordinates: [from, [n.lng, n.lat]] },
-      properties: { selected: true, obs: n.obs, ageDays: Math.max(0, (now - n.lastSeen) / 86400000) },
+      geometry: {
+        type: "LineString",
+        coordinates: [from, [n.longitude, n.latitude]],
+      },
+      properties: {
+        selected: true,
+        obs: n.obs,
+        ageDays: Math.max(0, (now - n.lastSeen) / 86400000),
+      },
     });
   }
   return { type: "FeatureCollection", features };
@@ -119,7 +144,10 @@ export function buildFocusedNeighborEdges(
 // undirected — a node listing the selection counts). Returns null when there's nothing to focus on:
 // no selection, the selected node isn't on the map, or it has no located neighbors. Mirrors the
 // undirected logic in buildNeighborEdges so the bright set matches the drawn edges.
-export function neighborFocusIds(nodes: NodeSummary[], selectedId: string | null): string[] | null {
+export function neighborFocusIds(
+  nodes: NodeSummary[],
+  selectedId: string | null,
+): string[] | null {
   if (!selectedId) return null;
   const located = new Map<string, NodeSummary>();
   for (const n of nodes) {
@@ -133,7 +161,8 @@ export function neighborFocusIds(nodes: NodeSummary[], selectedId: string | null
     if (otherId !== selectedId && located.has(otherId)) focus.add(otherId);
   }
   for (const n of located.values()) {
-    if (n.id !== selectedId && n.neighborIds?.includes(selectedId)) focus.add(n.id);
+    if (n.id !== selectedId && n.neighborIds?.includes(selectedId))
+      focus.add(n.id);
   }
   return focus.size > 1 ? [...focus] : null;
 }
@@ -145,5 +174,8 @@ export function filterByNodeType(
   typeName: string,
 ): FeatureCollection<Point, NodeFeatureProps> {
   if (typeName === "") return fc;
-  return { ...fc, features: fc.features.filter((f) => f.properties.nodeTypeName === typeName) };
+  return {
+    ...fc,
+    features: fc.features.filter((f) => f.properties.nodeTypeName === typeName),
+  };
 }

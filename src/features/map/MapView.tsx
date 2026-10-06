@@ -174,11 +174,11 @@ export function MapView({ wsManager, selectedNodeId, onSelectNode }: MapViewProp
   // IATA coords to frame: the selection's airports, or every airport for "All". Regions carry no
   // bounds from the API, so their member IATAs stand in for the extent.
   const fitPoints = useMemo<[number, number][] | null>(() => {
-    const withCoords = (iatas ?? []).filter((i) => i.lat != null && i.lon != null);
+    const withCoords = (iatas ?? []).filter((i) => i.latitude != null && i.longitude != null);
     if (withCoords.length === 0) return null;
     const scope = selectedIatas ? new Set(selectedIatas) : null;
     const chosen = scope ? withCoords.filter((i) => scope.has(i.iata)) : withCoords;
-    return chosen.length > 0 ? chosen.map((i) => [i.lon!, i.lat!]) : null;
+    return chosen.length > 0 ? chosen.map((i) => [i.longitude!, i.latitude!]) : null;
   }, [iatas, selectedIatas]);
 
   // Borders to draw: the selected region's IATAs, or every IATA for "All" (most have none configured,

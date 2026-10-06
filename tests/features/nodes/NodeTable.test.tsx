@@ -20,8 +20,8 @@ const node = (over: Partial<NodeSummary>): NodeSummary => ({
   nodeType: 2,
   nodeTypeName: "REPEATER",
   name: "Node A",
-  lat: null,
-  lng: null,
+  latitude: null,
+  longitude: null,
   iatas: [],
   knownNeighborCount: 0,
   ...over,
@@ -43,7 +43,7 @@ beforeEach(() => {
 
 describe("NodeTable location column", () => {
   it("shows a dash for an explicit 0/0 advert reset, not the coordinates", async () => {
-    mount([node({ id: "node-zero", name: "Zeroed node", lat: 0, lng: 0 })]);
+    mount([node({ id: "node-zero", name: "Zeroed node", latitude: 0, longitude: 0 })]);
     const nameCell = await screen.findByText("Zeroed node");
     const row = nameCell.closest("tr")!;
     const cells = within(row).getAllByRole("cell");
@@ -52,7 +52,7 @@ describe("NodeTable location column", () => {
   });
 
   it("still shows coordinates when only one axis is zero", async () => {
-    mount([node({ id: "node-partial", name: "Partial node", lat: 0, lng: 10 })]);
+    mount([node({ id: "node-partial", name: "Partial node", latitude: 0, longitude: 10 })]);
     await screen.findByText("Partial node");
     expect(screen.getByText("0.00, 10.00")).toBeInTheDocument();
   });

@@ -83,24 +83,24 @@ describe("language preferences and catalogs", () => {
   });
 
   it("uses each language's plural forms and interpolates the retry duration", () => {
-    expect(i18n.t("region.count", { lng: "en", count: 1 })).toBe("1 region");
-    expect(i18n.t("region.count", { lng: "en", count: 2 })).toBe("2 regions");
-    expect(i18n.t("region.count", { lng: "fr", count: 1 })).toBe("1 région");
-    expect(i18n.t("region.count", { lng: "fr", count: 2 })).toBe("2 régions");
-    expect(i18n.t("connection.rateLimited", { lng: "fr", seconds: 5 })).toBe("DÉBIT LIMITÉ 5 s");
+    expect(i18n.t("region.count", { longitude: "en", count: 1 })).toBe("1 region");
+    expect(i18n.t("region.count", { longitude: "en", count: 2 })).toBe("2 regions");
+    expect(i18n.t("region.count", { longitude: "fr", count: 1 })).toBe("1 région");
+    expect(i18n.t("region.count", { longitude: "fr", count: 2 })).toBe("2 régions");
+    expect(i18n.t("connection.rateLimited", { longitude: "fr", seconds: 5 })).toBe("DÉBIT LIMITÉ 5 s");
   });
 
   it("has whole-phrase battery/noise labels in both catalogs (no joined-word strings)", () => {
-    expect(i18n.t("observerPage.batteryV", { lng: "en" })).toBe("Battery V");
-    expect(i18n.t("observerPage.noiseDbm", { lng: "en" })).toBe("Noise dBm");
-    expect(i18n.t("observerPage.batteryV", { lng: "fr" })).toBe("Batterie V");
-    expect(i18n.t("observerPage.noiseDbm", { lng: "fr" })).toBe("Bruit dBm");
+    expect(i18n.t("observerPage.batteryV", { longitude: "en" })).toBe("Battery V");
+    expect(i18n.t("observerPage.noiseDbm", { longitude: "en" })).toBe("Noise dBm");
+    expect(i18n.t("observerPage.batteryV", { longitude: "fr" })).toBe("Batterie V");
+    expect(i18n.t("observerPage.noiseDbm", { longitude: "fr" })).toBe("Bruit dBm");
   });
 
   it("interpolates the payload-type total as a plain value, not a plural count", () => {
     // formatCount can return a non-numeric string like "1.2k"; a `count` placeholder would feed that
     // into plural resolution instead of a straight interpolation.
-    expect(i18n.t("mesh.obs", { lng: "en", value: "1.2k" })).toBe("1.2k obs");
-    expect(i18n.t("mesh.obs", { lng: "fr", value: "1,2k" })).toBe("1,2k obs");
+    expect(i18n.t("mesh.obs", { longitude: "en", value: "1.2k" })).toBe("1.2k obs");
+    expect(i18n.t("mesh.obs", { longitude: "fr", value: "1,2k" })).toBe("1,2k obs");
   });
 });

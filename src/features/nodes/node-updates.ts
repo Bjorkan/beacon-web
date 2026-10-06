@@ -4,7 +4,7 @@ import type { CursorPage } from "../../types/api";
 import type { WsNodeUpdate } from "../../types/ws";
 import { patchInfinitePages } from "../../lib/infinite-pages";
 
-// Patch a node's name/lat/lng in a cached list (immutably); nodes not already in the list are left
+// Patch a node's name/latitude/longitude in a cached list (immutably); nodes not already in the list are left
 // alone — the Nodes table can't blindly insert because its cache is filter-scoped. The map uses
 // upsertNodePages below instead, which does insert. Shared so the two stay in step.
 export function patchNodeSummary(
@@ -18,14 +18,29 @@ export function patchNodeSummary(
   // only name/coords move in practice; nodeType/iatas are near-static, so we drop data.nodeType here
   // and let a reload carry a rare type change rather than keep a numeric-type lookup in sync
   const name = data.name || prev.name;
-  const lat = data.lat === undefined ? prev.lat : data.lat;
-  const lng = data.lng === undefined ? prev.lng : data.lng;
-  const possiblyForeign = data.possiblyForeign === undefined ? prev.possiblyForeign : data.possiblyForeign ?? undefined;
+  const lat = data.latitude === undefined ? prev.latitude : data.latitude;
+  const lng = data.longitude === undefined ? prev.longitude : data.longitude;
+  const possiblyForeign =
+    data.possiblyForeign === undefined
+      ? prev.possiblyForeign
+      : (data.possiblyForeign ?? undefined);
   // a re-advert that re-sends the same values must keep the SAME ref so patchInfinitePages no-ops
   // (otherwise an unchanged node would trigger a full map FeatureCollection rebuild + setData)
-  if (name === prev.name && lat === prev.lat && lng === prev.lng && possiblyForeign === prev.possiblyForeign) return list;
+  if (
+    name === prev.name &&
+    lat === prev.latitude &&
+    lng === prev.longitude &&
+    possiblyForeign === prev.possiblyForeign
+  )
+    return list;
   const updated = [...list];
-  updated[idx] = { ...prev, name, lat, lng, possiblyForeign };
+  updated[idx] = {
+    ...prev,
+    name,
+    latitude: lat,
+    longitude: lng,
+    possiblyForeign,
+  };
   return updated;
 }
 
@@ -38,7 +53,10 @@ export function upsertNodePages(
 ): InfiniteData<CursorPage<NodeSummary>> | undefined {
   if (!old || old.pages.length === 0) return old;
   if (old.pages.some((p) => p.items.some((n) => n.id === data.nodeId))) {
-    return patchInfinitePages(old, (items) => patchNodeSummary(items, data) ?? items);
+    return patchInfinitePages(
+      old,
+      (items) => patchNodeSummary(items, data) ?? items,
+    );
   }
   const fresh: NodeSummary = {
     id: data.nodeId,
@@ -46,8 +64,8 @@ export function upsertNodePages(
     nodeType: data.nodeType,
     nodeTypeName: data.nodeTypeName,
     name: data.name || null,
-    lat: data.lat ?? null,
-    lng: data.lng ?? null,
+    latitude: data.latitude ?? null,
+    longitude: data.longitude ?? null,
     radio: data.radio,
     defaultScope: data.defaultScope,
     iatas: data.iatas,

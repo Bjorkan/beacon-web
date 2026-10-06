@@ -6,7 +6,7 @@ import type { IataBorder } from "../../../src/api/client";
 const state = vi.hoisted(() => ({ data: null as IataBorder | null, updated: 0 }));
 vi.mock("@tanstack/react-query", () => ({ useQueries: () => [{ data: state.data, dataUpdatedAt: state.updated }] }));
 
-const border = (lng: number): IataBorder => ({ type: "Feature", properties: {}, geometry: { type: "Polygon", coordinates: [[[lng, 0], [lng + 1, 0], [lng + 1, 1], [lng, 0]]] } });
+const border = (longitude: number): IataBorder => ({ type: "Feature", properties: {}, geometry: { type: "Polygon", coordinates: [[[lng, 0], [lng + 1, 0], [lng + 1, 1], [lng, 0]]] } });
 
 describe("border refresh", () => {
   it("replaces an already-loaded polygon when its query refreshes", () => {

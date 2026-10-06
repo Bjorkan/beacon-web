@@ -181,7 +181,7 @@ export function useMapPacketFlow(
       if (nodes.length < 2) return; // need at least two located hops to animate a path
       while (flowsRef.current.length >= PACKET_FLOW_MAX) flowsRef.current.shift();
       flowsRef.current.push({
-        coords: nodes.map((n) => [n.lng, n.lat] as [number, number]),
+        coords: nodes.map((n) => [n.longitude, n.latitude] as [number, number]),
         ids: nodes.map((n) => n.id),
         start: performance.now(),
         lastNode: -1,

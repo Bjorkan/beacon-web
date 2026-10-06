@@ -6,8 +6,8 @@ import { packetChain, locatedHopNode } from "./packet-flow";
 export interface PathPoint {
   id: string;
   name?: string;
-  lng: number;
-  lat: number;
+  longitude: number;
+  latitude: number;
   breakBefore?: boolean;
 }
 
@@ -42,7 +42,7 @@ function pathPoints(hops: ResolvedHop[]): PathPoint[] {
     if (!node) { gap = true; continue; }
     if (!seen.has(node.id)) {
       seen.add(node.id);
-      out.push({ id: node.id, name: node.name, lng: node.longitude!, lat: node.latitude!, ...(gap && out.length ? { breakBefore: true } : {}) });
+      out.push({ id: node.id, name: node.name, longitude: node.longitude!, latitude: node.latitude!, ...(gap && out.length ? { breakBefore: true } : {}) });
       gap = false;
     } else gap = out.at(-1)?.id !== node.id;
   }
@@ -114,7 +114,7 @@ export function packetPathsToFeatures(
     };
     for (const point of path.points) {
       if (point.breakBefore) finishSegment();
-      segment.push([point.lng, point.lat]);
+      segment.push([point.longitude, point.latitude]);
     }
     finishSegment();
     path.points.forEach((pt, i) => {
@@ -122,9 +122,9 @@ export function packetPathsToFeatures(
       points.push({
         type: "Feature",
         properties: { key: path.key, color: path.color, label: pt.name ?? pt.id.slice(0, 6), title: pt.name ?? pt.id, endpoint },
-        geometry: { type: "Point", coordinates: [pt.lng, pt.lat] },
+        geometry: { type: "Point", coordinates: [pt.longitude, pt.latitude] },
       });
-      bounds.push([pt.lng, pt.lat]);
+      bounds.push([pt.longitude, pt.latitude]);
     });
   }
 

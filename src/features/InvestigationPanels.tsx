@@ -21,7 +21,7 @@ export interface Investigation {
 export function InvestigationPanel({ target, inactive, onClose, onOpen, onViewObserver, onViewOnMap }: {
   target: InvestigationTarget; inactive: boolean; onClose: () => void;
   onOpen: (target: InvestigationTarget) => void; onViewObserver: (id: string, packet?: { hash: string; observationId?: number }) => void;
-  onViewOnMap?: (nodeId: string, lat: number, lng: number) => void;
+  onViewOnMap?: (nodeId: string, latitude: number, longitude: number) => void;
 }) {
   const { t } = useTranslation();
   const { data: detail, isLoading } = usePacketDetail(target.kind === "packet" ? target.hash : null);

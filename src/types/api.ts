@@ -122,8 +122,8 @@ export interface PacketDetail {
 export interface IataCode {
   iata: string;
   displayName?: string;
-  lat?: number;
-  lon?: number;
+  latitude?: number;
+  longitude?: number;
 }
 
 // A region groups IATAs under a URL-safe slug. The list endpoint returns summaries; the detail

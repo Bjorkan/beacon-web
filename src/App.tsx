@@ -210,7 +210,7 @@ function AppInner() {
     }, { replace: true });
   }, [setSearchParams]);
 
-  const handleTabChange = (tab: string, mapFocus?: { lat: number; lng: number }) => {
+  const handleTabChange = (tab: string, mapFocus?: { latitude: number; longitude: number }) => {
     // On mobile a detail panel (and the analyzer) fills the screen, so leaving its tab must close it;
     // desktop side panels persist across tabs. Map and Analytics start without carried-over windows.
     if (isMobile || tab === "Map" || tab === "Analytics") setPanels([]);
@@ -230,10 +230,10 @@ function AppInner() {
       if (changed && tab !== "Observers") for (const key of ["observer", "compareWith", "compareUntil"]) next.delete(key);
       if (changed && tab !== "Analytics") for (const key of ["compareA", "compareB", "compareSince", "compareUntil"]) next.delete(key);
       // lat/lng/zoom only seed the map on mount, so they'd re-frame it on every later visit
-      if (tab !== "Map" || mapFocus) for (const key of ["lat", "lng", "zoom"]) next.delete(key);
+      if (tab !== "Map" || mapFocus) for (const key of ["latitude", "longitude", "zoom"]) next.delete(key);
       if (mapFocus) {
-        next.set("lat", mapFocus.lat.toFixed(5));
-        next.set("lng", mapFocus.lng.toFixed(5));
+        next.set("latitude", mapFocus.latitude.toFixed(5));
+        next.set("longitude", mapFocus.longitude.toFixed(5));
         next.set("zoom", "14");
       }
       // stats sub-state shouldn't haunt the URL on other tabs
@@ -249,7 +249,7 @@ function AppInner() {
   // offered only off the Map tab, and only when the deployment has one
   const canViewOnMap = activeTab !== "Map" && ENABLED_TABS.includes("Map");
   const handleViewOnMap = (nodeId: string, lat: number, lng: number) => {
-    handleTabChange("Map", { lat, lng });
+    handleTabChange("Map", { latitude: lat, longitude: lng });
     if (!isMobile) setSelectedNodeId(nodeId);
   };
 

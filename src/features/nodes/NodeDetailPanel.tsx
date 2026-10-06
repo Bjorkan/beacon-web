@@ -147,14 +147,14 @@ export function NodeDetailPanel({ nodeId, onClose, onViewObserver, onViewNode, o
             {(hasLocation || node.locationSource) && (
               <Section title={t("nodeDetail.location")}>
                 <div className="flex flex-wrap gap-x-4 gap-y-0.5 font-mono text-[13px]">
-                  {hasLocation && <Field label={t("nodeDetail.lat")} value={node.lat!.toFixed(5)} />}
-                  {hasLocation && <Field label={t("nodeDetail.lng")} value={node.lng!.toFixed(5)} />}
+                  {hasLocation && <Field label={t("nodeDetail.latitude")} value={node.latitude!.toFixed(5)} />}
+                  {hasLocation && <Field label={t("nodeDetail.longitude")} value={node.longitude!.toFixed(5)} />}
                   {node.locationSource && <Field label={t("nodeDetail.source")} value={node.locationSource} />}
                 </div>
                 {hasMapLocation(node) && onViewOnMap && (
                   <button
                     type="button"
-                    onClick={() => onViewOnMap(node.lat, node.lng)}
+                    onClick={() => onViewOnMap(node.latitude, node.longitude)}
                     className="mt-2 block font-mono text-[11px] text-primary hover:underline"
                   >
                     {t("nodeDetail.viewOnMap")}

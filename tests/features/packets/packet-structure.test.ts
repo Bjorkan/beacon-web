@@ -68,7 +68,7 @@ describe("computeFieldRanges — ADVERT (lean backend shape, no `type` field)", 
     const ranges = rangesFor(
       makeDetail({
         payloadType: PayloadType.ADVERT,
-        parsedPayload: { publicKey, name: "Hi", nodeType: "ChatNode", timestamp: 1, lat: 1, lon: 2 },
+        parsedPayload: { publicKey, name: "Hi", nodeType: "ChatNode", timestamp: 1, latitude: 1, longitude: 2 },
         rawPayload,
       }),
     );
